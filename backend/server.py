@@ -68,7 +68,9 @@ def get_stream(video_id):
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
-            'format': 'bestaudio/best',
+            # Force highest quality audio - prefer 256kbps+ m4a/opus for browser compatibility
+            'format': 'bestaudio[abr>=256]/bestaudio[abr>=192]/bestaudio[abr>=128]/bestaudio/best',
+            'prefer_free_formats': False,  # Don't limit to free formats
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -77,19 +79,39 @@ def get_stream(video_id):
             
             if result:
                 audio_url = result.get('url')
+                audio_bitrate = result.get('abr', 0)
+                audio_codec = result.get('acodec', 'unknown')
                 
+                # If direct URL not available, find best audio format manually
                 if not audio_url and result.get('formats'):
-                    audio_formats = [f for f in result['formats'] if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
+                    audio_formats = [f for f in result['formats'] 
+                                    if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
                     if audio_formats:
-                        audio_formats.sort(key=lambda x: x.get('abr', 0) or 0, reverse=True)
-                        audio_url = audio_formats[0].get('url')
+                        # Sort by bitrate (highest first), prefer opus/aac codecs
+                        audio_formats.sort(
+                            key=lambda x: (
+                                x.get('abr', 0) or 0,
+                                1 if x.get('acodec') in ['opus', 'aac'] else 0
+                            ), 
+                            reverse=True
+                        )
+                        best = audio_formats[0]
+                        audio_url = best.get('url')
+                        audio_bitrate = best.get('abr', 0)
+                        audio_codec = best.get('acodec', 'unknown')
                 
                 if audio_url:
-                    print(f"[Stream] ✅ Got audio stream")
+                    quality = 'high' if audio_bitrate and audio_bitrate >= 128 else 'standard'
+                    print(f"[Stream] ✅ Got {quality} quality audio: {audio_bitrate}kbps {audio_codec}")
                     return jsonify({
                         'success': True,
                         'audioUrl': audio_url,
-                        'duration': result.get('duration')
+                        'duration': result.get('duration'),
+                        'quality': {
+                            'bitrate': audio_bitrate,
+                            'codec': audio_codec,
+                            'level': quality
+                        }
                     })
                     
     except Exception as e:
