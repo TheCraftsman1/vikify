@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "data": {
+    "id": "3n3Ppam7vgaVa1iaRUc9Lp",
+    "artist": "The Killers",
+    "title": "Mr. Brightside",
+    "album": "Hot Fuss",
+    "cover": "https://i.scdn.co/image/ab67616d0000b2739c284a6855f4945dc5a3cd73",
+    "releaseDate": "2004-06-15",
+    "downloadLink": "https://spotify-api.mybackend.in/download/The%20Killers/Hot%20Fuss/Mr.%20Brightside-3n3Ppam7vgaVa1iaRUc9Lp.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=fb1f22f7dff2534061496f49%2F20251207%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251207T201445Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=543dc5fea72caa669a3a302b3f5584964fce09f65099a6713278bb9a03545469"
+  },
+  "generatedTimeStamp": 1765138533841
+}
