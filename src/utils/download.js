@@ -1,6 +1,6 @@
 import { saveAudioBlob } from './offlineDB';
 
-const BACKEND_URL = `http://${window.location.hostname}:5000`;
+const BACKEND_URL = 'https://vikify-production.up.railway.app';
 
 /**
  * Get video ID from YouTube search

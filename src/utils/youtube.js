@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Backend URL - uses env var in production, localhost in dev
 // Set VITE_BACKEND_URL in your .env file or at build time
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`;
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://vikify-production.up.railway.app';
 
 /**
  * Search for a video and get its direct audio stream URL

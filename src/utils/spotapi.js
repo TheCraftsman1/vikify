@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BACKEND_URL = `http://${window.location.hostname}:5000`;
+const BACKEND_URL = 'https://vikify-production.up.railway.app';
 
 /**
  * Search for tracks using the Python SpotAPI backend
