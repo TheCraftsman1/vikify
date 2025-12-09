@@ -4,6 +4,12 @@ import { getAudioBlob } from '../utils/offlineDB';
 
 const PlayerContext = createContext();
 
+// Audio quality and volume constants
+const VOLUME_MIN = 0;
+const VOLUME_MAX = 1;
+const VOLUME_DEFAULT = 0.8; // Start at 80% for ear safety
+const VOLUME_STEP = 0.05; // 5% increments for keyboard shortcuts
+
 export const usePlayer = () => useContext(PlayerContext);
 
 export const PlayerProvider = ({ children }) => {
@@ -20,10 +26,11 @@ export const PlayerProvider = ({ children }) => {
     const [shuffle, setShuffle] = useState(false); // Shuffle mode
     const [upNextQueue, setUpNextQueue] = useState([]); // Suggested songs (used only when no playlist queue)
     const [isOfflinePlayback, setIsOfflinePlayback] = useState(false);
-    const [volume, setVolume] = useState(1); // Volume 0-1
+    const [volume, setVolume] = useState(VOLUME_DEFAULT); // Start at safe volume
     const [isMuted, setIsMuted] = useState(false);
     const [sleepTimer, setSleepTimer] = useState(null); // Minutes left, null = off
     const [isFullScreen, setIsFullScreen] = useState(false);
+    const [audioQuality, setAudioQuality] = useState(null); // {bitrate, codec, level}
     const playerRef = useRef(null);
     const blobUrlRef = useRef(null);
     const sleepTimerRef = useRef(null);
@@ -377,11 +384,11 @@ export const PlayerProvider = ({ children }) => {
                     break;
                 case 'ArrowUp':
                     e.preventDefault();
-                    changeVolume(volume + 0.1);
+                    changeVolume(volume + VOLUME_STEP);
                     break;
                 case 'ArrowDown':
                     e.preventDefault();
-                    changeVolume(volume - 0.1);
+                    changeVolume(volume - VOLUME_STEP);
                     break;
                 case 'KeyM':
                     toggleMute();

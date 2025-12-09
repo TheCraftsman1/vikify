@@ -1,0 +1,5 @@
+# Railway uses Nixpacks which includes ffmpeg
+# This file tells Nixpacks to also include ffmpeg
+
+[phases.setup]
+nixPkgs = ["ffmpeg"]
