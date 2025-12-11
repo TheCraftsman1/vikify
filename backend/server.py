@@ -1,13 +1,62 @@
-from flask import Flask, jsonify, request, Response, send_file
+from flask import Flask, jsonify, request, Response, send_file, redirect
 from flask_cors import CORS
 import yt_dlp
 import re
 import os
 import tempfile
 import threading
+import time
+import requests
+import base64
+import urllib.parse
 
 app = Flask(__name__)
 CORS(app)
+
+# Spotify API credentials
+SPOTIFY_CLIENT_ID = os.environ.get('SPOTIFY_CLIENT_ID', '242fffd1ca15426ab8c7396a6931b780')
+SPOTIFY_CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET', '5a479c5370ba48bc860048d89878ee4d')
+SPOTIFY_REDIRECT_URI = os.environ.get('SPOTIFY_REDIRECT_URI', 'http://127.0.0.1:5000/auth/spotify/callback')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+
+# Spotify token cache (for client credentials - public API)
+spotify_token = None
+spotify_token_expiry = 0
+
+def get_spotify_token():
+    """Get valid Spotify access token"""
+    global spotify_token, spotify_token_expiry
+    
+    # Return cached token if valid
+    if spotify_token and time.time() < spotify_token_expiry:
+        return spotify_token
+    
+    try:
+        auth_str = f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}"
+        auth_b64 = base64.b64encode(auth_str.encode()).decode()
+        
+        response = requests.post(
+            'https://accounts.spotify.com/api/token',
+            data={'grant_type': 'client_credentials'},
+            headers={
+                'Authorization': f'Basic {auth_b64}',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            spotify_token = data['access_token']
+            # Set expiry 60 seconds before actual expiry
+            spotify_token_expiry = time.time() + data['expires_in'] - 60
+            print(f"[Spotify] ✅ Got new access token")
+            return spotify_token
+        else:
+            print(f"[Spotify] ❌ Token error: {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        print(f"[Spotify] ❌ Token exception: {e}")
+        return None
 
 # Temp directory for downloads
 TEMP_DIR = os.path.join(tempfile.gettempdir(), 'vikify_cache')
@@ -61,6 +110,185 @@ def search():
         print(f"[Search] yt-dlp error: {e}")
     
     return jsonify({'success': False, 'error': 'No results'})
+
+# ============== ITUNES SEARCH PROXY ==============
+
+@app.route('/itunes/search')
+def itunes_search():
+    """Proxy iTunes search API to bypass CORS/redirect issues on mobile"""
+    query = request.args.get('q', '')
+    limit = request.args.get('limit', '30')
+    
+    if not query:
+        return jsonify({'success': False, 'error': 'No query provided'}), 400
+    
+    try:
+        response = requests.get(
+            'https://itunes.apple.com/search',
+            params={
+                'term': query,
+                'media': 'music',
+                'limit': limit
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            # Format results for frontend
+            results = []
+            for item in data.get('results', []):
+                results.append({
+                    'id': item.get('trackId'),
+                    'title': item.get('trackName'),
+                    'artist': item.get('artistName'),
+                    'album': item.get('collectionName'),
+                    'image': item.get('artworkUrl100', '').replace('100x100', '300x300'),
+                    'previewUrl': item.get('previewUrl'),
+                    'duration': item.get('trackTimeMillis')
+                })
+            
+            print(f"[iTunes] ✅ Found {len(results)} results for '{query}'")
+            return jsonify({'success': True, 'results': results})
+        else:
+            print(f"[iTunes] API error: {response.status_code}")
+            return jsonify({'success': False, 'error': 'iTunes API error'}), 500
+            
+    except Exception as e:
+        print(f"[iTunes] Exception: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ============== SPOTIFY USER OAUTH ==============
+
+@app.route('/auth/spotify')
+def spotify_auth():
+    """Redirect user to Spotify login"""
+    scopes = 'user-read-private user-read-email playlist-read-private playlist-read-collaborative user-library-read'
+    params = {
+        'client_id': SPOTIFY_CLIENT_ID,
+        'response_type': 'code',
+        'redirect_uri': SPOTIFY_REDIRECT_URI,
+        'scope': scopes,
+        'show_dialog': 'true'
+    }
+    auth_url = f"https://accounts.spotify.com/authorize?{urllib.parse.urlencode(params)}"
+    print(f"[Spotify Auth] Redirecting to Spotify login")
+    return redirect(auth_url)
+
+@app.route('/auth/spotify/callback')
+def spotify_callback():
+    """Handle OAuth callback from Spotify"""
+    code = request.args.get('code')
+    error = request.args.get('error')
+    
+    if error:
+        return redirect(f"{FRONTEND_URL}/?auth_error={error}")
+    
+    if not code:
+        return redirect(f"{FRONTEND_URL}/?auth_error=no_code")
+    
+    try:
+        auth_str = f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}"
+        auth_b64 = base64.b64encode(auth_str.encode()).decode()
+        
+        response = requests.post(
+            'https://accounts.spotify.com/api/token',
+            data={
+                'grant_type': 'authorization_code',
+                'code': code,
+                'redirect_uri': SPOTIFY_REDIRECT_URI
+            },
+            headers={
+                'Authorization': f'Basic {auth_b64}',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        )
+        
+        if response.status_code == 200:
+            tokens = response.json()
+            params = urllib.parse.urlencode({
+                'access_token': tokens['access_token'],
+                'refresh_token': tokens.get('refresh_token', ''),
+                'expires_in': tokens.get('expires_in', 3600)
+            })
+            print(f"[Spotify Auth] ✅ Got user tokens")
+            return redirect(f"{FRONTEND_URL}/?{params}")
+        else:
+            print(f"[Spotify Auth] ❌ Token exchange failed: {response.status_code}")
+            return redirect(f"{FRONTEND_URL}/?auth_error=token_failed")
+            
+    except Exception as e:
+        print(f"[Spotify Auth] ❌ Exception: {e}")
+        return redirect(f"{FRONTEND_URL}/?auth_error=exception")
+
+@app.route('/spotify/me')
+def spotify_user_profile():
+    """Get authenticated user's profile"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({'success': False, 'error': 'No authorization'}), 401
+    
+    try:
+        response = requests.get('https://api.spotify.com/v1/me', headers={'Authorization': auth_header})
+        if response.status_code == 200:
+            data = response.json()
+            return jsonify({
+                'success': True,
+                'user': {
+                    'id': data.get('id'),
+                    'name': data.get('display_name'),
+                    'email': data.get('email'),
+                    'image': data.get('images', [{}])[0].get('url') if data.get('images') else None
+                }
+            })
+        return jsonify({'success': False, 'error': 'Failed'}), response.status_code
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/spotify/me/playlists')
+def spotify_user_playlists():
+    """Get user's playlists"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({'success': False, 'error': 'No authorization'}), 401
+    
+    try:
+        response = requests.get('https://api.spotify.com/v1/me/playlists?limit=50', headers={'Authorization': auth_header})
+        if response.status_code == 200:
+            data = response.json()
+            playlists = [{
+                'id': p.get('id'),
+                'title': p.get('name'),
+                'image': p.get('images', [{}])[0].get('url') if p.get('images') else None,
+                'tracksCount': p.get('tracks', {}).get('total', 0)
+            } for p in data.get('items', [])]
+            return jsonify({'success': True, 'playlists': playlists})
+        return jsonify({'success': False, 'error': 'Failed'}), response.status_code
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/spotify/me/tracks')
+def spotify_user_tracks():
+    """Get user's liked songs"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({'success': False, 'error': 'No authorization'}), 401
+    
+    try:
+        response = requests.get('https://api.spotify.com/v1/me/tracks?limit=50', headers={'Authorization': auth_header})
+        if response.status_code == 200:
+            data = response.json()
+            tracks = [{
+                'id': t.get('track', {}).get('id'),
+                'title': t.get('track', {}).get('name'),
+                'artist': ', '.join([a.get('name', '') for a in t.get('track', {}).get('artists', [])]),
+                'image': t.get('track', {}).get('album', {}).get('images', [{}])[0].get('url') if t.get('track', {}).get('album', {}).get('images') else None,
+                'duration': t.get('track', {}).get('duration_ms')
+            } for t in data.get('items', [])]
+            return jsonify({'success': True, 'tracks': tracks, 'total': data.get('total', 0)})
+        return jsonify({'success': False, 'error': 'Failed'}), response.status_code
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/stream/<video_id>')
 def get_stream(video_id):
@@ -216,6 +444,106 @@ def get_related(video_id):
         print(f"[Related] Error: {e}")
     
     return jsonify({'success': False, 'related': []})
+
+# ============== SPOTIFY PROXY ENDPOINTS ==============
+
+@app.route('/spotify/playlist/<playlist_id>')
+def get_spotify_playlist(playlist_id):
+    """Fetch Spotify playlist data (bypasses CORS)"""
+    token = get_spotify_token()
+    if not token:
+        return jsonify({'success': False, 'error': 'Failed to authenticate with Spotify'}), 500
+    
+    try:
+        response = requests.get(
+            f'https://api.spotify.com/v1/playlists/{playlist_id}',
+            headers={'Authorization': f'Bearer {token}'}
+        )
+        
+        if response.status_code != 200:
+            print(f"[Spotify] Playlist error: {response.status_code}")
+            return jsonify({'success': False, 'error': f'Spotify API error: {response.status_code}'}), response.status_code
+        
+        data = response.json()
+        
+        # Map to Vikify format
+        playlist = {
+            'id': data['id'],
+            'title': data['name'],
+            'description': data.get('description') or f"By {data['owner']['display_name']}",
+            'image': data['images'][0]['url'] if data.get('images') else None,
+            'type': 'playlist',
+            'songs': []
+        }
+        
+        # Map tracks
+        for item in data.get('tracks', {}).get('items', []):
+            track = item.get('track')
+            if track:
+                playlist['songs'].append({
+                    'id': track['id'],
+                    'title': track['name'],
+                    'artist': ', '.join([a['name'] for a in track['artists']]),
+                    'image': track['album']['images'][0]['url'] if track.get('album', {}).get('images') else None,
+                    'duration': track['duration_ms'] / 1000,
+                    'album': track.get('album', {}).get('name', ''),
+                    'isSpotify': True
+                })
+        
+        print(f"[Spotify] ✅ Playlist '{playlist['title']}' with {len(playlist['songs'])} tracks")
+        return jsonify({'success': True, 'data': playlist})
+        
+    except Exception as e:
+        print(f"[Spotify] Playlist exception: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/spotify/album/<album_id>')
+def get_spotify_album(album_id):
+    """Fetch Spotify album data (bypasses CORS)"""
+    token = get_spotify_token()
+    if not token:
+        return jsonify({'success': False, 'error': 'Failed to authenticate with Spotify'}), 500
+    
+    try:
+        response = requests.get(
+            f'https://api.spotify.com/v1/albums/{album_id}',
+            headers={'Authorization': f'Bearer {token}'}
+        )
+        
+        if response.status_code != 200:
+            print(f"[Spotify] Album error: {response.status_code}")
+            return jsonify({'success': False, 'error': f'Spotify API error: {response.status_code}'}), response.status_code
+        
+        data = response.json()
+        
+        # Map to Vikify format
+        album = {
+            'id': data['id'],
+            'title': data['name'],
+            'description': ', '.join([a['name'] for a in data['artists']]),
+            'image': data['images'][0]['url'] if data.get('images') else None,
+            'type': 'album',
+            'songs': []
+        }
+        
+        # Map tracks
+        for track in data.get('tracks', {}).get('items', []):
+            album['songs'].append({
+                'id': track['id'],
+                'title': track['name'],
+                'artist': ', '.join([a['name'] for a in track['artists']]),
+                'image': album['image'],  # Albums share the same image
+                'duration': track['duration_ms'] / 1000,
+                'album': album['title'],
+                'isSpotify': True
+            })
+        
+        print(f"[Spotify] ✅ Album '{album['title']}' with {len(album['songs'])} tracks")
+        return jsonify({'success': True, 'data': album})
+        
+    except Exception as e:
+        print(f"[Spotify] Album exception: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/health')
 def health():

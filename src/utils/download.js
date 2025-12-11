@@ -1,6 +1,5 @@
-import { saveAudioBlob } from './offlineDB';
-
-const BACKEND_URL = 'https://vikify-production.up.railway.app';
+import { saveAudioBlob, pruneOldDownloads } from './offlineDB';
+import { BACKEND_URL, MAX_DOWNLOADS_HISTORY } from '../config.js';
 
 /**
  * Get video ID from YouTube search
@@ -86,8 +85,7 @@ export const downloadSong = async (song, cacheOnly = false) => {
 
         if (!blob) {
             console.error('[Download] No audio source available');
-            if (!cacheOnly) alert('Unable to download this song');
-            return false;
+            return { success: false, error: 'NO_SOURCE', message: 'Unable to download this song' };
         }
 
         // Cache to IndexedDB for offline playback
@@ -102,6 +100,8 @@ export const downloadSong = async (song, cacheOnly = false) => {
 
         if (cached) {
             console.log('[Download] ✅ Cached for offline playback');
+            // Enforce smart cache limit
+            pruneOldDownloads(MAX_DOWNLOADS_HISTORY).catch(e => console.error(e));
         }
 
         // Trigger browser download (unless cacheOnly)
@@ -135,11 +135,10 @@ export const downloadSong = async (song, cacheOnly = false) => {
 
         localStorage.setItem('downloads', JSON.stringify(filtered));
 
-        return true;
+        return { success: true };
     } catch (error) {
         console.error('[Download] Error:', error);
-        if (!cacheOnly) alert('Failed to download song. Please try again.');
-        return false;
+        return { success: false, error: 'DOWNLOAD_FAILED', message: error.message || 'Failed to download song' };
     }
 };
 

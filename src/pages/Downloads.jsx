@@ -100,63 +100,111 @@ const Downloads = () => {
     const offlineCount = downloads.filter(d => d.isOffline).length;
 
     return (
-        <div style={{ minHeight: '100%', position: 'relative' }}>
+        <div className="downloads-page" style={{ minHeight: '100%', position: 'relative' }}>
             {/* Header Gradient */}
             <div style={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
                 right: 0,
-                height: '332px',
+                height: '380px',
                 background: 'linear-gradient(180deg, #5038a0 0%, #121212 100%)',
                 pointerEvents: 'none'
             }} />
 
-            <div style={{ position: 'relative', padding: '24px', paddingBottom: '120px' }} className="page-content">
-                {/* Header */}
-                <div className="playlist-header" style={{ display: 'flex', alignItems: 'flex-end', gap: '24px', marginBottom: '24px', paddingTop: '32px', flexWrap: 'wrap' }}>
-                    <div className="playlist-header-image" style={{
-                        width: '200px',
-                        height: '200px',
+            <div style={{ position: 'relative', padding: '24px', paddingBottom: '160px' }} className="page-content">
+                {/* Header - Centered on Mobile */}
+                <div className="downloads-header" style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    textAlign: 'center',
+                    marginBottom: '32px',
+                    paddingTop: '24px'
+                }}>
+                    {/* Download Icon Box */}
+                    <div style={{
+                        width: '180px',
+                        height: '180px',
                         borderRadius: '8px',
                         background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        boxShadow: '0 4px 60px rgba(0,0,0,0.5)',
-                        flexShrink: 0
+                        boxShadow: '0 8px 32px rgba(91, 56, 160, 0.5)',
+                        marginBottom: '24px'
                     }}>
                         <Download size={64} color="#fff" />
                     </div>
-                    <div style={{ flex: 1, minWidth: '200px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Playlist</span>
-                        <h1 style={{
-                            fontSize: 'clamp(32px, 8vw, 72px)',
-                            fontWeight: 900,
-                            marginTop: '8px',
-                            marginBottom: '12px',
-                            lineHeight: 1
-                        }}>Downloads</h1>
-                        <p style={{ color: '#b3b3b3', fontSize: '14px', marginBottom: '8px' }}>
-                            Your offline collection • {downloads.length} song{downloads.length !== 1 ? 's' : ''}
-                        </p>
-                        {/* Storage Info */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '13px', color: '#b3b3b3', flexWrap: 'wrap' }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <WifiOff size={14} />
-                                {offlineCount} offline
-                            </span>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <HardDrive size={14} />
-                                {storageInfo.usedMB} MB
-                            </span>
-                        </div>
+
+                    {/* Info Section */}
+                    <span style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '1.5px',
+                        color: 'rgba(255,255,255,0.7)',
+                        marginBottom: '8px'
+                    }}>Playlist</span>
+
+                    <h1 style={{
+                        fontSize: '32px',
+                        fontWeight: 800,
+                        marginBottom: '12px',
+                        lineHeight: 1
+                    }}>Downloads</h1>
+
+                    <p style={{
+                        color: '#b3b3b3',
+                        fontSize: '14px',
+                        marginBottom: '12px'
+                    }}>
+                        Your offline collection • {downloads.length} song{downloads.length !== 1 ? 's' : ''}
+                    </p>
+
+                    {/* Storage Info - Horizontal Pills */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '12px',
+                        fontSize: '13px',
+                        color: '#b3b3b3'
+                    }}>
+                        <span style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: 'rgba(255,255,255,0.08)',
+                            padding: '6px 12px',
+                            borderRadius: '16px'
+                        }}>
+                            <WifiOff size={14} />
+                            {offlineCount} offline
+                        </span>
+                        <span style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: 'rgba(255,255,255,0.08)',
+                            padding: '6px 12px',
+                            borderRadius: '16px'
+                        }}>
+                            <HardDrive size={14} />
+                            {storageInfo.usedMB} MB
+                        </span>
                     </div>
                 </div>
 
-                {/* Play Button */}
+                {/* Action Buttons - Centered */}
                 {downloads.length > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '24px' }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '20px',
+                        marginBottom: '32px'
+                    }}>
                         <button
                             onClick={() => downloads.length > 0 && handlePlay(downloads[0])}
                             style={{
@@ -168,31 +216,43 @@ const Downloads = () => {
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
-                                transition: 'all 0.2s'
+                                transition: 'all 0.2s',
+                                border: 'none',
+                                cursor: 'pointer'
                             }}
-                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.backgroundColor = '#1ed760'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.backgroundColor = '#1db954'; }}
                         >
                             <Play size={24} fill="#000" color="#000" style={{ marginLeft: '2px' }} />
                         </button>
                         <button
                             onClick={clearAllDownloads}
-                            style={{ color: '#b3b3b3', padding: '8px' }}
-                            onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
-                            onMouseLeave={(e) => e.currentTarget.style.color = '#b3b3b3'}
+                            style={{
+                                color: '#b3b3b3',
+                                padding: '12px',
+                                background: 'rgba(255,255,255,0.08)',
+                                borderRadius: '50%',
+                                border: 'none',
+                                cursor: 'pointer'
+                            }}
                             title="Clear all"
                         >
-                            <Trash2 size={24} />
+                            <Trash2 size={22} />
                         </button>
                     </div>
                 )}
 
-                {/* Content */}
+                {/* Empty State - Properly Centered */}
                 {downloads.length === 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px', textAlign: 'center' }}>
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '48px 24px',
+                        textAlign: 'center'
+                    }}>
                         <div style={{
-                            width: '128px',
-                            height: '128px',
+                            width: '100px',
+                            height: '100px',
                             borderRadius: '50%',
                             backgroundColor: '#282828',
                             display: 'flex',
@@ -200,10 +260,20 @@ const Downloads = () => {
                             justifyContent: 'center',
                             marginBottom: '24px'
                         }}>
-                            <Music size={48} color="#7f7f7f" />
+                            <Music size={40} color="#7f7f7f" />
                         </div>
-                        <h2 style={{ fontSize: '32px', fontWeight: 700, marginBottom: '8px' }}>No downloads yet</h2>
-                        <p style={{ color: '#b3b3b3', maxWidth: '400px' }}>
+                        <h2 style={{
+                            fontSize: '22px',
+                            fontWeight: 700,
+                            marginBottom: '8px',
+                            color: '#fff'
+                        }}>No downloads yet</h2>
+                        <p style={{
+                            color: '#b3b3b3',
+                            maxWidth: '280px',
+                            fontSize: '14px',
+                            lineHeight: 1.5
+                        }}>
                             Songs you download will appear here and be available offline!
                         </p>
                     </div>

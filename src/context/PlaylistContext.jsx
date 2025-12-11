@@ -8,6 +8,7 @@ const STORAGE_KEY = 'vikify-custom-playlists';
 
 export const PlaylistProvider = ({ children }) => {
     const [playlists, setPlaylists] = useState([]);
+    const [isLoaded, setIsLoaded] = useState(false);
 
     // Load from localStorage on mount
     useEffect(() => {
@@ -20,12 +21,16 @@ export const PlaylistProvider = ({ children }) => {
                 console.error('[Playlists] Error parsing saved data:', e);
             }
         }
+        setIsLoaded(true); // Mark as loaded after initial load
     }, []);
 
-    // Save to localStorage whenever playlists change
+    // Save to localStorage whenever playlists change (but only after initial load)
     useEffect(() => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(playlists));
-    }, [playlists]);
+        if (isLoaded) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(playlists));
+            console.log('[Playlists] Saved', playlists.length, 'playlists to localStorage');
+        }
+    }, [playlists, isLoaded]);
 
     /**
      * Create a new playlist
@@ -33,15 +38,23 @@ export const PlaylistProvider = ({ children }) => {
      * @param {string} description - Optional description
      * @returns {Object} Created playlist
      */
-    const createPlaylist = (name, description = '') => {
+    /**
+     * Create a new playlist
+     * @param {string} name - Playlist name
+     * @param {string} description - Optional description
+     * @param {string} image - Optional image URL
+     * @param {Array} songList - Optional initial songs
+     * @returns {Object} Created playlist
+     */
+    const createPlaylist = (name, description = '', image = null, songList = []) => {
         const newPlaylist = {
             id: `custom-${Date.now()}`,
             title: name,
             description: description || `Created ${new Date().toLocaleDateString()}`,
-            songs: [],
+            songs: songList || [],
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            image: null, // Will use first song's image or gradient
+            image: image || (songList && songList.length > 0 ? songList[0].image : null),
             isCustom: true
         };
 

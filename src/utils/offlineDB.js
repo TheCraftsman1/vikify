@@ -259,3 +259,28 @@ export const clearAllOfflineData = async () => {
         return false;
     }
 };
+/**
+ * Prune old downloads to enforce a limit
+ * @param {number} limit - Maximum number of songs to keep
+ */
+export const pruneOldDownloads = async (limit) => {
+    if (!limit || limit <= 0) return;
+
+    try {
+        const songs = await getAllOfflineSongs();
+        if (songs.length <= limit) return;
+
+        // Sort by downloadedAt (oldest first)
+        songs.sort((a, b) => (a.downloadedAt || 0) - (b.downloadedAt || 0));
+
+        // Delete excess
+        const toDelete = songs.slice(0, songs.length - limit);
+        console.log(`[OfflineDB] Pruning ${toDelete.length} old songs...`);
+
+        for (const song of toDelete) {
+            await deleteAudioBlob(song.songId);
+        }
+    } catch (error) {
+        console.error('[OfflineDB] Error pruning downloads:', error);
+    }
+};

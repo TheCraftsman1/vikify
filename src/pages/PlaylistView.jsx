@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Play, Pause, Clock, Download, Heart, Shuffle, MoreHorizontal, Plus, Trash2, Music, Loader } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext';
@@ -8,6 +8,7 @@ import { useOffline } from '../context/OfflineContext';
 import { albums } from '../data/songs';
 import { downloadSong } from '../utils/download';
 import AddToPlaylistModal from '../components/AddToPlaylistModal';
+import { getPlaylist as getSpotifyPlaylist, getAlbum as getSpotifyAlbum } from '../services/spotify';
 
 const PlaylistView = () => {
     const { id } = useParams();
@@ -18,10 +19,47 @@ const PlaylistView = () => {
     const { isSongOffline, downloadPlaylist, isDownloading } = useOffline();
 
     const [addToPlaylistSong, setAddToPlaylistSong] = useState(null);
+    const [fetchedAlbum, setFetchedAlbum] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
 
     // Check if this is a custom playlist or an album
     const customPlaylist = getPlaylist(id);
-    const album = customPlaylist || albums.find(a => a.id === id);
+    const localAlbum = albums.find(a => a.id === id);
+
+    // Effective album (local or fetched)
+    const album = customPlaylist || localAlbum || fetchedAlbum;
+
+    useEffect(() => {
+        if (!customPlaylist && !localAlbum) {
+            const fetchSpotifyData = async () => {
+                setIsLoading(true);
+                try {
+                    // Try fetching as playlist first
+                    let data = await getSpotifyPlaylist(id);
+                    if (!data) {
+                        // Try as album
+                        data = await getSpotifyAlbum(id);
+                    }
+                    if (data) {
+                        setFetchedAlbum(data);
+                    }
+                } catch (e) {
+                    console.error("Error fetching spotify data", e);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+            fetchSpotifyData();
+        }
+    }, [id, customPlaylist, localAlbum]);
+
+    if (isLoading) {
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100%', padding: '24px' }}>
+                <Loader className="animate-spin" size={32} color="#1db954" />
+            </div>
+        );
+    }
 
     if (!album) {
         return (
@@ -40,7 +78,7 @@ const PlaylistView = () => {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const totalDuration = album.songs.reduce((acc, s) => acc + (s.duration || 0), 0);
+    const totalDuration = album.songs ? album.songs.reduce((acc, s) => acc + (s.duration || 0), 0) : 0;
     const isCurrentAlbumPlaying = currentSong && album.songs.some(s => s.id === currentSong.id);
 
     const handlePlayClick = () => {
@@ -95,17 +133,10 @@ const PlaylistView = () => {
                 pointerEvents: 'none'
             }} />
 
-            <div style={{ position: 'relative', padding: '24px', paddingBottom: '120px' }}>
+            <div className="playlist-page-content" style={{ position: 'relative', padding: '24px', paddingBottom: '120px' }}>
                 {/* Playlist Header */}
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '24px', marginBottom: '24px', paddingTop: '32px' }}>
-                    <div style={{
-                        width: '232px',
-                        height: '232px',
-                        borderRadius: '4px',
-                        overflow: 'hidden',
-                        boxShadow: '0 4px 60px rgba(0,0,0,0.5)',
-                        flexShrink: 0
-                    }}>
+                <div className="playlist-header">
+                    <div className="playlist-header-image">
                         {album.image ? (
                             <img
                                 src={album.image}
@@ -122,32 +153,23 @@ const PlaylistView = () => {
                                 alignItems: 'center',
                                 justifyContent: 'center'
                             }}>
-                                <Music size={80} color="#7f7f7f" />
+                                <Music size={80} color="#7f7f7f" className="playlist-header-icon" />
                             </div>
                         )}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: '14px', fontWeight: 700, textTransform: 'uppercase' }}>
+                    <div className="playlist-header-info">
+                        <span className="playlist-type-label">
                             {customPlaylist ? 'Playlist' : 'Playlist'}
                         </span>
-                        <h1 style={{
-                            fontSize: '72px',
-                            fontWeight: 900,
-                            marginTop: '8px',
-                            marginBottom: '16px',
-                            lineHeight: 0.9,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                        }}>{album.title}</h1>
-                        <p style={{ color: '#b3b3b3', fontSize: '14px', marginBottom: '8px' }}>
+                        <h1 className="playlist-title">{album.title}</h1>
+                        <p className="playlist-description">
                             {album.description || 'A collection of amazing songs'}
                         </p>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px' }}>
-                            <span style={{ fontWeight: 700 }}>{album.artist || 'Your playlist'}</span>
-                            <span style={{ color: '#b3b3b3' }}>•</span>
-                            <span style={{ color: '#b3b3b3' }}>{album.songs.length} songs,</span>
-                            <span style={{ color: '#b3b3b3' }}>about {Math.floor(totalDuration / 60)} min</span>
+                        <div className="playlist-meta">
+                            <span className="playlist-artist">{album.artist || 'Your playlist'}</span>
+                            <span className="playlist-meta-dot">•</span>
+                            <span className="playlist-meta-info">{album.songs.length} songs,</span>
+                            <span className="playlist-meta-info">about {Math.floor(totalDuration / 60)} min</span>
                         </div>
                     </div>
                 </div>
@@ -415,8 +437,179 @@ const PlaylistView = () => {
                 .track-row:hover .track-play { display: block !important; }
                 .track-row:hover .action-btn { opacity: 1 !important; }
                 .action-btn:hover { color: #fff !important; }
+                
+                /* Playlist Header Styles */
+                .playlist-header {
+                    display: flex;
+                    align-items: flex-end;
+                    gap: 24px;
+                    margin-bottom: 24px;
+                    padding-top: 32px;
+                }
+                .playlist-header-image {
+                    width: 232px;
+                    height: 232px;
+                    border-radius: 4px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 60px rgba(0,0,0,0.5);
+                    flex-shrink: 0;
+                }
+                .playlist-header-info {
+                    flex: 1;
+                    min-width: 0;
+                }
+                .playlist-type-label {
+                    font-size: 14px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                }
+                .playlist-title {
+                    font-size: 72px;
+                    font-weight: 900;
+                    margin-top: 8px;
+                    margin-bottom: 16px;
+                    line-height: 0.9;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .playlist-description {
+                    color: #b3b3b3;
+                    font-size: 14px;
+                    margin-bottom: 8px;
+                }
+                .playlist-meta {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    font-size: 14px;
+                    flex-wrap: wrap;
+                }
+                .playlist-artist {
+                    font-weight: 700;
+                }
+                .playlist-meta-dot,
+                .playlist-meta-info {
+                    color: #b3b3b3;
+                }
+                
+                /* MOBILE RESPONSIVE */
                 @media (max-width: 768px) {
                     .hide-mobile { display: none !important; }
+                    
+                    .playlist-page-content {
+                        padding: 16px !important;
+                        padding-bottom: 160px !important;
+                    }
+                    
+                    .playlist-header {
+                        flex-direction: column;
+                        align-items: center;
+                        text-align: center;
+                        gap: 16px;
+                        padding-top: 16px;
+                    }
+                    
+                    .playlist-header-image {
+                        width: 180px;
+                        height: 180px;
+                    }
+                    
+                    .playlist-header-icon {
+                        width: 48px !important;
+                        height: 48px !important;
+                    }
+                    
+                    .playlist-header-info {
+                        width: 100%;
+                    }
+                    
+                    .playlist-title {
+                        font-size: 28px !important;
+                        line-height: 1.1;
+                        white-space: normal;
+                        word-wrap: break-word;
+                    }
+                    
+                    .playlist-meta {
+                        justify-content: center;
+                    }
+                    
+                    /* Track list mobile */
+                    .track-list-header {
+                        display: none !important;
+                    }
+                    
+                    .track-row {
+                        display: flex !important;
+                        align-items: center !important;
+                        padding: 10px 0 !important;
+                        gap: 12px !important;
+                    }
+                    
+                    /* Hide track number on mobile */
+                    .track-row > div:first-child {
+                        display: none !important;
+                    }
+                    
+                    /* Song info container */
+                    .track-row > div:nth-child(2) {
+                        flex: 1 !important;
+                        min-width: 0 !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        gap: 12px !important;
+                    }
+                    
+                    /* Hide album column */
+                    .track-row > div:nth-child(3) {
+                        display: none !important;
+                    }
+                    
+                    /* Actions column - simplified */
+                    .track-row > div:nth-child(4) {
+                        flex-shrink: 0 !important;
+                        gap: 4px !important;
+                    }
+                    
+                    /* Hide action buttons except like on mobile */
+                    .track-row .action-btn {
+                        display: none !important;
+                    }
+                    
+                    /* Keep heart visible if liked */
+                    .track-row .action-btn:first-child {
+                        display: flex !important;
+                        opacity: 1 !important;
+                    }
+                    
+                    /* Song image */
+                    .track-row img {
+                        width: 48px !important;
+                        height: 48px !important;
+                        border-radius: 4px;
+                    }
+                    
+                    /* Song text container */
+                    .track-row > div:nth-child(2) > div:last-child {
+                        min-width: 0;
+                    }
+                    
+                    /* Song title - mobile */
+                    .track-row > div:nth-child(2) > div:last-child > div:first-child {
+                        font-size: 15px !important;
+                        font-weight: 500 !important;
+                    }
+                    
+                    /* Artist name - mobile */
+                    .track-row > div:nth-child(2) > div:last-child > div:last-child {
+                        font-size: 13px !important;
+                    }
+                    
+                    /* Action bar mobile */
+                    .action-bar {
+                        gap: 16px !important;
+                    }
                 }
             `}</style>
         </div>

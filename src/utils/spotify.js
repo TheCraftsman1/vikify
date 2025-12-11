@@ -1,8 +1,6 @@
 import axios from 'axios';
 import { searchYouTube } from './youtube.js';
-
-const RAPIDAPI_KEY = 'db265c87acmsh63e2fe36b9673a3p182b87jsne1fdbe07fddc';
-const RAPIDAPI_HOST = 'spotify-downloader9.p.rapidapi.com';
+import { RAPIDAPI_KEY, RAPIDAPI_HOST, ENABLE_RAPIDAPI } from '../config.js';
 
 /**
  * Downloads a track from Spotify using RapidAPI

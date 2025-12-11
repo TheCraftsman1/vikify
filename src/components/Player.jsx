@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Play, Pause, SkipBack, SkipForward, Volume2, Volume1, VolumeX,
     Repeat, Shuffle, Heart, Loader, Maximize2, Mic2, ListMusic, Laptop2,
     Timer, X, ChevronDown
 } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext';
-import ReactPlayer from 'react-player';
+import { useLikedSongs } from '../context/LikedSongsContext';
+import MobileFullScreenPlayer from './MobileFullScreenPlayer';
 
 const Player = () => {
     const {
@@ -17,12 +18,63 @@ const Player = () => {
         sleepTimer, startSleepTimer, cancelSleepTimer,
         isFullScreen, toggleFullScreen
     } = usePlayer();
+    const { isLiked, toggleLike } = useLikedSongs();
 
-    const [isLiked, setIsLiked] = useState(false);
     const [isShuffle, setIsShuffle] = useState(false);
     const [repeatMode, setRepeatMode] = useState(0);
     const [showQueue, setShowQueue] = useState(false);
     const [showSleepMenu, setShowSleepMenu] = useState(false);
+    const [showMobileFullScreen, setShowMobileFullScreen] = useState(false);
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+    const [dominantColor, setDominantColor] = useState('#121212');
+
+    // Detect mobile screen
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth <= 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Generate color from current song
+    useEffect(() => {
+        if (currentSong?.image) {
+            const hash = currentSong.image.split('').reduce((a, b) => {
+                a = ((a << 5) - a) + b.charCodeAt(0);
+                return a & a;
+            }, 0);
+            const hue = Math.abs(hash) % 360;
+            setDominantColor(`hsl(${hue}, 35%, 25%)`);
+        }
+    }, [currentSong?.image]);
+
+    // Check if current song is liked
+    const currentSongLiked = currentSong ? isLiked(currentSong.id) : false;
+
+    // Single unified play/pause handler for all buttons
+    const handlePlayPause = () => {
+        // If we don't have an audio element yet, just toggle the UI state
+        if (!playerRef.current) {
+            togglePlay();
+            return;
+        }
+
+        const audio = playerRef.current;
+
+        if (audio.paused) {
+            // Currently paused → play
+            audio.play()
+                .then(() => {
+                    if (!isPlaying) togglePlay(); // keep context in sync
+                })
+                .catch((err) => {
+                    console.error('[Player] play() failed:', err);
+                });
+        } else {
+            // Currently playing → pause
+            audio.pause();
+            if (isPlaying) togglePlay(); // keep context in sync
+        }
+    };
 
     const isYoutube = youtubeUrl && (youtubeUrl.includes('youtube.com') || youtubeUrl.includes('youtu.be'));
 
@@ -101,8 +153,27 @@ const Player = () => {
             height: '100%',
             padding: '0 16px',
             backgroundColor: '#000',
-            borderTop: '1px solid #282828'
+            borderTop: '1px solid #282828',
+            position: 'relative'
         }}>
+            {/* Mobile Progress Indicator - thin bar at top */}
+            <div className="mobile-progress-indicator" style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '3px',
+                backgroundColor: 'rgba(255,255,255,0.1)',
+                overflow: 'hidden',
+                borderRadius: '4px 4px 0 0'
+            }}>
+                <div style={{
+                    height: '100%',
+                    backgroundColor: '#1db954',
+                    width: `${(progress / (duration || 1)) * 100}%`,
+                    transition: 'width 0.2s linear'
+                }} />
+            </div>
             {/* Audio Player - uses native audio for all sources including YouTube streams */}
             {youtubeUrl && (
                 <audio
@@ -123,36 +194,187 @@ const Player = () => {
                 />
             )}
 
-            {/* Left: Now Playing */}
-            <div className="player-now-playing">
-                <div className="player-album-art">
+            {/* Left: Now Playing - flex:1 to take remaining space, min-width:0 for truncation */}
+            {/* On mobile, this becomes a clickable area to open full-screen player */}
+            <div
+                className="player-now-playing"
+                onClick={() => isMobile && setShowMobileFullScreen(true)}
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    flex: 1,
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    cursor: isMobile ? 'pointer' : 'default'
+                }}
+            >
+                <div className="player-album-art" style={{ width: '48px', height: '48px', flexShrink: 0, borderRadius: '6px', overflow: 'hidden' }}>
                     <img
                         src={currentSong.image}
                         alt={currentSong.title}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         onError={(e) => { e.target.src = '/placeholder.svg'; }}
                     />
                 </div>
-                <div className="player-song-info">
-                    <div className="player-song-title">{currentSong.title}</div>
-                    <div className="player-song-artist">{currentSong.artist}</div>
+                <div className="player-song-info" style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                    <div className="player-song-title" style={{
+                        color: '#fff',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                    }}>{currentSong.title}</div>
+                    <div className="player-song-artist" style={{
+                        color: '#b3b3b3',
+                        fontSize: '12px',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                    }}>{currentSong.artist}</div>
                 </div>
+            </div>
+
+            {/* Mobile Mini Player Controls - Spotify style */}
+            <div
+                className="mobile-player-controls"
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    flexShrink: 0
+                }}
+            >
+                {/* Device/Headphones icon - shows connection status */}
                 <button
-                    onClick={() => setIsLiked(!isLiked)}
-                    className="hide-mobile"
+                    className="mobile-only-btn"
+                    onClick={(e) => { e.stopPropagation(); }}
                     style={{
-                        color: isLiked ? '#1db954' : '#b3b3b3',
+                        color: '#1db954',
                         padding: '4px',
-                        transition: 'all 0.2s'
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'none' // Will be shown via CSS on mobile
                     }}
-                    onMouseEnter={(e) => !isLiked && (e.currentTarget.style.color = '#fff')}
-                    onMouseLeave={(e) => !isLiked && (e.currentTarget.style.color = '#b3b3b3')}
+                    title="Connected Device"
                 >
-                    <Heart size={16} fill={isLiked ? '#1db954' : 'none'} />
+                    <Laptop2 size={20} />
+                </button>
+
+                {/* Like button - Spotify style checkmark when liked */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (currentSong) {
+                            toggleLike(currentSong);
+                        }
+                    }}
+                    className="mobile-like-btn"
+                    style={{
+                        width: '26px',
+                        height: '26px',
+                        borderRadius: '50%',
+                        background: currentSongLiked ? '#1db954' : 'transparent',
+                        border: currentSongLiked ? 'none' : '2px solid rgba(255,255,255,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        transform: 'scale(1)'
+                    }}
+                    title={currentSongLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'}
+                >
+                    {currentSongLiked ? (
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <path d="M13.5 4.5L6 12L2.5 8.5" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    ) : (
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <path d="M8 3V13M3 8H13" stroke="rgba(255,255,255,0.8)" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                    )}
+                </button>
+
+                {/* Play/Pause Button */}
+                <button
+                    onClick={(e) => { e.stopPropagation(); handlePlayPause(); }}
+                    className="mobile-play-btn"
+                    style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        background: '#fff',
+                        border: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                    }}
+                >
+                    {isLoading ? (
+                        <Loader size={18} color="#000" className="animate-spin" />
+                    ) : isPlaying ? (
+                        <Pause size={18} fill="#000" color="#000" />
+                    ) : (
+                        <Play size={18} fill="#000" color="#000" style={{ marginLeft: '2px' }} />
+                    )}
                 </button>
             </div>
 
+            {/* Desktop Controls - Hidden on Mobile */}
+            <div
+                className="hide-mobile desktop-player-controls"
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '16px',
+                    flexShrink: 0
+                }}
+            >
+                <button
+                    onClick={playPrevious}
+                    style={{ color: '#fff', padding: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                    <SkipBack size={22} fill="currentColor" />
+                </button>
+                <button
+                    onClick={handlePlayPause}
+                    style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        background: '#fff',
+                        border: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                    }}
+                >
+                    {isLoading ? (
+                        <Loader size={20} color="#000" className="animate-spin" />
+                    ) : isPlaying ? (
+                        <Pause size={22} fill="#000" color="#000" />
+                    ) : (
+                        <Play size={22} fill="#000" color="#000" style={{ marginLeft: '2px' }} />
+                    )}
+                </button>
+                <button
+                    onClick={playNext}
+                    style={{ color: '#fff', padding: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                    <SkipForward size={22} fill="currentColor" />
+                </button>
+            </div>
+
+
+
             {/* Center: Controls */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', maxWidth: '40%', width: '100%' }}>
+            <div className="player-controls" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', maxWidth: '40%', width: '100%' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <button
                         onClick={() => setIsShuffle(!isShuffle)}
@@ -172,13 +394,7 @@ const Player = () => {
                         <SkipBack size={20} fill="currentColor" />
                     </button>
                     <button
-                        onClick={() => {
-                            togglePlay();
-                            if (playerRef.current && !isYoutube) {
-                                if (isPlaying) playerRef.current.pause();
-                                else playerRef.current.play().catch(() => { });
-                            }
-                        }}
+                        onClick={handlePlayPause}
                         disabled={isLoading}
                         style={{
                             width: '32px',
@@ -265,7 +481,7 @@ const Player = () => {
             </div>
 
             {/* Right: Volume & Extra - hidden on mobile */}
-            <div className="hide-mobile" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', width: '30%', minWidth: '180px' }}>
+            <div className="hide-mobile player-extra-controls" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', width: '30%', minWidth: '180px' }}>
                 <button style={{ color: '#b3b3b3', padding: '4px' }}
                     onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
                     onMouseLeave={(e) => e.currentTarget.style.color = '#b3b3b3'}>
@@ -628,7 +844,7 @@ const Player = () => {
                             <SkipBack size={32} fill="currentColor" />
                         </button>
                         <button
-                            onClick={togglePlay}
+                            onClick={handlePlayPause}
                             style={{
                                 width: '72px',
                                 height: '72px',
@@ -678,7 +894,96 @@ const Player = () => {
                 .progress-bar:hover .progress-fill { background-color: #1db954 !important; }
                 .progress-bar:hover .progress-thumb { opacity: 1 !important; }
                 .volume-bar:hover .volume-fill { background-color: #1db954 !important; }
+                
+                /* Mobile Player Bar Styles - Override nth-child rules */
+                @media (max-width: 768px) {
+                    .player-bar {
+                        background: linear-gradient(90deg, ${dominantColor} 0%, rgba(18,18,18,0.98) 100%) !important;
+                        border-radius: 8px !important;
+                        margin: 4px 8px !important;
+                        padding: 10px 14px !important;
+                        height: auto !important;
+                        min-height: 64px !important;
+                    }
+                    
+                    /* CRITICAL: Override the nth-child(3) hiding rule */
+                    .player-bar > .mobile-player-controls {
+                        display: flex !important;
+                        visibility: visible !important;
+                        opacity: 1 !important;
+                    }
+                    
+                    /* Also use nth-child to override index.css */
+                    .player-bar > div:nth-child(2),
+                    .player-bar > div:nth-child(3) {
+                        display: flex !important;
+                    }
+                    
+                    .desktop-player-controls {
+                        display: none !important;
+                    }
+                    
+                    .mobile-player-controls {
+                        display: flex !important;
+                        align-items: center !important;
+                        gap: 10px !important;
+                    }
+                    
+                    .mobile-only-btn {
+                        display: flex !important;
+                    }
+                    
+                    .player-now-playing {
+                        flex: 1 !important;
+                        min-width: 0 !important;
+                    }
+                    
+                    .player-album-art {
+                        width: 48px !important;
+                        height: 48px !important;
+                        border-radius: 6px !important;
+                    }
+                    
+                    .player-song-title {
+                        font-size: 15px !important;
+                        font-weight: 600 !important;
+                    }
+                    
+                    .player-song-artist {
+                        font-size: 12px !important;
+                        color: rgba(255,255,255,0.7) !important;
+                    }
+                    
+                    /* Mobile progress indicator - visible on mobile */
+                    .mobile-progress-indicator {
+                        display: block !important;
+                    }
+                    
+                    /* Hide center and right desktop controls */
+                    .player-bar > div:nth-child(5),
+                    .player-bar > div:nth-child(6),
+                    .player-bar > div:nth-child(7) {
+                        display: none !important;
+                    }
+                }
+                
+                @media (min-width: 769px) {
+                    .mobile-player-controls {
+                        display: none !important;
+                    }
+                    
+                    /* Hide mobile progress indicator on desktop */
+                    .mobile-progress-indicator {
+                        display: none !important;
+                    }
+                }
             `}</style>
+
+            {/* Mobile Full Screen Player */}
+            <MobileFullScreenPlayer
+                isOpen={showMobileFullScreen}
+                onClose={() => setShowMobileFullScreen(false)}
+            />
         </div>
     );
 };

@@ -7,6 +7,7 @@ import { PlayerProvider } from './context/PlayerContext';
 import { LikedSongsProvider } from './context/LikedSongsContext';
 import { OfflineProvider } from './context/OfflineContext';
 import { PlaylistProvider } from './context/PlaylistContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Debug logging capture
 if (typeof window !== 'undefined') {
@@ -44,7 +45,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <LikedSongsProvider>
           <PlaylistProvider>
             <PlayerProvider>
-              <App />
+              <ErrorBoundary>
+                <App />
+              </ErrorBoundary>
             </PlayerProvider>
           </PlaylistProvider>
         </LikedSongsProvider>
