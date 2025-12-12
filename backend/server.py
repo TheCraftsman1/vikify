@@ -16,8 +16,10 @@ CORS(app)
 # Spotify API credentials
 SPOTIFY_CLIENT_ID = os.environ.get('SPOTIFY_CLIENT_ID', '242fffd1ca15426ab8c7396a6931b780')
 SPOTIFY_CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET', '5a479c5370ba48bc860048d89878ee4d')
-SPOTIFY_REDIRECT_URI = os.environ.get('SPOTIFY_REDIRECT_URI', 'http://127.0.0.1:5000/auth/spotify/callback')
+SPOTIFY_REDIRECT_URI = os.environ.get('SPOTIFY_REDIRECT_URI', 'https://vikify-production.up.railway.app/auth/spotify/callback')
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+# Deep link scheme for mobile app
+MOBILE_APP_SCHEME = 'vikify://'
 
 # Spotify token cache (for client credentials - public API)
 spotify_token = None
@@ -200,16 +202,20 @@ def itunes_search():
 @app.route('/auth/spotify')
 def spotify_auth():
     """Redirect user to Spotify login"""
+    # Check if request is from mobile app
+    is_mobile = request.args.get('mobile', 'false').lower() == 'true'
+    
     scopes = 'user-read-private user-read-email playlist-read-private playlist-read-collaborative user-library-read'
     params = {
         'client_id': SPOTIFY_CLIENT_ID,
         'response_type': 'code',
         'redirect_uri': SPOTIFY_REDIRECT_URI,
         'scope': scopes,
-        'show_dialog': 'true'
+        'show_dialog': 'true',
+        'state': 'mobile' if is_mobile else 'web'
     }
     auth_url = f"https://accounts.spotify.com/authorize?{urllib.parse.urlencode(params)}"
-    print(f"[Spotify Auth] Redirecting to Spotify login")
+    print(f"[Spotify Auth] Redirecting to Spotify login (mobile={is_mobile})")
     return redirect(auth_url)
 
 @app.route('/auth/spotify/callback')
@@ -217,11 +223,19 @@ def spotify_callback():
     """Handle OAuth callback from Spotify"""
     code = request.args.get('code')
     error = request.args.get('error')
+    state = request.args.get('state', '')  # 'mobile' if from app
+    
+    # Determine redirect target based on state
+    is_mobile = state == 'mobile'
     
     if error:
+        if is_mobile:
+            return redirect(f"{MOBILE_APP_SCHEME}?auth_error={error}")
         return redirect(f"{FRONTEND_URL}/?auth_error={error}")
     
     if not code:
+        if is_mobile:
+            return redirect(f"{MOBILE_APP_SCHEME}?auth_error=no_code")
         return redirect(f"{FRONTEND_URL}/?auth_error=no_code")
     
     try:
@@ -248,14 +262,24 @@ def spotify_callback():
                 'refresh_token': tokens.get('refresh_token', ''),
                 'expires_in': tokens.get('expires_in', 3600)
             })
-            print(f"[Spotify Auth] ✅ Got user tokens")
-            return redirect(f"{FRONTEND_URL}/?{params}")
+            print(f"[Spotify Auth] ✅ Got user tokens (mobile={is_mobile})")
+            
+            if is_mobile:
+                # Redirect to mobile app using deep link
+                return redirect(f"{MOBILE_APP_SCHEME}?{params}")
+            else:
+                # Redirect to web frontend
+                return redirect(f"{FRONTEND_URL}/?{params}")
         else:
             print(f"[Spotify Auth] ❌ Token exchange failed: {response.status_code}")
+            if is_mobile:
+                return redirect(f"{MOBILE_APP_SCHEME}?auth_error=token_failed")
             return redirect(f"{FRONTEND_URL}/?auth_error=token_failed")
             
     except Exception as e:
         print(f"[Spotify Auth] ❌ Exception: {e}")
+        if is_mobile:
+            return redirect(f"{MOBILE_APP_SCHEME}?auth_error=exception")
         return redirect(f"{FRONTEND_URL}/?auth_error=exception")
 
 @app.route('/spotify/me')

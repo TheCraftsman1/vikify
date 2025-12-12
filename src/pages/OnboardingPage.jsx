@@ -1,11 +1,17 @@
 import { Browser } from '@capacitor/browser';
+import { Capacitor } from '@capacitor/core';
+import { useAuth } from '../context/AuthContext';
+import { BACKEND_URL } from '../config';
 
 const OnboardingPage = () => {
     const { user, isAuthenticated, completeOnboarding, skipOnboarding, logout } = useAuth();
     const backendUrl = BACKEND_URL;
 
     const handleConnectSpotify = async () => {
-        await Browser.open({ url: `${backendUrl}/auth/spotify` });
+        // Detect if running on mobile (Android/iOS) to tell backend to redirect via deep link
+        const isMobile = Capacitor.isNativePlatform();
+        const authUrl = `${backendUrl}/auth/spotify${isMobile ? '?mobile=true' : ''}`;
+        await Browser.open({ url: authUrl });
     };
 
     const handleLoadData = () => {
