@@ -232,14 +232,6 @@ const OnboardingPage = () => {
                 }}>
                     You can connect your Spotify account later in Settings
                 </p>
-
-                {/* DEBUG INFO - REMOVE IN PRODUCTION */}
-                <div style={{ marginTop: '40px', padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px', fontSize: '10px', color: '#ff4444', fontFamily: 'monospace', width: '100%', wordBreak: 'break-all' }}>
-                    <div><strong>Debug Info:</strong></div>
-                    <div>Backend: {backendUrl}</div>
-                    <div>Platform: {Capacitor.getPlatform()}</div>
-                    <div>User Agent: {navigator.userAgent.substring(0, 50)}...</div>
-                </div>
             </div>
         </div>
     );
