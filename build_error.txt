@@ -1,0 +1,402 @@
+﻿node.exe : 2025-12-12T
+05:29:43.433Z 
+vite:config bundled 
+config file loaded in 
+79.69ms
+At line:1 char:1
++ & "C:\Program Files\
+nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (2025-12-12   
+ T05:2...aded in 7    
+9.69ms:String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+2025-12-12T05:29:43.55
+0Z vite:config using 
+resolved config: {
+  plugins: [
+    
+'vite:build-metadata',
+    'vite:watch-packag
+e-data',
+    'vite:pre-alias',
+    'alias',
+    
+'vite:react-babel',
+    
+'vite:react-refresh',
+    'vite:modulepreloa
+d-polyfill',
+    'vite:resolve',
+    'vite:html-inline-
+proxy',
+    'vite:css',
+    'vite:esbuild',
+    'vite:json',
+    
+'vite:wasm-helper',
+    'vite:worker',
+    'vite:asset',
+    'vite:react-virtua
+l-preamble',
+    
+'vite:wasm-fallback',
+    'vite:define',
+    'vite:css-post',
+    'vite:build-html',
+    'vite:worker-impor
+t-meta-url',
+    'vite:asset-import
+-meta-url',
+    'vite:force-system
+js-wrap-complete',
+    'commonjs',
+    'vite:data-uri',
+    'vite:dynamic-impo
+rt-vars',
+    
+'vite:import-glob',
+    'vite:build-import
+-analysis',
+    'vite:esbuild-tran
+spile',
+    'vite:terser',
+    'vite:reporter',
+    
+'vite:load-fallback'
+  ],
+  server: {
+    
+preTransformRequests: 
+true,
+    host: '0.0.0.0',
+    port: 5173,
+    
+sourcemapIgnoreList: 
+[Function: 
+isInNodeModules$1],
+    middlewareMode: 
+false,
+    fs: {
+      strict: true,
+      allow: [Array],
+      deny: [Array],
+      cachedChecks: 
+undefined
+    }
+  },
+  build: {
+    target: [ 
+'es2020', 'edge88', 
+'firefox78', 
+'chrome87', 
+'safari14' ],
+    cssTarget: [ 
+'es2020', 'edge88', 
+'firefox78', 
+'chrome87', 
+'safari14' ],
+    outDir: 'dist',
+    assetsDir: 
+'assets',
+    
+assetsInlineLimit: 
+4096,
+    cssCodeSplit: 
+true,
+    sourcemap: false,
+    rollupOptions: { 
+output: [Object], 
+onwarn: [Function: 
+onwarn] },
+    minify: 'esbuild',
+    terserOptions: {},
+    write: true,
+    emptyOutDir: null,
+    copyPublicDir: 
+true,
+    manifest: false,
+    lib: false,
+    ssr: false,
+    ssrManifest: 
+false,
+    ssrEmitAssets: 
+false,
+    
+reportCompressedSize: 
+true,
+    chunkSizeWarningLi
+mit: 500,
+    watch: null,
+    commonjsOptions: 
+{ include: [Array], 
+extensions: [Array] },
+    dynamicImportVarsO
+ptions: { 
+warnOnError: true, 
+exclude: [Array] },
+    modulePreload: { 
+polyfill: true },
+    cssMinify: true
+  },
+  logLevel: 'error',
+  esbuild: { jsxDev: 
+false, jsx: 
+'automatic', 
+jsxImportSource: 
+undefined },
+  optimizeDeps: {
+    
+holdUntilCrawlEnd: 
+true,
+    esbuildOptions: { 
+preserveSymlinks: 
+false, jsx: 
+'automatic' },
+    include: [
+      'react',
+      'react-dom',
+      'react/jsx-dev-r
+untime',
+      
+'react/jsx-runtime'
+    ]
+  },
+  configFile: 'C:/User
+s/vishn/Desktop/vikify
+/vite.config.js',
+  configFileDependenci
+es: [ 'C:/Users/vishn/
+Desktop/vikify/vite.co
+nfig.js' ],
+  inlineConfig: {
+    root: undefined,
+    base: undefined,
+    mode: undefined,
+    configFile: 
+undefined,
+    logLevel: 'error',
+    clearScreen: 
+undefined,
+    build: {}
+  },
+  root: 'C:/Users/vish
+n/Desktop/vikify',
+  base: '/',
+  decodedBase: '/',
+  rawBase: '/',
+  resolve: {
+    mainFields: [ 
+'browser', 'module', 
+'jsnext:main', 
+'jsnext' ],
+    conditions: [],
+    extensions: [
+      '.mjs',  '.js',
+      '.mts',  '.ts',
+      '.jsx',  '.tsx',
+      '.json'
+    ],
+    dedupe: [],
+    preserveSymlinks: 
+false,
+    alias: [ 
+[Object], [Object] ]
+  },
+  publicDir: 'C:/Users
+/vishn/Desktop/vikify/
+public',
+  cacheDir: 'C:/Users/
+vishn/Desktop/vikify/n
+ode_modules/.vite',
+  command: 'build',
+  mode: 'production',
+  ssr: {
+    target: 'node',
+    optimizeDeps: { 
+noDiscovery: true, 
+esbuildOptions: 
+[Object] }
+  },
+  isWorker: false,
+  mainConfig: null,
+  bundleChain: [],
+  isProduction: true,
+  css: { 
+lightningcss: 
+undefined },
+  preview: {
+    port: undefined,
+    strictPort: 
+undefined,
+    host: '0.0.0.0',
+    allowedHosts: 
+undefined,
+    https: undefined,
+    open: undefined,
+    proxy: undefined,
+    cors: undefined,
+    headers: undefined
+  },
+  envDir: 'C:/Users/vi
+shn/Desktop/vikify',
+  env: { BASE_URL: 
+'/', MODE: 
+'production', DEV: 
+false, PROD: true },
+  assetsInclude: 
+[Function: 
+assetsInclude],
+  logger: {
+    hasWarned: false,
+    info: [Function: 
+info],
+    warn: [Function: 
+warn],
+    warnOnce: 
+[Function: warnOnce],
+    error: [Function: 
+error],
+    clearScreen: 
+[Function: 
+clearScreen],
+    hasErrorLogged: 
+[Function: 
+hasErrorLogged]
+  },
+  packageCache: 
+Map(1) {
+    'fnpd_C:/Users/vis
+hn/Desktop/vikify' => 
+{
+      dir: 'C:/Users/v
+ishn/Desktop/vikify',
+      data: [Object],
+      hasSideEffects: 
+[Function: 
+hasSideEffects],
+      
+webResolvedImports: 
+{},
+      
+nodeResolvedImports: 
+{},
+      
+setResolvedCache: 
+[Function: 
+setResolvedCache],
+      
+getResolvedCache: 
+[Function: 
+getResolvedCache]
+    },
+    set: [Function 
+(anonymous)]
+  },
+  createResolver: 
+[Function: 
+createResolver],
+  worker: { format: 
+'iife', plugins: '() 
+=> plugins', 
+rollupOptions: {} },
+  appType: 'spa',
+  experimental: { impo
+rtGlobRestoreExtension
+: false, 
+hmrPartialAccept: 
+false },
+  webSocketToken: 
+'887WNvIeay7b',
+  additionalAllowedHos
+ts: [ '0.0.0.0', 
+'0.0.0.0' ],
+  getSortedPlugins: 
+[Function: 
+getSortedPlugins],
+  
+getSortedPluginHooks: 
+[Function: 
+getSortedPluginHooks]
+}
+[31mx[39m Build 
+failed in 692ms
+[31merror during 
+build:
+[31m[vite]: Rollup 
+failed to resolve 
+import 
+"@capacitor/browser" 
+from "C:/Users/vishn/D
+esktop/vikify/src/page
+s/OnboardingPage.jsx".
+This is most likely 
+unintended because it 
+can break your 
+application at 
+runtime.
+If you do want to 
+externalize this 
+module explicitly add 
+it to
+`build.rollupOptions.e
+xternal`[31m
+    at viteWarn (file:
+///C:/Users/vishn/Desk
+top/vikify/node_module
+s/vite/dist/node/chunk
+s/dep-BK3b2jBa.js:6585
+5:17)
+    at onwarn (file://
+/C:/Users/vishn/Deskto
+p/vikify/node_modules/
+@vitejs/plugin-react/d
+ist/index.js:76:7)
+    at 
+onRollupWarning (file:
+///C:/Users/vishn/Desk
+top/vikify/node_module
+s/vite/dist/node/chunk
+s/dep-BK3b2jBa.js:6588
+5:5)
+    at onwarn (file://
+/C:/Users/vishn/Deskto
+p/vikify/node_modules/
+vite/dist/node/chunks/
+dep-BK3b2jBa.js:65550:
+7)
+    at file:///C:/User
+s/vishn/Desktop/vikify
+/node_modules/rollup/d
+ist/es/shared/node-ent
+ry.js:20975:13
+    at Object.logger 
+[as onLog] (file:///C:
+/Users/vishn/Desktop/v
+ikify/node_modules/rol
+lup/dist/es/shared/nod
+e-entry.js:22848:9)
+    at ModuleLoader.ha
+ndleInvalidResolvedId 
+(file:///C:/Users/vish
+n/Desktop/vikify/node_
+modules/rollup/dist/es
+/shared/node-entry.js:
+21592:26)
+    at file:///C:/User
+s/vishn/Desktop/vikify
+/node_modules/rollup/d
+ist/es/shared/node-ent
+ry.js:21550:26[39m
