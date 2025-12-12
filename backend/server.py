@@ -11,13 +11,32 @@ import base64
 import urllib.parse
 
 app = Flask(__name__)
-CORS(app)
+
+# Comprehensive CORS configuration for mobile apps
+CORS(app, resources={
+    r"/*": {
+        "origins": ["*", "https://localhost", "capacitor://localhost", "http://localhost:*"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+        "supports_credentials": True
+    }
+})
+
+# Explicit CORS handler for preflight requests
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin', '*')
+    response.headers.add('Access-Control-Allow-Origin', origin)
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
 
 # Spotify API credentials
 SPOTIFY_CLIENT_ID = os.environ.get('SPOTIFY_CLIENT_ID', '242fffd1ca15426ab8c7396a6931b780')
 SPOTIFY_CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET', '5a479c5370ba48bc860048d89878ee4d')
 SPOTIFY_REDIRECT_URI = os.environ.get('SPOTIFY_REDIRECT_URI', 'https://vikify-production.up.railway.app/auth/spotify/callback')
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5174')
 # Deep link scheme for mobile app
 MOBILE_APP_SCHEME = 'vikify://'
 
@@ -636,6 +655,99 @@ def get_spotify_album(album_id):
         
     except Exception as e:
         print(f"[Spotify] Album exception: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/spotify/search')
+def spotify_search():
+    """Search Spotify for playlists/tracks"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({'success': False, 'error': 'No authorization'}), 401
+    
+    query = request.args.get('q')
+    search_type = request.args.get('type', 'playlist,track')
+    
+    if not query:
+        return jsonify({'success': False, 'error': 'Missing query'}), 400
+
+    try:
+        response = requests.get(
+            f'https://api.spotify.com/v1/search?q={urllib.parse.quote(query)}&type={search_type}&limit=10',
+            headers={'Authorization': auth_header}
+        )
+        
+        if response.status_code != 200:
+            return jsonify({'success': False, 'error': f'Spotify API error: {response.status_code}'}), response.status_code
+        
+        data = response.json()
+        results = {}
+        
+        if 'playlists' in data:
+            results['playlists'] = [{
+                'id': p['id'],
+                'title': p['name'],
+                'description': p.get('description', ''),
+                'image': p['images'][0]['url'] if p.get('images') else None,
+                'type': 'playlist'
+            } for p in data['playlists']['items'] if p]
+            
+        if 'tracks' in data:
+            results['songs'] = [{
+                'id': t['id'],
+                'title': t['name'],
+                'artist': ', '.join([a['name'] for a in t['artists']]),
+                'album': t['album']['name'],
+                'image': t['album']['images'][0]['url'] if t['album'].get('images') else None,
+                'duration': t['duration_ms'],
+                'isSpotify': True,
+                'type': 'song'
+            } for t in data['tracks']['items'] if t]
+            
+        return jsonify({'success': True, 'results': results})
+        
+    except Exception as e:
+        print(f"[Spotify] Search exception: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/spotify/recommendations')
+def get_spotify_recommendations():
+    """Get recommendations based on seed tracks"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({'success': False, 'error': 'No authorization'}), 401
+    
+    seed_tracks = request.args.get('seed_tracks')
+    if not seed_tracks:
+        return jsonify({'success': False, 'error': 'Missing seed_tracks'}), 400
+
+    try:
+        response = requests.get(
+            f'https://api.spotify.com/v1/recommendations?seed_tracks={seed_tracks}&limit=10',
+            headers={'Authorization': auth_header}
+        )
+        
+        if response.status_code != 200:
+            print(f"[Spotify] Recommendations error: {response.status_code}")
+            return jsonify({'success': False, 'error': f'Spotify API error: {response.status_code}'}), response.status_code
+        
+        data = response.json()
+        tracks = []
+        for track in data.get('tracks', []):
+            tracks.append({
+                'id': track['id'],
+                'title': track['name'],
+                'artist': ', '.join([a['name'] for a in track['artists']]),
+                'image': track['album']['images'][0]['url'] if track.get('album', {}).get('images') else None,
+                'duration': track['duration_ms'] / 1000,
+                'album': track.get('album', {}).get('name', ''),
+                'isSpotify': True
+            })
+            
+        print(f"[Spotify] ✅ Fetched {len(tracks)} recommendations")
+        return jsonify({'success': True, 'tracks': tracks})
+        
+    except Exception as e:
+        print(f"[Spotify] Recommendations exception: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/health')
