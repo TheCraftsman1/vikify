@@ -32,9 +32,9 @@ def after_request(response):
     response.headers.add('Access-Control-Allow-Credentials', 'true')
     return response
 
-# Spotify API credentials
-SPOTIFY_CLIENT_ID = os.environ.get('SPOTIFY_CLIENT_ID', '242fffd1ca15426ab8c7396a6931b780')
-SPOTIFY_CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET', '5a479c5370ba48bc860048d89878ee4d')
+# Spotify API credentials (MUST be provided via environment variables)
+SPOTIFY_CLIENT_ID = os.environ.get('SPOTIFY_CLIENT_ID')
+SPOTIFY_CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET')
 SPOTIFY_REDIRECT_URI = os.environ.get('SPOTIFY_REDIRECT_URI', 'https://vikify-production.up.railway.app/auth/spotify/callback')
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5174')
 # Deep link scheme for mobile app
@@ -44,9 +44,32 @@ MOBILE_APP_SCHEME = 'vikify://'
 spotify_token = None
 spotify_token_expiry = 0
 
+# Simple in-memory response cache for public endpoints
+public_cache = {}
+
+def cache_get(key):
+    rec = public_cache.get(key)
+    if not rec:
+        return None
+    exp = rec.get('exp', 0)
+    if time.time() > exp:
+        public_cache.pop(key, None)
+        return None
+    return rec.get('value')
+
+def cache_set(key, value, ttl_seconds=600):
+    public_cache[key] = {
+        'value': value,
+        'exp': time.time() + ttl_seconds
+    }
+
 def get_spotify_token():
     """Get valid Spotify access token"""
     global spotify_token, spotify_token_expiry
+
+    if not SPOTIFY_CLIENT_ID or not SPOTIFY_CLIENT_SECRET:
+        print('[Spotify] ❌ Missing SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET env vars')
+        return None
     
     # Return cached token if valid
     if spotify_token and time.time() < spotify_token_expiry:
@@ -127,6 +150,109 @@ def resolve_audio_url(video_id):
     except Exception as e:
         print(f"[Resolve] Error: {e}")
     return None
+
+
+def spotify_api_get(path, params=None, token=None, timeout=10):
+    """Server-side helper to call Spotify Web API."""
+    tok = token or get_spotify_token()
+    if not tok:
+        return None, 502
+
+    try:
+        r = requests.get(
+            f'https://api.spotify.com/v1/{path.lstrip("/")}',
+            params=params or {},
+            headers={'Authorization': f'Bearer {tok}'},
+            timeout=timeout
+        )
+        if r.status_code == 200:
+            return r.json(), 200
+        return {'error': r.text, 'status': r.status_code}, r.status_code
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+
+@app.route('/spotify/featured-playlists')
+def spotify_featured_playlists():
+    """Public featured playlists (server-side credentials)."""
+    try:
+        limit = int(request.args.get('limit', '10'))
+    except Exception:
+        limit = 10
+    limit = max(1, min(limit, 30))
+
+    cache_key = f'featured:{limit}'
+    cached = cache_get(cache_key)
+    if cached:
+        return jsonify(cached)
+
+    data, status = spotify_api_get('/browse/featured-playlists', params={'limit': limit}, timeout=10)
+    if status != 200 or not data:
+        # fallback to search (some regions/API conditions)
+        data, status = spotify_api_get('/search', params={'q': 'featured', 'type': 'playlist', 'limit': limit}, timeout=10)
+        if status != 200 or not data:
+            return jsonify({'success': False, 'error': data.get('error') if isinstance(data, dict) else 'Spotify error'}), 502
+
+        items = (data.get('playlists') or {}).get('items') or []
+    else:
+        items = (data.get('playlists') or {}).get('items') or []
+
+    playlists = []
+    for p in items:
+        try:
+            playlists.append({
+                'id': p.get('id'),
+                'title': p.get('name'),
+                'description': (p.get('description') or '') or f"By {(p.get('owner') or {}).get('display_name', 'Spotify')}",
+                'image': ((p.get('images') or [{}])[0] or {}).get('url'),
+                'type': 'playlist',
+                'songs': []
+            })
+        except Exception:
+            continue
+
+    payload = {'success': True, 'playlists': playlists}
+    cache_set(cache_key, payload, ttl_seconds=600)
+    return jsonify(payload)
+
+
+@app.route('/spotify/new-releases')
+def spotify_new_releases():
+    """Public new releases (server-side credentials)."""
+    try:
+        limit = int(request.args.get('limit', '10'))
+    except Exception:
+        limit = 10
+    limit = max(1, min(limit, 30))
+
+    cache_key = f'newreleases:{limit}'
+    cached = cache_get(cache_key)
+    if cached:
+        return jsonify(cached)
+
+    data, status = spotify_api_get('/browse/new-releases', params={'limit': limit}, timeout=10)
+    if status != 200 or not data:
+        return jsonify({'success': False, 'error': data.get('error') if isinstance(data, dict) else 'Spotify error'}), 502
+
+    items = (data.get('albums') or {}).get('items') or []
+    albums = []
+    for a in items:
+        try:
+            artists = a.get('artists') or []
+            albums.append({
+                'id': a.get('id'),
+                'title': a.get('name'),
+                'description': ", ".join([x.get('name') for x in artists if x.get('name')]) if artists else '',
+                'image': ((a.get('images') or [{}])[0] or {}).get('url'),
+                'type': 'album',
+                'artist': (artists[0].get('name') if artists else '')
+            })
+        except Exception:
+            continue
+
+    payload = {'success': True, 'albums': albums}
+    cache_set(cache_key, payload, ttl_seconds=600)
+    return jsonify(payload)
 
 from ytmusicapi import YTMusic
 

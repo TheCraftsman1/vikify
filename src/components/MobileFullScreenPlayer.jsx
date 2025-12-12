@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext';
 import { useLikedSongs } from '../context/LikedSongsContext';
+import { hapticLight, hapticMedium, hapticSelection } from '../utils/haptics';
 
 const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
     const {
@@ -18,7 +19,13 @@ const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
     const [showLyrics, setShowLyrics] = useState(false);
     const [showQueue, setShowQueue] = useState(false);
     const [dominantColor, setDominantColor] = useState('#1a1a2e');
+    const [isScrubbing, setIsScrubbing] = useState(false);
+    const [scrubTime, setScrubTime] = useState(0);
     const scrollRef = useRef(null);
+    const progressTrackRef = useRef(null);
+    const scrubbingRef = useRef(false);
+    const rafRef = useRef(null);
+    const lastSelectionSecondRef = useRef(-1);
 
     // Extract dominant color from album art (simplified version)
     useEffect(() => {
@@ -43,6 +50,7 @@ const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
     };
 
     const handlePlayPause = () => {
+        hapticMedium();
         if (!playerRef.current) {
             togglePlay();
             return;
@@ -68,6 +76,85 @@ const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
         }
     };
 
+    const clampScrubTimeFromClientX = (clientX, element) => {
+        const target = element || progressTrackRef.current;
+        if (!target) return 0;
+        const rect = target.getBoundingClientRect();
+        const percent = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+        return percent * (duration || 0);
+    };
+
+    const scheduleScrubUpdate = (nextTime) => {
+        if (rafRef.current) return;
+        rafRef.current = requestAnimationFrame(() => {
+            rafRef.current = null;
+            setScrubTime(nextTime);
+            const nextSecond = Math.floor(nextTime);
+            if (nextSecond !== lastSelectionSecondRef.current) {
+                lastSelectionSecondRef.current = nextSecond;
+                hapticSelection();
+            }
+        });
+    };
+
+    const onScrubPointerDown = (e) => {
+        if (!duration) return;
+        e.preventDefault();
+        scrubbingRef.current = true;
+        setIsScrubbing(true);
+        const nextTime = clampScrubTimeFromClientX(e.clientX, e.currentTarget);
+        lastSelectionSecondRef.current = Math.floor(nextTime);
+        setScrubTime(nextTime);
+        hapticLight();
+
+        // Capture pointer so we keep receiving move/up even if finger leaves the bar.
+        try {
+            e.currentTarget.setPointerCapture?.(e.pointerId);
+        } catch {
+            // ignore
+        }
+    };
+
+    const onScrubPointerMove = (e) => {
+        if (!scrubbingRef.current || !duration) return;
+        e.preventDefault();
+        const nextTime = clampScrubTimeFromClientX(e.clientX, e.currentTarget);
+        scheduleScrubUpdate(nextTime);
+    };
+
+    const endScrub = (finalClientX, element) => {
+        if (!scrubbingRef.current) return;
+        scrubbingRef.current = false;
+        const finalTime = clampScrubTimeFromClientX(finalClientX, element);
+        setIsScrubbing(false);
+        setScrubTime(finalTime);
+        hapticLight();
+        seek(finalTime);
+        if (playerRef.current) {
+            playerRef.current.currentTime = finalTime;
+        }
+    };
+
+    const onScrubPointerUp = (e) => {
+        e.preventDefault();
+        endScrub(e.clientX, e.currentTarget);
+    };
+
+    const onScrubPointerCancel = (e) => {
+        e.preventDefault();
+        // Cancel behaves like commit on mobile players (more predictable than snapping back).
+        endScrub(e.clientX, e.currentTarget);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (rafRef.current) {
+                cancelAnimationFrame(rafRef.current);
+                rafRef.current = null;
+            }
+        };
+    }, []);
+
     // Sample lyrics - in production, fetch from lyrics API
     const sampleLyrics = currentSong ? [
         { time: 0, text: "(Ooh) na-na, yeah" },
@@ -79,6 +166,8 @@ const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
     ] : [];
 
     if (!isOpen || !currentSong) return null;
+
+    const displayedProgress = isScrubbing ? scrubTime : progress;
 
     // Use Portal to render at document.body level - bypasses all parent CSS constraints
     return ReactDOM.createPortal(
@@ -247,34 +336,55 @@ const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
                     {/* Progress Bar */}
                     <div style={{ width: '100%', marginBottom: '16px' }}>
                         <div
+                            data-testid="mobile-progress-scrubber"
+                            onPointerDown={onScrubPointerDown}
+                            onPointerMove={onScrubPointerMove}
+                            onPointerUp={onScrubPointerUp}
+                            onPointerCancel={onScrubPointerCancel}
+                            // Fallback for environments that don't support Pointer Events
                             onClick={handleSeek}
                             style={{
                                 width: '100%',
-                                height: '4px',
-                                backgroundColor: 'rgba(255,255,255,0.2)',
-                                borderRadius: '2px',
+                                height: '24px',
                                 cursor: 'pointer',
                                 marginBottom: '8px',
-                                position: 'relative'
+                                position: 'relative',
+                                display: 'flex',
+                                alignItems: 'center',
+                                touchAction: 'none',
+                                WebkitTapHighlightColor: 'transparent'
                             }}
                         >
-                            <div style={{
-                                height: '100%',
-                                backgroundColor: '#fff',
-                                borderRadius: '2px',
-                                width: `${(progress / (duration || 1)) * 100}%`,
-                                position: 'relative'
-                            }}>
+                            <div
+                                ref={progressTrackRef}
+                                data-testid="mobile-progress-track"
+                                style={{
+                                    width: '100%',
+                                    height: '4px',
+                                    backgroundColor: 'rgba(255,255,255,0.2)',
+                                    borderRadius: '2px',
+                                    position: 'relative'
+                                }}
+                            >
                                 <div style={{
-                                    position: 'absolute',
-                                    right: '-6px',
-                                    top: '-4px',
-                                    width: '12px',
-                                    height: '12px',
+                                    height: '100%',
                                     backgroundColor: '#fff',
-                                    borderRadius: '50%',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
-                                }} />
+                                    borderRadius: '2px',
+                                    width: `${(displayedProgress / (duration || 1)) * 100}%`,
+                                    position: 'relative'
+                                }}>
+                                    <div style={{
+                                        position: 'absolute',
+                                        right: '-6px',
+                                        top: '-4px',
+                                        width: '12px',
+                                        height: '12px',
+                                        backgroundColor: '#fff',
+                                        borderRadius: '50%',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                                        opacity: isScrubbing ? 1 : 1
+                                    }} />
+                                </div>
                             </div>
                         </div>
                         <div style={{
@@ -284,7 +394,7 @@ const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
                             fontSize: '12px',
                             fontVariantNumeric: 'tabular-nums'
                         }}>
-                            <span>{formatTime(progress)}</span>
+                            <span>{formatTime(displayedProgress)}</span>
                             <span>{formatTime(duration)}</span>
                         </div>
                     </div>
@@ -302,6 +412,8 @@ const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
                             style={{
                                 color: '#1db954',
                                 padding: '8px',
+                                minWidth: '44px',
+                                minHeight: '44px',
                                 background: 'transparent',
                                 border: 'none',
                                 cursor: 'pointer'
@@ -314,6 +426,8 @@ const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
                             style={{
                                 color: '#fff',
                                 padding: '8px',
+                                minWidth: '44px',
+                                minHeight: '44px',
                                 background: 'transparent',
                                 border: 'none',
                                 cursor: 'pointer'
@@ -357,6 +471,8 @@ const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
                             style={{
                                 color: '#fff',
                                 padding: '8px',
+                                minWidth: '44px',
+                                minHeight: '44px',
                                 background: 'transparent',
                                 border: 'none',
                                 cursor: 'pointer'
@@ -368,6 +484,8 @@ const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
                             style={{
                                 color: 'rgba(255,255,255,0.7)',
                                 padding: '8px',
+                                minWidth: '44px',
+                                minHeight: '44px',
                                 background: 'transparent',
                                 border: 'none',
                                 cursor: 'pointer'

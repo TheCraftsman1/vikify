@@ -1,5 +1,6 @@
 import { saveAudioBlob, pruneOldDownloads } from './offlineDB';
 import { BACKEND_URL, MAX_DOWNLOADS_HISTORY } from '../config.js';
+import { getYouTubeVideoId } from './youtube';
 
 /**
  * Get video ID from YouTube search
@@ -7,12 +8,9 @@ import { BACKEND_URL, MAX_DOWNLOADS_HISTORY } from '../config.js';
 const searchYouTubeForDownload = async (title, artist) => {
     try {
         const query = `${title} ${artist}`;
-        const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}`);
-        const data = await response.json();
-
-        if (data.success && data.videoId) {
-            return data.videoId;
-        }
+        // Use cached resolution (faster + fewer backend calls)
+        const videoId = await getYouTubeVideoId(query);
+        if (videoId) return videoId;
     } catch (error) {
         console.error('[Download] Search failed:', error);
     }

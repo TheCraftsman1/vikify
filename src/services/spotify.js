@@ -1,11 +1,14 @@
 import axios from 'axios';
 import { BACKEND_URL } from '../config';
 
-const CLIENT_ID = '242fffd1ca15426ab8c7396a6931b780';
-const CLIENT_SECRET = '5a479c5370ba48bc860048d89878ee4d';
+import {
+    getCachedFeaturedPlaylists,
+    getCachedNewReleases,
+    setCachedFeaturedPlaylists,
+    setCachedNewReleases
+} from '../utils/spotifyCache';
 
-let accessToken = null;
-let tokenExpirationTime = null;
+import { isOffline } from '../utils/net';
 
 // Helper Mappers (defined first or hoisted)
 const mapSpotifyPlaylist = (playlist) => ({
@@ -29,48 +32,23 @@ const mapSpotifyTrack = (track) => ({
 
 
 /**
- * Get a valid Spotify Access Token using Client Credentials Flow
- */
-const getAccessToken = async () => {
-    if (accessToken && tokenExpirationTime && Date.now() < tokenExpirationTime) {
-        return accessToken;
-    }
-
-    try {
-        const response = await axios.post('https://accounts.spotify.com/api/token',
-            new URLSearchParams({
-                'grant_type': 'client_credentials'
-            }), {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': 'Basic ' + btoa(CLIENT_ID + ':' + CLIENT_SECRET)
-            }
-        });
-
-        accessToken = response.data.access_token;
-        // Set expiration 1 minute before actual expiry to be safe
-        tokenExpirationTime = Date.now() + (response.data.expires_in - 60) * 1000;
-        return accessToken;
-    } catch (error) {
-        console.error('Error fetching Spotify access token:', error);
-        return null;
-    }
-};
-
-/**
  * Fetch featured playlists from Spotify
  */
 export const getFeaturedPlaylists = async (limit = 10) => {
-    const token = await getAccessToken();
-    if (!token) return [];
-
     try {
-        // Use search endpoint as featured-playlists endpoint is often restricted/404
-        const response = await axios.get(`https://api.spotify.com/v1/search?q=featured&type=playlist&limit=${limit}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+        const cached = getCachedFeaturedPlaylists(limit);
+        if (cached) return cached;
+
+        if (isOffline()) return [];
+
+        const response = await axios.get(`${BACKEND_URL}/spotify/featured-playlists`, {
+            params: { limit },
+            timeout: 12000
         });
 
-        return response.data.playlists.items.map(mapSpotifyPlaylist);
+        const playlists = response.data?.success ? (response.data.playlists || []) : [];
+        setCachedFeaturedPlaylists(limit, playlists);
+        return playlists;
     } catch (error) {
         console.error('Error fetching featured playlists:', error);
         return [];
@@ -81,22 +59,20 @@ export const getFeaturedPlaylists = async (limit = 10) => {
  * Fetch new releases
  */
 export const getNewReleases = async (limit = 10) => {
-    const token = await getAccessToken();
-    if (!token) return [];
-
     try {
-        const response = await axios.get(`https://api.spotify.com/v1/browse/new-releases?limit=${limit}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+        const cached = getCachedNewReleases(limit);
+        if (cached) return cached;
+
+        if (isOffline()) return [];
+
+        const response = await axios.get(`${BACKEND_URL}/spotify/new-releases`, {
+            params: { limit },
+            timeout: 12000
         });
 
-        return response.data.albums.items.map(album => ({
-            id: album.id,
-            title: album.name,
-            description: album.artists.map(a => a.name).join(', '),
-            image: album.images[0]?.url,
-            type: 'album',
-            artist: album.artists[0].name
-        }));
+        const albums = response.data?.success ? (response.data.albums || []) : [];
+        setCachedNewReleases(limit, albums);
+        return albums;
     } catch (error) {
         console.error('Error fetching new releases:', error);
         return [];
@@ -156,9 +132,12 @@ export const getUserPlaylists = async (token) => {
         return [];
     }
 
+    if (isOffline()) return [];
+
     try {
         const response = await axios.get(`${BACKEND_URL}/spotify/me/playlists`, {
             headers: { 'Authorization': `Bearer ${token}` }
+            ,timeout: 12000
         });
 
         if (response.data.success) {
@@ -188,10 +167,13 @@ export const getUserPlaylists = async (token) => {
 export const getRecommendations = async (seedTrackId, token) => {
     if (!token || !seedTrackId) return [];
 
+    if (isOffline()) return [];
+
     try {
         const response = await axios.get(`${BACKEND_URL}/spotify/recommendations`, {
             headers: { 'Authorization': `Bearer ${token}` },
-            params: { seed_tracks: seedTrackId }
+            params: { seed_tracks: seedTrackId },
+            timeout: 12000
         });
 
         if (response.data.success) {
@@ -210,10 +192,13 @@ export const getRecommendations = async (seedTrackId, token) => {
 export const searchSpotify = async (query, token, type = 'playlist') => {
     if (!token || !query) return { playlists: [], songs: [] };
 
+    if (isOffline()) return { playlists: [], songs: [] };
+
     try {
         const response = await axios.get(`${BACKEND_URL}/spotify/search`, {
             headers: { 'Authorization': `Bearer ${token}` },
-            params: { q: query, type: type }
+            params: { q: query, type: type },
+            timeout: 12000
         });
 
         if (response.data.success) {

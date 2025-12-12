@@ -13,6 +13,9 @@ import {
     getUserData
 } from '../utils/authStorage';
 
+import { clearSpotifyPublicCaches } from '../utils/spotifyCache';
+import { clearYouTubeCaches } from '../utils/youtube';
+
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
@@ -270,6 +273,14 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
         setAccessToken(null);
         await clearTokens();
+
+        // Cache hygiene: clear public metadata caches (no offline downloads).
+        try {
+            clearSpotifyPublicCaches();
+        } catch {}
+        try {
+            clearYouTubeCaches();
+        } catch {}
 
         try {
             await Haptics.impact({ style: ImpactStyle.Light });

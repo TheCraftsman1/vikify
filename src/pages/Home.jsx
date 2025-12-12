@@ -6,9 +6,11 @@ import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { albums } from '../data/songs';
 import { getFeaturedPlaylists, getNewReleases, getPlaylist, getUserPlaylists } from '../services/spotify';
+import { useOnlineStatus } from '../utils/online';
 
 const Home = () => {
     const navigate = useNavigate();
+    const isOnline = useOnlineStatus();
     const { playSong, currentSong, isPlaying, togglePlay } = usePlayer();
     const { logout, user, isAuthenticated, accessToken } = useAuth();
     const { openProfileMenu } = useUI();
@@ -30,7 +32,7 @@ const Home = () => {
                 ];
 
                 // If authenticated, also fetch user playlists
-                if (isAuthenticated && accessToken) {
+                if (isAuthenticated && accessToken && isOnline) {
                     promises.push(getUserPlaylists(accessToken));
                 }
 
@@ -50,7 +52,7 @@ const Home = () => {
         };
 
         loadSpotifyData();
-    }, [isAuthenticated]);
+    }, [isAuthenticated, isOnline]);
 
     const getGreeting = () => {
         const hour = new Date().getHours();

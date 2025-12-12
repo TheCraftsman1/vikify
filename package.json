@@ -8,7 +8,9 @@
     "start": "start.bat",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
@@ -16,8 +18,8 @@
     "@capacitor/browser": "^7.0.0",
     "@capacitor/cli": "^7.4.4",
     "@capacitor/core": "^7.4.4",
-    "@capacitor/haptics": "^8.0.0",
-    "@capacitor/preferences": "^8.0.0",
+    "@capacitor/haptics": "^7.0.0",
+    "@capacitor/preferences": "^7.0.0",
     "axios": "^1.13.2",
     "framer-motion": "^12.23.25",
     "lucide-react": "^0.556.0",
@@ -29,6 +31,9 @@
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^9.39.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
@@ -37,8 +42,10 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsdom": "^27.3.0",
     "parcel": "^2.16.3",
     "rollup": "^4.27.3",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vitest": "^4.0.15"
   }
 }

@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
-import { searchYouTube, getRelatedSongs } from '../utils/youtube';
+import { searchYouTube, getRelatedSongs, prefetchYouTubeVideoId } from '../utils/youtube';
 import { getAudioBlob } from '../utils/offlineDB';
 import { useAuth } from './AuthContext';
 import { getRecommendations as getSpotifyRecommendations } from '../services/spotify';
 import { hapticMedium, hapticLight } from '../utils/haptics';
+import { updateNowPlaying, clearNowPlaying, onNowPlayingAction, isNative as isNativePlatform } from '../utils/nowPlaying';
 
 const PlayerContext = createContext();
 
@@ -37,6 +38,8 @@ export const PlayerProvider = ({ children }) => {
     const playerRef = useRef(null);
     const blobUrlRef = useRef(null);
     const sleepTimerRef = useRef(null);
+    const progressRafRef = useRef(null);
+    const pendingProgressRef = useRef(null);
 
     // Refs for Media Session handlers (to avoid stale closures)
     const playNextRef = useRef(null);
@@ -156,6 +159,98 @@ export const PlayerProvider = ({ children }) => {
 
     }, [currentSong, duration, updatePositionState]);
 
+    // Native Android notification shade controls (fallback when MediaSession notification isn't shown by WebView)
+    useEffect(() => {
+        if (!isNativePlatform()) return;
+
+        if (!currentSong) {
+            clearNowPlaying();
+            return;
+        }
+
+        updateNowPlaying({
+            title: currentSong.title || 'Vikify',
+            artist: currentSong.artist || '',
+            isPlaying: !!isPlaying,
+            positionSeconds: progress || 0,
+            durationSeconds: duration || 0
+        });
+    }, [currentSong, isPlaying, duration]);
+
+    // Keep MediaSession position in sync so Android shows proper seekbar + timestamps.
+    // Throttle to ~1s while playing to avoid spamming the native bridge.
+    useEffect(() => {
+        if (!isNativePlatform()) return;
+        if (!currentSong) return;
+
+        let timer = null;
+
+        const push = () => {
+            updateNowPlaying({
+                title: currentSong.title || 'Vikify',
+                artist: currentSong.artist || '',
+                isPlaying: !!isPlaying,
+                positionSeconds: progress || 0,
+                durationSeconds: duration || 0
+            });
+        };
+
+        // Always push once on effect start.
+        push();
+
+        if (isPlaying) {
+            timer = setInterval(push, 1000);
+        }
+
+        return () => {
+            if (timer) clearInterval(timer);
+        };
+    }, [currentSong, isPlaying, duration, progress]);
+
+    useEffect(() => {
+        if (!isNativePlatform()) return;
+
+        const sub = onNowPlayingAction(({ action, positionMs }) => {
+            switch (action) {
+                case 'com.vikify.app.NOW_PLAY':
+                    if (playerRef.current?.paused) {
+                        playerRef.current.play().catch(() => {});
+                    }
+                    setIsPlaying(true);
+                    break;
+                case 'com.vikify.app.NOW_PAUSE':
+                    playerRef.current?.pause?.();
+                    setIsPlaying(false);
+                    break;
+                case 'com.vikify.app.NOW_NEXT':
+                    playNextRef.current?.();
+                    break;
+                case 'com.vikify.app.NOW_PREV':
+                    playPreviousRef.current?.();
+                    break;
+                case 'com.vikify.app.NOW_STOP':
+                    playerRef.current?.pause?.();
+                    setIsPlaying(false);
+                    clearNowPlaying();
+                    break;
+                case 'com.vikify.app.NOW_SEEK_TO':
+                    if (typeof positionMs === 'number' && playerRef.current) {
+                        const t = Math.max(0, (positionMs || 0) / 1000);
+                        playerRef.current.currentTime = t;
+                        setProgress(t);
+                        updatePositionState(t);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        });
+
+        return () => {
+            sub?.remove?.();
+        };
+    }, []);
+
     // Update Playback State
     useEffect(() => {
         if ('mediaSession' in navigator) {
@@ -201,11 +296,37 @@ export const PlayerProvider = ({ children }) => {
                 const shuffled = related.sort(() => Math.random() - 0.5).slice(0, 6);
                 setUpNextQueue(shuffled);
                 console.log('[Autoplay] YouTube Preloaded:', shuffled.map(s => s.title));
+
+                // Prefetch stable videoIds (fast + avoids repeating /search)
+                shuffled.slice(0, 3).forEach((s) => {
+                    prefetchYouTubeVideoId(`${s.title} ${s.artist}`);
+                });
             }
         } catch (e) {
             console.error("Autoplay fetch failed", e);
         }
     }, [currentSong, isSpotifyAuthenticated, spotifyToken]);
+
+    // Attempt to refresh stream URL when it expires or fails.
+    const reloadCurrentStream = useCallback(async () => {
+        if (!currentSong) return false;
+        if (!navigator.onLine) return false;
+
+        // Never reload offline blob playback.
+        if (isOfflinePlayback) return false;
+
+        try {
+            console.log('[PlayerContext] Reloading stream URL...');
+            const audioUrl = await searchYouTube(`${currentSong.title} ${currentSong.artist}`);
+            if (audioUrl) {
+                setYoutubeUrl(audioUrl);
+                return true;
+            }
+        } catch (e) {
+            console.warn('[PlayerContext] Stream reload failed:', e?.message || e);
+        }
+        return false;
+    }, [currentSong, isOfflinePlayback]);
 
     // Trigger fetch when song changes
     useEffect(() => {
@@ -568,10 +689,27 @@ export const PlayerProvider = ({ children }) => {
             if (sleepTimerRef.current) {
                 clearInterval(sleepTimerRef.current);
             }
+            if (progressRafRef.current) {
+                cancelAnimationFrame(progressRafRef.current);
+                progressRafRef.current = null;
+            }
         };
     }, []);
 
-    const handleProgress = (state) => setProgress(state.playedSeconds);
+    const handleProgress = (state) => {
+        const next = state?.playedSeconds;
+        if (typeof next !== 'number' || Number.isNaN(next)) return;
+
+        pendingProgressRef.current = next;
+        if (progressRafRef.current) return;
+
+        progressRafRef.current = requestAnimationFrame(() => {
+            progressRafRef.current = null;
+            if (typeof pendingProgressRef.current === 'number') {
+                setProgress(pendingProgressRef.current);
+            }
+        });
+    };
     const handleDuration = (d) => setDuration(d);
     const handleEnded = () => playNext();
 
@@ -584,7 +722,8 @@ export const PlayerProvider = ({ children }) => {
             playNext, playPrevious, changeVolume, toggleMute,
             startSleepTimer, cancelSleepTimer, toggleFullScreen,
             addToQueue, clearQueue, skipAutoplaySong, seek, handleProgress, handleDuration,
-            handleEnded, onPlayerReady
+            handleEnded, onPlayerReady,
+            reloadCurrentStream
         }}>
             {children}
         </PlayerContext.Provider>

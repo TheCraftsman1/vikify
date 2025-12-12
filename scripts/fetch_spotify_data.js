@@ -7,8 +7,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.join(__dirname, '..');
 
-const CLIENT_ID = '242fffd1ca15426ab8c7396a6931b780';
-const CLIENT_SECRET = '5a479c5370ba48bc860048d89878ee4d';
+const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
+const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
+
+if (!CLIENT_ID || !CLIENT_SECRET) {
+    throw new Error('Missing SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET environment variables');
+}
 
 const getAccessToken = async () => {
     const authString = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');

@@ -15,6 +15,7 @@ import axios from 'axios';
 import { Heart, Download, Music2, Search as SearchIcon, X, Plus, Loader } from 'lucide-react';
 // import Loader from '../components/Loader'; // Removed because file doesn't exist
 import { formatDuration } from '../utils/formatters';
+import { useOnlineStatus } from '../utils/online';
 
 const categories = [
     { id: 'podcasts', title: 'Podcasts', color: '#E13E3E', icon: '🎙️' },
@@ -33,6 +34,7 @@ const categories = [
 
 const Search = () => {
     const navigate = useNavigate();
+    const isOnline = useOnlineStatus();
     const [query, setQuery] = useState('');
     const [results, setResults] = useState([]);
     const [playlists, setPlaylists] = useState([]); // New state for playlists
@@ -63,6 +65,13 @@ const Search = () => {
     const handleSearch = async (e) => {
         e.preventDefault();
         if (!query.trim()) return;
+
+        if (!isOnline) {
+            setLoading(false);
+            setResults([]);
+            setPlaylists([]);
+            return;
+        }
 
         setLoading(true);
         setResults([]);
@@ -239,6 +248,16 @@ const Search = () => {
                 ) : !query ? (
                     /* Default Browse Categories */
                     <div style={{ paddingTop: '12px' }}>
+                                                {!isOnline && (
+                                                    <div style={{
+                                                        textAlign: 'center',
+                                                        padding: '20px 0',
+                                                        color: '#b3b3b3',
+                                                        fontSize: '14px'
+                                                    }}>
+                                                        You're offline. Search needs internet.
+                                                    </div>
+                                                )}
                         <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', color: '#fff' }}>Start browsing</h2>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                             {categories.map(cat => (
@@ -374,8 +393,14 @@ const Search = () => {
                         {/* No Results Fallback */}
                         {filteredResults.songs.length === 0 && filteredResults.playlists.length === 0 && (
                             <div style={{ textAlign: 'center', padding: '40px 0', color: '#fff' }}>
-                                <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>No results found</div>
-                                <div style={{ color: '#b3b3b3', fontSize: '14px' }}>Please check your spelling or try different keywords.</div>
+                                <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>
+                                    {isOnline ? 'No results found' : 'Offline'}
+                                </div>
+                                <div style={{ color: '#b3b3b3', fontSize: '14px' }}>
+                                    {isOnline
+                                        ? 'Please check your spelling or try different keywords.'
+                                        : 'Connect to the internet to search.'}
+                                </div>
                             </div>
                         )}
                     </div>

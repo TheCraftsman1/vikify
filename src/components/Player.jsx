@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Play, Pause, SkipBack, SkipForward, Volume2, Volume1, VolumeX,
     Repeat, Shuffle, Heart, Loader, Maximize2, Mic2, ListMusic, Laptop2,
@@ -7,6 +7,7 @@ import {
 import { usePlayer } from '../context/PlayerContext';
 import { useLikedSongs } from '../context/LikedSongsContext';
 import MobileFullScreenPlayer from './MobileFullScreenPlayer';
+import { hapticLight, hapticSelection } from '../utils/haptics';
 
 const Player = () => {
     const {
@@ -16,7 +17,8 @@ const Player = () => {
         upNextQueue, queue, playSong,
         volume, isMuted, changeVolume, toggleMute,
         sleepTimer, startSleepTimer, cancelSleepTimer,
-        isFullScreen, toggleFullScreen
+        isFullScreen, toggleFullScreen,
+        reloadCurrentStream
     } = usePlayer();
     const { isLiked, toggleLike } = useLikedSongs();
 
@@ -27,6 +29,15 @@ const Player = () => {
     const [showMobileFullScreen, setShowMobileFullScreen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
     const [dominantColor, setDominantColor] = useState('#121212');
+
+    // Scrubbing: seek on release (better for mobile streaming)
+    const [isScrubbing, setIsScrubbing] = useState(false);
+    const [scrubTime, setScrubTime] = useState(0);
+    const activeScrubElRef = useRef(null);
+    const scrubbingRef = useRef(false);
+    const rafRef = useRef(null);
+    const lastSelectionSecondRef = useRef(-1);
+    const streamReloadGuardRef = useRef({ songId: null, attempts: 0 });
 
     // Detect mobile screen
     useEffect(() => {
@@ -70,6 +81,7 @@ const Player = () => {
     };
 
     const isYoutube = youtubeUrl && (youtubeUrl.includes('youtube.com') || youtubeUrl.includes('youtu.be'));
+    const displayedProgress = isScrubbing ? scrubTime : progress;
 
     const formatTime = (time) => {
         if (!time || isNaN(time)) return "0:00";
@@ -87,6 +99,82 @@ const Player = () => {
             playerRef.current.currentTime = time;
         }
     };
+
+    const clampScrubTimeFromClientX = (clientX, element) => {
+        const target = element || activeScrubElRef.current;
+        if (!target) return 0;
+        const rect = target.getBoundingClientRect();
+        const percent = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+        return percent * (duration || 0);
+    };
+
+    const scheduleScrubUpdate = (nextTime) => {
+        if (rafRef.current) return;
+        rafRef.current = requestAnimationFrame(() => {
+            rafRef.current = null;
+            setScrubTime(nextTime);
+            const nextSecond = Math.floor(nextTime);
+            if (nextSecond !== lastSelectionSecondRef.current) {
+                lastSelectionSecondRef.current = nextSecond;
+                hapticSelection();
+            }
+        });
+    };
+
+    const onScrubPointerDown = (e) => {
+        if (!duration) return;
+        e.preventDefault();
+        activeScrubElRef.current = e.currentTarget;
+        scrubbingRef.current = true;
+        setIsScrubbing(true);
+        const nextTime = clampScrubTimeFromClientX(e.clientX, e.currentTarget);
+        lastSelectionSecondRef.current = Math.floor(nextTime);
+        setScrubTime(nextTime);
+        hapticLight();
+        try {
+            e.currentTarget.setPointerCapture?.(e.pointerId);
+        } catch {
+            // ignore
+        }
+    };
+
+    const onScrubPointerMove = (e) => {
+        if (!scrubbingRef.current || !duration) return;
+        e.preventDefault();
+        scheduleScrubUpdate(clampScrubTimeFromClientX(e.clientX, e.currentTarget));
+    };
+
+    const endScrub = (finalClientX, element) => {
+        if (!scrubbingRef.current) return;
+        scrubbingRef.current = false;
+        const finalTime = clampScrubTimeFromClientX(finalClientX, element);
+        setIsScrubbing(false);
+        setScrubTime(finalTime);
+        hapticLight();
+        seek(finalTime);
+        if (playerRef.current && !isYoutube) {
+            playerRef.current.currentTime = finalTime;
+        }
+    };
+
+    const onScrubPointerUp = (e) => {
+        e.preventDefault();
+        endScrub(e.clientX, e.currentTarget);
+    };
+
+    const onScrubPointerCancel = (e) => {
+        e.preventDefault();
+        endScrub(e.clientX, e.currentTarget);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (rafRef.current) {
+                cancelAnimationFrame(rafRef.current);
+                rafRef.current = null;
+            }
+        };
+    }, []);
 
     const handleVolumeChange = (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
@@ -181,7 +269,28 @@ const Player = () => {
                         onPlayerReady();
                     }}
                     onPlay={() => console.log('[Player] Playing!')}
-                    onError={(e) => console.error('[Player] Audio error:', e)}
+                    onError={async (e) => {
+                        console.error('[Player] Audio error:', e);
+
+                        // Prevent infinite retry loops.
+                        const id = currentSong?.id || null;
+                        if (streamReloadGuardRef.current.songId !== id) {
+                            streamReloadGuardRef.current = { songId: id, attempts: 0 };
+                        }
+
+                        if (streamReloadGuardRef.current.attempts >= 1) return;
+                        streamReloadGuardRef.current.attempts += 1;
+
+                        try {
+                            const ok = await reloadCurrentStream?.();
+                            if (ok && playerRef.current) {
+                                playerRef.current.load?.();
+                                playerRef.current.play?.().catch(() => {});
+                            }
+                        } catch {
+                            // ignore
+                        }
+                    }}
                     onEnded={handleEnded}
                     style={{ display: 'none' }}
                 />
@@ -433,38 +542,55 @@ const Player = () => {
                 {/* Progress Bar */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', maxWidth: '600px' }}>
                     <span style={{ fontSize: '11px', color: '#b3b3b3', fontVariantNumeric: 'tabular-nums', minWidth: '40px', textAlign: 'right' }}>
-                        {formatTime(progress)}
+                        {formatTime(displayedProgress)}
                     </span>
                     <div
+                        onPointerDown={onScrubPointerDown}
+                        onPointerMove={onScrubPointerMove}
+                        onPointerUp={onScrubPointerUp}
+                        onPointerCancel={onScrubPointerCancel}
                         onClick={handleSeek}
                         style={{
                             flex: 1,
-                            height: '4px',
-                            backgroundColor: 'rgba(255,255,255,0.1)',
-                            borderRadius: '2px',
                             cursor: 'pointer',
-                            position: 'relative'
+                            position: 'relative',
+                            height: '20px',
+                            touchAction: 'none',
+                            WebkitTapHighlightColor: 'transparent'
                         }}
                         className="progress-bar"
                     >
-                        <div style={{
-                            height: '100%',
-                            backgroundColor: '#fff',
-                            borderRadius: '2px',
-                            width: `${(progress / (duration || 1)) * 100}%`,
-                            position: 'relative'
-                        }} className="progress-fill">
-                            <div className="progress-thumb" style={{
+                        <div
+                            style={{
                                 position: 'absolute',
-                                right: '-6px',
-                                top: '-4px',
-                                width: '12px',
-                                height: '12px',
+                                left: 0,
+                                right: 0,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                height: '4px',
+                                backgroundColor: 'rgba(255,255,255,0.1)',
+                                borderRadius: '2px'
+                            }}
+                        >
+                            <div style={{
+                                height: '100%',
                                 backgroundColor: '#fff',
-                                borderRadius: '50%',
-                                opacity: 0,
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
-                            }} />
+                                borderRadius: '2px',
+                                width: `${(displayedProgress / (duration || 1)) * 100}%`,
+                                position: 'relative'
+                            }} className="progress-fill">
+                                <div className="progress-thumb" style={{
+                                    position: 'absolute',
+                                    right: '-6px',
+                                    top: '-4px',
+                                    width: '12px',
+                                    height: '12px',
+                                    backgroundColor: '#fff',
+                                    borderRadius: '50%',
+                                    opacity: 0,
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                                }} />
+                            </div>
                         </div>
                     </div>
                     <span style={{ fontSize: '11px', color: '#b3b3b3', fontVariantNumeric: 'tabular-nums', minWidth: '40px' }}>
@@ -804,26 +930,44 @@ const Player = () => {
                     {/* Progress Bar */}
                     <div style={{ width: 'min(600px, 80%)', marginBottom: '24px' }}>
                         <div
+                            onPointerDown={onScrubPointerDown}
+                            onPointerMove={onScrubPointerMove}
+                            onPointerUp={onScrubPointerUp}
+                            onPointerCancel={onScrubPointerCancel}
                             onClick={handleSeek}
                             style={{
                                 width: '100%',
-                                height: '6px',
-                                backgroundColor: 'rgba(255,255,255,0.2)',
-                                borderRadius: '3px',
                                 cursor: 'pointer',
-                                marginBottom: '8px'
+                                marginBottom: '8px',
+                                position: 'relative',
+                                height: '24px',
+                                touchAction: 'none',
+                                WebkitTapHighlightColor: 'transparent'
                             }}
                         >
-                            <div style={{
-                                height: '100%',
-                                backgroundColor: '#1db954',
-                                borderRadius: '3px',
-                                width: `${(progress / (duration || 1)) * 100}%`,
-                                transition: 'width 0.1s linear'
-                            }} />
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    left: 0,
+                                    right: 0,
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    height: '6px',
+                                    backgroundColor: 'rgba(255,255,255,0.2)',
+                                    borderRadius: '3px'
+                                }}
+                            >
+                                <div style={{
+                                    height: '100%',
+                                    backgroundColor: '#1db954',
+                                    borderRadius: '3px',
+                                    width: `${(displayedProgress / (duration || 1)) * 100}%`,
+                                    transition: 'width 0.1s linear'
+                                }} />
+                            </div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b3b3b3', fontSize: '14px' }}>
-                            <span>{formatTime(progress)}</span>
+                            <span>{formatTime(displayedProgress)}</span>
                             <span>{formatTime(duration)}</span>
                         </div>
                     </div>

@@ -17,6 +17,9 @@ import Settings from './pages/Settings';
 import { UIProvider } from './context/UIContext';
 import ProfileDrawer from './components/ProfileDrawer';
 import './App.css';
+import { Capacitor } from '@capacitor/core';
+import { pruneSpotifyPublicCaches } from './utils/spotifyCache';
+import { pruneYouTubeCaches } from './utils/youtube';
 
 function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
@@ -25,8 +28,17 @@ function AppContent() {
   const handleSplashComplete = async () => {
     setShowSplash(false);
 
-    // Request Notification Permission (Android 13+)
-    if ('Notification' in window) {
+    // Storage hygiene (safe to run on web and native)
+    try {
+      pruneSpotifyPublicCaches();
+    } catch {}
+    try {
+      pruneYouTubeCaches();
+    } catch {}
+
+    // Browser-only notification permission prompt.
+    // Android native permission is requested immediately in MainActivity.
+    if (!Capacitor.isNativePlatform() && 'Notification' in window) {
       try {
         const permission = await Notification.requestPermission();
         console.log('[App] Notification permission:', permission);
