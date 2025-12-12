@@ -116,21 +116,9 @@ const Library = () => {
     const FilterChip = ({ label, value }) => (
         <button
             onClick={() => setFilter(value)}
-            style={{
-                padding: '6px 12px',
-                borderRadius: '16px',
-                fontSize: '14px',
-                fontWeight: 500,
-                backgroundColor: filter === value ? '#fff' : 'rgba(255,255,255,0.07)',
-                color: filter === value ? '#000' : '#fff',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                whiteSpace: 'nowrap'
-            }}
-            onMouseEnter={(e) => filter !== value && (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)')}
-            onMouseLeave={(e) => filter !== value && (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.07)')}
+            className={`chip ${filter === value ? 'active' : ''}`}
         >
-            {label}
+            <span>{label}</span>
         </button>
     );
 
@@ -228,38 +216,16 @@ const Library = () => {
             {/* Content */}
             <div className="library-content" style={{ padding: '0 16px 160px' }}>
                 {viewMode === 'grid' ? (
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                        gap: '24px'
-                    }}>
+                    <div className="playlist-grid">
                         {filteredItems.map((item) => {
                             const isThisPlaying = currentSong && item.songs?.some(s => s.id === currentSong.id);
                             return (
                                 <div
                                     key={item.id}
                                     onClick={() => handleItemClick(item)}
-                                    style={{
-                                        padding: '16px',
-                                        backgroundColor: '#181818',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        transition: 'background 0.3s',
-                                        position: 'relative'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#282828'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#181818'}
-                                    className="card-hover"
+                                    className="playlist-card"
                                 >
-                                    <div style={{
-                                        position: 'relative',
-                                        width: '100%',
-                                        aspectRatio: '1',
-                                        marginBottom: '16px',
-                                        borderRadius: '4px',
-                                        overflow: 'hidden',
-                                        boxShadow: '0 8px 24px rgba(0,0,0,0.5)'
-                                    }}>
+                                    <div className="playlist-card-image">
                                         {item.gradient ? (
                                             <div style={{
                                                 width: '100%',
@@ -275,7 +241,6 @@ const Library = () => {
                                             <img
                                                 src={item.image}
                                                 alt={item.title}
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                                 onError={(e) => { e.target.src = '/placeholder.svg'; }}
                                             />
                                         ) : (
@@ -293,23 +258,7 @@ const Library = () => {
                                         {item.songs && item.songs.length > 0 && (
                                             <button
                                                 onClick={(e) => handlePlayFirstSong(e, item)}
-                                                className="card-play-btn"
-                                                style={{
-                                                    position: 'absolute',
-                                                    bottom: '8px',
-                                                    right: '8px',
-                                                    width: '48px',
-                                                    height: '48px',
-                                                    borderRadius: '50%',
-                                                    backgroundColor: '#1db954',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
-                                                    opacity: 0,
-                                                    transform: 'translateY(8px)',
-                                                    transition: 'all 0.3s ease'
-                                                }}
+                                                className="playlist-card-play-btn"
                                             >
                                                 {isThisPlaying && isPlaying ? (
                                                     <Pause size={22} fill="#000" color="#000" />
@@ -319,10 +268,8 @@ const Library = () => {
                                             </button>
                                         )}
                                     </div>
-                                    <h3 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {item.title}
-                                    </h3>
-                                    <p style={{ fontSize: '14px', color: '#b3b3b3' }}>
+                                    <h3 className="playlist-card-title">{item.title}</h3>
+                                    <p className="playlist-card-description">
                                         {item.description || (item.songs ? `${item.songs.length} songs` : `By ${item.artist}`)}
                                     </p>
                                 </div>
@@ -335,58 +282,44 @@ const Library = () => {
                             <div
                                 key={item.id}
                                 onClick={() => handleItemClick(item)}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '12px',
-                                    padding: '8px',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    transition: 'background 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                className="library-card"
                             >
-                                <div style={{
-                                    width: '48px',
-                                    height: '48px',
-                                    borderRadius: '4px',
-                                    overflow: 'hidden',
-                                    flexShrink: 0
-                                }}>
-                                    {item.gradient ? (
-                                        <div style={{
-                                            width: '100%',
-                                            height: '100%',
-                                            background: item.gradient,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}>
-                                            {item.id === 'liked' ? <Heart size={20} fill="#fff" color="#fff" /> : <Download size={20} color="#fff" />}
-                                        </div>
-                                    ) : item.image ? (
-                                        <img
-                                            src={item.image}
-                                            alt={item.title}
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        />
-                                    ) : (
-                                        <div style={{
-                                            width: '100%',
-                                            height: '100%',
-                                            background: 'linear-gradient(135deg, #333, #555)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}>
-                                            <Music size={20} color="#7f7f7f" />
-                                        </div>
-                                    )}
-                                </div>
-                                <div>
-                                    <div style={{ fontWeight: 500, fontSize: '15px' }}>{item.title}</div>
-                                    <div style={{ color: '#b3b3b3', fontSize: '13px' }}>
+                                {item.gradient ? (
+                                    <div style={{
+                                        width: '48px',
+                                        height: '48px',
+                                        borderRadius: '4px',
+                                        background: item.gradient,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0
+                                    }}>
+                                        {item.id === 'liked' ? <Heart size={20} fill="#fff" color="#fff" /> : <Download size={20} color="#fff" />}
+                                    </div>
+                                ) : item.image ? (
+                                    <img
+                                        src={item.image}
+                                        alt={item.title}
+                                        onError={(e) => { e.target.src = '/placeholder.svg'; }}
+                                    />
+                                ) : (
+                                    <div style={{
+                                        width: '48px',
+                                        height: '48px',
+                                        borderRadius: '4px',
+                                        background: 'linear-gradient(135deg, #333, #555)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0
+                                    }}>
+                                        <Music size={20} color="#7f7f7f" />
+                                    </div>
+                                )}
+                                <div className="library-card-info">
+                                    <div className="library-card-title">{item.title}</div>
+                                    <div className="library-card-subtitle">
                                         {item.type === 'custom-playlist' ? 'Playlist' : 'Playlist'} • {item.songs?.length || 0} songs
                                     </div>
                                 </div>
@@ -401,17 +334,6 @@ const Library = () => {
                 isOpen={showCreateModal}
                 onClose={() => setShowCreateModal(false)}
             />
-
-            <style>{`
-                .card-hover:hover .card-play-btn {
-                    opacity: 1 !important;
-                    transform: translateY(0) !important;
-                }
-                .card-play-btn:hover {
-                    transform: scale(1.04) !important;
-                    background-color: #1ed760 !important;
-                }
-            `}</style>
         </div>
     );
 };

@@ -10,7 +10,7 @@ import { getFeaturedPlaylists, getNewReleases, getPlaylist, getUserPlaylists } f
 const Home = () => {
     const navigate = useNavigate();
     const { playSong, currentSong, isPlaying, togglePlay } = usePlayer();
-    const { logout, user, isAuthenticated } = useAuth();
+    const { logout, user, isAuthenticated, accessToken } = useAuth();
     const { openProfileMenu } = useUI();
     const [featured, setFeatured] = useState([]);
 
@@ -30,11 +30,8 @@ const Home = () => {
                 ];
 
                 // If authenticated, also fetch user playlists
-                if (isAuthenticated) {
-                    const token = localStorage.getItem('spotify_access_token');
-                    if (token) {
-                        promises.push(getUserPlaylists(token));
-                    }
+                if (isAuthenticated && accessToken) {
+                    promises.push(getUserPlaylists(accessToken));
                 }
 
                 const results = await Promise.all(promises);
@@ -181,12 +178,12 @@ const Home = () => {
                     padding: '0 16px'
                 }}>Discover something new today</p>
 
-                {/* Quick Access Grid - Compact Pills */}
-                <div className="quick-access-grid" style={{
+                {/* Quick Access Grid - Spotify Style Horizontal Tiles */}
+                <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(2, 1fr)',
-                    gap: '12px',
-                    marginBottom: '40px'
+                    gap: '8px',
+                    marginBottom: '32px'
                 }}>
                     {quickAccess.map((item) => (
                         <div
@@ -196,57 +193,32 @@ const Home = () => {
                                 else if (item.id === 'downloads') navigate('/downloads');
                                 else navigate(`/playlist/${item.id}`);
                             }}
-                            className="quick-access-tile"
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                backgroundColor: 'rgba(255, 255, 255, 0.07)',
-                                borderRadius: '8px',
-                                overflow: 'hidden',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                height: '64px'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.12)'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.07)'}
+                            className="horizontal-playlist"
                         >
-                            <div style={{
-                                width: '64px',
-                                height: '64px',
-                                flexShrink: 0,
-                                background: item.gradient || '#282828',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderRadius: '8px 0 0 8px',
-                                boxShadow: '4px 0 12px rgba(0,0,0,0.3)'
-                            }}>
-                                {item.icon ? (
-                                    <Music2 size={26} color="#fff" />
-                                ) : item.image ? (
-                                    <img
-                                        src={item.image}
-                                        alt={item.title}
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px 0 0 8px' }}
-                                        onError={(e) => { e.target.src = '/placeholder.svg'; }}
-                                    />
-                                ) : (
-                                    <Music2 size={26} color="#fff" />
-                                )}
+                            <div className="img-container">
+                                <div className="img-section" style={{ background: item.gradient || '#282828' }}>
+                                    {item.icon ? (
+                                        <Music2 size={24} color="#fff" />
+                                    ) : item.image ? (
+                                        <img
+                                            src={item.image}
+                                            alt={item.title}
+                                            onError={(e) => { e.target.src = '/placeholder.svg'; }}
+                                        />
+                                    ) : (
+                                        <Music2 size={24} color="#fff" />
+                                    )}
+                                </div>
                             </div>
-                            <span style={{
-                                flex: 1,
-                                padding: '0 16px',
-                                fontWeight: 700,
-                                fontSize: '14px',
-                                color: '#fff',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis'
-                            }}>{item.title}</span>
+                            <div className="text-container">
+                                <div className="text-section">
+                                    <span>{item.title}</span>
+                                </div>
+                            </div>
                         </div>
                     ))}
                 </div>
+
 
                 {/* Loading State */}
                 {
@@ -348,44 +320,12 @@ const Home = () => {
             </div >
 
             {/* Animations */}
-            < style > {`
+            <style>{`
                 @keyframes pulse {
                     0%, 100% { transform: scale(1); opacity: 1; }
                     50% { transform: scale(1.1); opacity: 0.7; }
                 }
-                @keyframes shine {
-                    0% { background-position: -200% center; }
-                    100% { background-position: 200% center; }
-                }
-                .quick-access-tile {
-                    position: relative;
-                    border: 1px solid rgba(255,255,255,0.08);
-                }
-                .quick-access-tile::before {
-                    content: '';
-                    position: absolute;
-                    inset: 0;
-                    border-radius: 8px;
-                    padding: 1px;
-                    background: linear-gradient(135deg, transparent, rgba(255,255,255,0.1), transparent);
-                    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-                    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-                    -webkit-mask-composite: xor;
-                    mask-composite: exclude;
-                    pointer-events: none;
-                    opacity: 0;
-                    transition: opacity 0.3s;
-                }
-                .quick-access-tile:hover::before {
-                    opacity: 1;
-                    background: linear-gradient(135deg, #1db954, rgba(255,255,255,0.3), #1db954);
-                    background-size: 200% 200%;
-                    animation: shine 1.5s ease infinite;
-                }
-                .quick-access-tile:active {
-                    transform: scale(0.98);
-                }
-            `}</style >
+            `}</style>
         </div >
     );
 };
@@ -404,41 +344,20 @@ const Section = ({ title, items, onPlay }) => {
                 alignItems: 'center',
                 marginBottom: '16px'
             }}>
-                <h2
-                    style={{
-                        fontSize: '22px',
-                        fontWeight: 700,
-                        color: '#fff',
-                        cursor: 'pointer',
-                        transition: 'color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
-                    onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
-                >
+                <h2 className="playlist-header" style={{ marginBottom: 0 }}>
                     {title}
                 </h2>
-                <span
-                    style={{
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        color: '#b3b3b3',
-                        cursor: 'pointer',
-                        letterSpacing: '0.08em',
-                        textTransform: 'uppercase',
-                        transition: 'color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#b3b3b3'}
-                >
+                <span className="hoverable-icon" style={{
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase'
+                }}>
                     Show all
                 </span>
             </div>
 
-            <div className="playlist-cards-grid" style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-                gap: '20px'
-            }}>
+            <div className="playlist-grid">
                 {items.slice(0, 6).map((item) => {
                     const isThisPlaying = currentSong && item.songs?.some(s => s.id === currentSong.id);
                     return (
@@ -446,64 +365,16 @@ const Section = ({ title, items, onPlay }) => {
                             key={item.id}
                             onClick={() => navigate(`/playlist/${item.id}`)}
                             className="playlist-card"
-                            style={{
-                                padding: '14px',
-                                backgroundColor: '#181818',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s ease',
-                                position: 'relative'
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = '#282828';
-                                e.currentTarget.style.transform = 'translateY(-2px)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = '#181818';
-                                e.currentTarget.style.transform = 'translateY(0)';
-                            }}
                         >
-                            <div style={{
-                                position: 'relative',
-                                width: '100%',
-                                aspectRatio: '1',
-                                marginBottom: '12px',
-                                borderRadius: '6px',
-                                overflow: 'hidden',
-                                boxShadow: '0 8px 24px rgba(0,0,0,0.5)'
-                            }}>
+                            <div className="playlist-card-image">
                                 <img
                                     src={item.image}
                                     alt={item.title}
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover',
-                                        transition: 'transform 0.3s ease'
-                                    }}
                                     onError={(e) => { e.target.src = '/placeholder.svg'; }}
                                 />
                                 <button
                                     onClick={(e) => onPlay && onPlay(e, item)}
-                                    className="card-play-btn"
-                                    style={{
-                                        position: 'absolute',
-                                        bottom: '8px',
-                                        right: '8px',
-                                        width: '44px',
-                                        height: '44px',
-                                        borderRadius: '50%',
-                                        backgroundColor: '#1db954',
-                                        border: 'none',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        boxShadow: '0 8px 16px rgba(0,0,0,0.4)',
-                                        opacity: 0,
-                                        transform: 'translateY(8px)',
-                                        transition: 'all 0.3s ease',
-                                        cursor: 'pointer'
-                                    }}
+                                    className="playlist-card-play-btn"
                                 >
                                     {isThisPlaying && isPlaying ? (
                                         <Pause size={20} fill="#000" color="#000" />
@@ -512,39 +383,14 @@ const Section = ({ title, items, onPlay }) => {
                                     )}
                                 </button>
                             </div>
-                            <h3 style={{
-                                fontWeight: 700,
-                                fontSize: '14px',
-                                color: '#fff',
-                                marginBottom: '4px',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis'
-                            }}>{item.title}</h3>
-                            <p style={{
-                                fontSize: '12px',
-                                color: '#a7a7a7',
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
-                                lineHeight: '1.4'
-                            }}>{item.description || item.artist || 'Playlist'}</p>
+                            <h3 className="playlist-card-title">{item.title}</h3>
+                            <p className="playlist-card-description">
+                                {item.description || item.artist || 'Playlist'}
+                            </p>
                         </div>
                     );
                 })}
             </div>
-
-            <style>{`
-                .playlist-card:hover .card-play-btn {
-                    opacity: 1 !important;
-                    transform: translateY(0) !important;
-                }
-                .card-play-btn:hover {
-                    transform: scale(1.06) translateY(0) !important;
-                    background-color: #1ed760 !important;
-                }
-            `}</style>
         </div>
     );
 };

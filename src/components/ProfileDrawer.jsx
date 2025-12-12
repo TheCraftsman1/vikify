@@ -1,10 +1,12 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { Plus, Bell, Clock, Settings, X, LogOut } from 'lucide-react';
 
 const ProfileDrawer = () => {
+    const navigate = useNavigate();
     const { user, isAuthenticated, logout } = useAuth();
     const { isProfileMenuOpen, closeProfileMenu } = useUI();
     const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
@@ -124,7 +126,10 @@ const ProfileDrawer = () => {
                     <MenuItem
                         icon={<Settings size={22} />}
                         label="Settings and privacy"
-                        onClick={() => { }}
+                        onClick={() => {
+                            navigate('/settings');
+                            closeProfileMenu();
+                        }}
                     />
                 </div>
 
