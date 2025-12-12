@@ -181,3 +181,47 @@ export const getUserPlaylists = async (token) => {
         return [];
     }
 };
+
+/**
+ * Get Recommendations based on Seed Tracks
+ */
+export const getRecommendations = async (seedTrackId, token) => {
+    if (!token || !seedTrackId) return [];
+
+    try {
+        const response = await axios.get(`${BACKEND_URL}/spotify/recommendations`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            params: { seed_tracks: seedTrackId }
+        });
+
+        if (response.data.success) {
+            return response.data.tracks;
+        }
+        return [];
+    } catch (error) {
+        console.error('Error in getRecommendations:', error);
+        return [];
+    }
+};
+
+/**
+ * Search Spotify for Playlists (Proxy)
+ */
+export const searchSpotify = async (query, token, type = 'playlist') => {
+    if (!token || !query) return { playlists: [], songs: [] };
+
+    try {
+        const response = await axios.get(`${BACKEND_URL}/spotify/search`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            params: { q: query, type: type }
+        });
+
+        if (response.data.success) {
+            return response.data.results;
+        }
+        return { playlists: [] };
+    } catch (error) {
+        console.error('Error searching Spotify:', error);
+        return { playlists: [] };
+    }
+};

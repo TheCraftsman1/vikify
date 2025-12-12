@@ -50,29 +50,22 @@ const Player = () => {
     // Check if current song is liked
     const currentSongLiked = currentSong ? isLiked(currentSong.id) : false;
 
-    // Single unified play/pause handler for all buttons
+    // Unified play/pause handler with Optimistic UI Update
     const handlePlayPause = () => {
-        // If we don't have an audio element yet, just toggle the UI state
-        if (!playerRef.current) {
-            togglePlay();
-            return;
-        }
+        // optimistically update UI immediately to prevent lag
+        togglePlay();
 
-        const audio = playerRef.current;
-
-        if (audio.paused) {
-            // Currently paused → play
-            audio.play()
-                .then(() => {
-                    if (!isPlaying) togglePlay(); // keep context in sync
-                })
-                .catch((err) => {
-                    console.error('[Player] play() failed:', err);
+        // Handle Audio Element (Required for mobile browsers to link audio to user interaction)
+        if (playerRef.current) {
+            const audio = playerRef.current;
+            if (audio.paused) {
+                audio.play().catch((err) => {
+                    console.error('[Player] play() failed, reverting UI:', err);
+                    togglePlay(); // Revert on failure
                 });
-        } else {
-            // Currently playing → pause
-            audio.pause();
-            if (isPlaying) togglePlay(); // keep context in sync
+            } else {
+                audio.pause();
+            }
         }
     };
 

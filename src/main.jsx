@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 import { BrowserRouter } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 import { PlayerProvider } from './context/PlayerContext';
 import { LikedSongsProvider } from './context/LikedSongsContext';
 import { OfflineProvider } from './context/OfflineContext';
@@ -41,17 +42,19 @@ if (typeof window !== 'undefined') {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <OfflineProvider>
-        <LikedSongsProvider>
-          <PlaylistProvider>
-            <PlayerProvider>
-              <ErrorBoundary>
-                <App />
-              </ErrorBoundary>
-            </PlayerProvider>
-          </PlaylistProvider>
-        </LikedSongsProvider>
-      </OfflineProvider>
+      <AuthProvider>
+        <OfflineProvider>
+          <LikedSongsProvider>
+            <PlaylistProvider>
+              <PlayerProvider>
+                <ErrorBoundary>
+                  <App />
+                </ErrorBoundary>
+              </PlayerProvider>
+            </PlaylistProvider>
+          </LikedSongsProvider>
+        </OfflineProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
 )

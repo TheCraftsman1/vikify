@@ -21,8 +21,18 @@ function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
   const { hasCompletedOnboarding, loading } = useAuth();
 
-  const handleSplashComplete = () => {
+  const handleSplashComplete = async () => {
     setShowSplash(false);
+
+    // Request Notification Permission (Android 13+)
+    if ('Notification' in window) {
+      try {
+        const permission = await Notification.requestPermission();
+        console.log('[App] Notification permission:', permission);
+      } catch (e) {
+        console.warn('[App] Failed to request notification permission:', e);
+      }
+    }
   };
 
   // Show splash screen on every load
