@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, Response, send_file, redirect
+from flask import Flask, jsonify, request, Response, send_file, redirect, stream_with_context, url_for
 from flask_cors import CORS
 import yt_dlp
 import re
@@ -74,6 +74,40 @@ def clean_query(query):
     query = re.sub(r'\[.*?\]', '', query)
     query = re.sub(r'-\s*(TAMIL|TELUGU|HINDI|ENGLISH)', '', query, flags=re.IGNORECASE)
     return query.strip()
+
+def resolve_audio_url(video_id):
+    """Helper to resolve direct audio URL using yt-dlp"""
+    try:
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'format': 'bestaudio[abr>=256]/bestaudio[abr>=192]/bestaudio[abr>=128]/bestaudio/best',
+            'prefer_free_formats': False,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            url = f'https://www.youtube.com/watch?v={video_id}'
+            result = ydl.extract_info(url, download=False)
+            
+            if result:
+                audio_url = result.get('url')
+                if not audio_url and result.get('formats'):
+                    # Fallback format selection
+                    audio_formats = [f for f in result['formats'] 
+                                    if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
+                    if audio_formats:
+                        audio_formats.sort(key=lambda x: (x.get('abr', 0) or 0), reverse=True)
+                        audio_url = audio_formats[0].get('url')
+                
+                return {
+                    'url': audio_url,
+                    'duration': result.get('duration'),
+                    'abr': result.get('abr', 0),
+                    'acodec': result.get('acodec', 'unknown')
+                }
+    except Exception as e:
+        print(f"[Resolve] Error: {e}")
+    return None
 
 from ytmusicapi import YTMusic
 
@@ -354,59 +388,57 @@ def spotify_user_tracks():
 @app.route('/stream/<video_id>')
 def get_stream(video_id):
     try:
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            # Force highest quality audio - prefer 256kbps+ m4a/opus for browser compatibility
-            'format': 'bestaudio[abr>=256]/bestaudio[abr>=192]/bestaudio[abr>=128]/bestaudio/best',
-            'prefer_free_formats': False,  # Don't limit to free formats
-        }
+        # Use helper to resolve URL
+        info = resolve_audio_url(video_id)
         
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            url = f'https://www.youtube.com/watch?v={video_id}'
-            result = ydl.extract_info(url, download=False)
+        if info and info.get('url'):
+            # Return PROXY URL to frontend to bypass local IP restrictions
+            # This ensures playback works on Railway/Mobile where direct Google links allow-list only server IP
+            proxy_url = url_for('proxy_audio_stream', video_id=video_id, _external=True)
+            # Use https if on railway (url_for might return http if not configured for proxy)
+            if 'railway' in proxy_url and proxy_url.startswith('http:'):
+                proxy_url = proxy_url.replace('http:', 'https:')
             
-            if result:
-                audio_url = result.get('url')
-                audio_bitrate = result.get('abr', 0)
-                audio_codec = result.get('acodec', 'unknown')
-                
-                # If direct URL not available, find best audio format manually
-                if not audio_url and result.get('formats'):
-                    audio_formats = [f for f in result['formats'] 
-                                    if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
-                    if audio_formats:
-                        # Sort by bitrate (highest first), prefer opus/aac codecs
-                        audio_formats.sort(
-                            key=lambda x: (
-                                x.get('abr', 0) or 0,
-                                1 if x.get('acodec') in ['opus', 'aac'] else 0
-                            ), 
-                            reverse=True
-                        )
-                        best = audio_formats[0]
-                        audio_url = best.get('url')
-                        audio_bitrate = best.get('abr', 0)
-                        audio_codec = best.get('acodec', 'unknown')
-                
-                if audio_url:
-                    quality = 'high' if audio_bitrate and audio_bitrate >= 128 else 'standard'
-                    print(f"[Stream] ✅ Got {quality} quality audio: {audio_bitrate}kbps {audio_codec}")
-                    return jsonify({
-                        'success': True,
-                        'audioUrl': audio_url,
-                        'duration': result.get('duration'),
-                        'quality': {
-                            'bitrate': audio_bitrate,
-                            'codec': audio_codec,
-                            'level': quality
-                        }
-                    })
+            quality = 'high' if info.get('abr', 0) >= 128 else 'standard'
+            print(f"[Stream] ✅ Returning proxy for: {video_id}")
+            
+            return jsonify({
+                'success': True,
+                'audioUrl': proxy_url,
+                'duration': info.get('duration'),
+                'quality': {
+                    'bitrate': info.get('abr'),
+                    'codec': info.get('acodec'),
+                    'level': quality
+                }
+            })
                     
     except Exception as e:
         print(f"[Stream] Error: {e}")
     
     return jsonify({'success': False, 'error': 'No audio streams'})
+
+@app.route('/proxy_stream/<video_id>')
+def proxy_audio_stream(video_id):
+    """Proxy the audio stream from Google to client to bypass IP binding"""
+    try:
+        info = resolve_audio_url(video_id)
+        if not info or not info.get('url'):
+            return Response("Stream not found", status=404)
+        
+        direct_url = info['url']
+        
+        # Stream from upstream
+        req = requests.get(direct_url, stream=True, timeout=10)
+        
+        return Response(
+            stream_with_context(req.iter_content(chunk_size=1024*64)),
+            content_type=req.headers.get('content-type', 'audio/mpeg'),
+            status=req.status_code
+        )
+    except Exception as e:
+        print(f"[Proxy] Error: {e}")
+        return Response(str(e), status=500)
 
 @app.route('/download/<video_id>')
 def download_audio(video_id):
