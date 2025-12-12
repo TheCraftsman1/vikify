@@ -13,6 +13,10 @@ import { BACKEND_URL } from '../config';
 import { searchSpotify } from '../services/spotify';
 
 const Search = () => {
+    const [debugUrl, setDebugUrl] = useState('');
+    useEffect(() => {
+        import('@capacitor/app').then(({ App }) => App.addListener('appUrlOpen', d => setDebugUrl(d.url)));
+    }, []);
     const navigate = useNavigate();
     const [query, setQuery] = useState('');
     const [results, setResults] = useState({ songs: [], playlists: [], artists: [], albums: [] });
@@ -156,6 +160,10 @@ const Search = () => {
 
     return (
         <div className="search-page" style={{ minHeight: '100%', backgroundColor: '#121212' }}>
+            <div style={{ position: 'fixed', top: 50, left: 0, right: 0, zIndex: 9999, background: 'rgba(0,0,0,0.9)', color: '#0f0', fontSize: '12px', padding: '8px', pointerEvents: 'none' }}>
+                URL: {debugUrl || 'Waiting...'} <br />
+                Auth: {isAuthenticated ? 'YES' : 'NO'} | User: {user ? user.name : 'None'}
+            </div>
             {/* Premium Search Header */}
             <div className="search-header" style={{
                 position: 'sticky',
