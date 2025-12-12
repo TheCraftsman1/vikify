@@ -73,6 +73,11 @@ def clean_query(query):
     query = re.sub(r'-\s*(TAMIL|TELUGU|HINDI|ENGLISH)', '', query, flags=re.IGNORECASE)
     return query.strip()
 
+from ytmusicapi import YTMusic
+
+# Initialize YTMusic
+ytmusic = YTMusic()
+
 @app.route('/search')
 def search():
     query = request.args.get('q', '')
@@ -82,6 +87,37 @@ def search():
     clean_q = clean_query(query)
     print(f"[Search] Query: {clean_q}")
     
+    # Method 1: Try ytmusicapi first (FAST & ACCURATE)
+    try:
+        search_results = ytmusic.search(clean_q, filter='songs')
+        
+        if search_results and len(search_results) > 0:
+            top_result = search_results[0]
+            video_id = top_result.get('videoId')
+            title = top_result.get('title')
+            # Artist list to string
+            artists = top_result.get('artists', [])
+            artist_name = ", ".join([a['name'] for a in artists]) if artists else "Unknown"
+            
+            # Additional metadata if available
+            duration = top_result.get('duration_seconds') # ytmusicapi returns int seconds usually
+            image = top_result.get('thumbnails', [{}])[-1].get('url') # Get largest thumbnail
+
+            print(f"[Search] ✅ Found via YTMusic: {video_id} - {title}")
+            return jsonify({
+                'success': True,
+                'videoId': video_id,
+                'title': title,
+                'artist': artist_name,
+                'image': image,
+                'youtubeUrl': f'https://www.youtube.com/watch?v={video_id}'
+            })
+            
+    except Exception as e:
+        print(f"[Search] ytmusicapi error: {e}")
+        # Fallback to yt-dlp if ytmusicapi fails logic continues below...
+
+    # Method 2: Fallback to yt-dlp (SLOWER but robust backup)
     try:
         ydl_opts = {
             'quiet': True,
@@ -90,6 +126,7 @@ def search():
             'default_search': 'ytsearch1',
         }
         
+        print(f"[Search] Falling back to yt-dlp for: {clean_q}")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             result = ydl.extract_info(f"ytsearch1:{clean_q}", download=False)
             
@@ -98,7 +135,7 @@ def search():
                 video_id = video.get('id')
                 title = video.get('title', '')
                 
-                print(f"[Search] ✅ Found: {video_id} - {title}")
+                print(f"[Search] ✅ Found via yt-dlp: {video_id} - {title}")
                 return jsonify({
                     'success': True,
                     'videoId': video_id,

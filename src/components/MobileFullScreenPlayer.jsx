@@ -613,7 +613,98 @@ const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
                 </div>
             </div>
 
-            {/* Full Lyrics Modal */}
+            {/* Full Queue Modal */}
+            {showQueue && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'linear-gradient(135deg, #1a1a2e 0%, #000 100%)',
+                    zIndex: 10001,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    animation: 'slideUp 0.3s ease-out'
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '16px 20px',
+                        paddingTop: 'max(16px, env(safe-area-inset-top))',
+                        borderBottom: '1px solid rgba(255,255,255,0.1)'
+                    }}>
+                        <button
+                            onClick={() => setShowQueue(false)}
+                            style={{ color: '#fff', padding: '8px', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                        >
+                            <ChevronDown size={28} />
+                        </button>
+                        <div style={{ fontSize: '16px', fontWeight: '700', color: '#fff' }}>Queue</div>
+                        <div style={{ width: '44px' }} />
+                    </div>
+
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+                        {/* Now Playing */}
+                        <div style={{ marginBottom: '24px' }}>
+                            <h3 style={{ color: '#b3b3b3', fontSize: '14px', marginBottom: '12px', fontWeight: '600' }}>Now Playing</h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                                <img src={currentSong.image} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px' }} onError={(e) => e.target.src = '/placeholder.svg'} />
+                                <div>
+                                    <div style={{ color: '#1db954', fontSize: '16px', fontWeight: '600' }}>{currentSong.title}</div>
+                                    <div style={{ color: '#b3b3b3', fontSize: '14px' }}>{currentSong.artist}</div>
+                                </div>
+                                <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
+                                    <div style={{ width: '3px', height: '16px', background: '#1db954', animation: 'eq 1s infinite' }}></div>
+                                    <div style={{ width: '3px', height: '16px', background: '#1db954', animation: 'eq 0.8s infinite' }}></div>
+                                    <div style={{ width: '3px', height: '16px', background: '#1db954', animation: 'eq 1.2s infinite' }}></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Next In Queue */}
+                        {queue.length > 0 && (
+                            <div style={{ marginBottom: '24px' }}>
+                                <h3 style={{ color: '#b3b3b3', fontSize: '14px', marginBottom: '12px', fontWeight: '600' }}>Next in Queue</h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {queue.map((song, i) => (
+                                        <div key={i} onClick={() => { playSong(song); setShowQueue(false); }}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px', borderRadius: '8px' }}>
+                                            <div style={{ color: '#b3b3b3', fontSize: '14px', width: '20px' }}>{i + 1}</div>
+                                            <img src={song.image} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px' }} onError={(e) => e.target.src = '/placeholder.svg'} />
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ color: '#fff', fontSize: '16px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
+                                                <div style={{ color: '#b3b3b3', fontSize: '14px' }}>{song.artist}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Up Next / Autoplay */}
+                        {upNextQueue.length > 0 && (
+                            <div>
+                                <h3 style={{ color: '#b3b3b3', fontSize: '14px', marginBottom: '12px', fontWeight: '600' }}>Next From: Autoplay</h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {upNextQueue.map((song, i) => (
+                                        <div key={i} onClick={() => { playSong(song); setShowQueue(false); }}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px', borderRadius: '8px' }}>
+                                            <img src={song.image} alt="" style={{ width: '48px', height: '48px', borderRadius: '4px' }} onError={(e) => e.target.src = '/placeholder.svg'} />
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ color: '#fff', fontSize: '16px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
+                                                <div style={{ color: '#b3b3b3', fontSize: '14px' }}>{song.artist}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {showLyrics && (
                 <div style={{
                     position: 'fixed',

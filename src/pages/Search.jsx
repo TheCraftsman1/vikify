@@ -8,6 +8,7 @@ import { useUI } from '../context/UIContext';
 import axios from 'axios';
 import { downloadSong } from '../utils/download';
 import AddToPlaylistModal from '../components/AddToPlaylistModal';
+import { BACKEND_URL } from '../config';
 
 const Search = () => {
     const [query, setQuery] = useState('');

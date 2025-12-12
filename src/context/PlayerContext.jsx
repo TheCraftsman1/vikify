@@ -35,6 +35,7 @@ export const PlayerProvider = ({ children }) => {
     const blobUrlRef = useRef(null);
     const sleepTimerRef = useRef(null);
 
+
     // Control audio playback
     useEffect(() => {
         const audio = playerRef.current;
@@ -45,7 +46,36 @@ export const PlayerProvider = ({ children }) => {
         } else {
             audio.pause();
         }
-    }, [isPlaying, youtubeUrl]);
+
+        // Media Session API (Lock Screen Controls)
+        if ('mediaSession' in navigator) {
+            if (currentSong) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: currentSong.title || 'Unknown Title',
+                    artist: currentSong.artist || 'Unknown Artist',
+                    album: currentSong.album || 'Vikify',
+                    artwork: [
+                        { src: currentSong.image || '/icon.png', sizes: '512x512', type: 'image/png' }
+                    ]
+                });
+            }
+
+            navigator.mediaSession.setActionHandler('play', () => {
+                togglePlay();
+                // Ensure audio context is resumed (mobile chrome requirement)
+                if (audio.paused) audio.play();
+            });
+            navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+            navigator.mediaSession.setActionHandler('previoustrack', () => playPrevious());
+            navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
+                if (details.seekTime && playerRef.current) {
+                    playerRef.current.currentTime = details.seekTime;
+                    setProgress(details.seekTime);
+                }
+            });
+        }
+    }, [isPlaying, youtubeUrl, currentSong]);
 
     // Cleanup blob URLs when song changes
     useEffect(() => {
@@ -76,6 +106,8 @@ export const PlayerProvider = ({ children }) => {
             console.log('[Autoplay] Preloaded songs:', shuffled.map(s => s.title));
         }
     };
+
+
 
     /**
      * Play a song

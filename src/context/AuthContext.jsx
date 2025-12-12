@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { App } from '@capacitor/app';
 import axios from 'axios';
+
+import { BACKEND_URL } from '../config';
 
 const AuthContext = createContext();
 
@@ -11,7 +14,7 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000';
+    const backendUrl = BACKEND_URL;
 
     // Check for tokens in URL (OAuth callback) or localStorage on mount
     useEffect(() => {
@@ -46,6 +49,32 @@ export const AuthProvider = ({ children }) => {
         if (onboarded) {
             setHasCompletedOnboarding(true);
         }
+
+        // Listen for Deep Links (Android)
+        App.addListener('appUrlOpen', (data) => {
+            console.log('[Auth] App opened with URL:', data.url);
+            if (data.url.includes('vikify://')) {
+                // Extract params from vikify://?access_token=...
+                // Only take the part after '?'
+                const queryString = data.url.split('?')[1];
+                if (queryString) {
+                    const urlParams = new URLSearchParams(queryString);
+                    const token = urlParams.get('access_token');
+                    const refreshToken = urlParams.get('refresh_token');
+
+                    if (token) {
+                        setAccessToken(token);
+                        localStorage.setItem('spotify_access_token', token);
+                        if (refreshToken) {
+                            localStorage.setItem('spotify_refresh_token', refreshToken);
+                        }
+                        fetchUserProfile(token);
+                        console.log('[Auth] Logged in via Deep Link!');
+                    }
+                }
+            }
+        });
+
     }, []);
 
     const fetchUserProfile = async (token) => {

@@ -4,7 +4,7 @@ const PlaylistContext = createContext();
 
 export const usePlaylists = () => useContext(PlaylistContext);
 
-const STORAGE_KEY = 'vikify-custom-playlists';
+const STORAGE_KEY = 'vikify-custom-playlists-v3';
 
 export const PlaylistProvider = ({ children }) => {
     const [playlists, setPlaylists] = useState([]);

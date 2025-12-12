@@ -1,12 +1,11 @@
-import React from 'react';
-import { useAuth } from '../context/AuthContext';
+import { Browser } from '@capacitor/browser';
 
 const OnboardingPage = () => {
     const { user, isAuthenticated, completeOnboarding, skipOnboarding, logout } = useAuth();
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000';
+    const backendUrl = BACKEND_URL;
 
-    const handleConnectSpotify = () => {
-        window.location.href = `${backendUrl}/auth/spotify`;
+    const handleConnectSpotify = async () => {
+        await Browser.open({ url: `${backendUrl}/auth/spotify` });
     };
 
     const handleLoadData = () => {

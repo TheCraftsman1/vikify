@@ -5,7 +5,7 @@ import { usePlayer } from '../context/PlayerContext';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { albums } from '../data/songs';
-import { getFeaturedPlaylists, getNewReleases, getPlaylist } from '../services/spotify';
+import { getFeaturedPlaylists, getNewReleases, getPlaylist, getUserPlaylists } from '../services/spotify';
 
 const Home = () => {
     const navigate = useNavigate();
@@ -18,17 +18,33 @@ const Home = () => {
     const userInitials = isAuthenticated && Object.keys(user || {}).length > 0 && user.name ? user.name[0].toUpperCase() : 'V';
     const userImage = isAuthenticated && user?.image ? user.image : null;
     const [newReleases, setNewReleases] = useState([]);
+    const [userPlaylists, setUserPlaylists] = useState([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
 
     useEffect(() => {
         const loadSpotifyData = async () => {
             try {
-                const [featuredData, newReleasesData] = await Promise.all([
+                const promises = [
                     getFeaturedPlaylists(8),
                     getNewReleases(8)
-                ]);
-                setFeatured(featuredData);
-                setNewReleases(newReleasesData);
+                ];
+
+                // If authenticated, also fetch user playlists
+                if (isAuthenticated) {
+                    const token = localStorage.getItem('spotify_access_token');
+                    if (token) {
+                        promises.push(getUserPlaylists(token));
+                    }
+                }
+
+                const results = await Promise.all(promises);
+
+                setFeatured(results[0]);
+                setNewReleases(results[1]);
+
+                if (isAuthenticated && results[2]) {
+                    setUserPlaylists(results[2]);
+                }
             } catch (error) {
                 console.error("Failed to load Spotify data", error);
             } finally {
@@ -37,7 +53,7 @@ const Home = () => {
         };
 
         loadSpotifyData();
-    }, []);
+    }, [isAuthenticated]);
 
     const getGreeting = () => {
         const hour = new Date().getHours();
@@ -249,38 +265,70 @@ const Home = () => {
                         </div>
                     ) : (
                         <>
-                            {/* Featured Playlists */}
-                            {featured.length > 0 && (
-                                <Section
-                                    title="Made For You"
-                                    items={featured}
-                                    onPlay={handlePlayAlbum}
-                                />
+                            {/* Guest Mode: Show minimal content */}
+                            {!isAuthenticated && (
+                                <div style={{
+                                    textAlign: 'center',
+                                    padding: '40px 20px',
+                                    background: 'rgba(255,255,255,0.05)',
+                                    borderRadius: '12px',
+                                    marginBottom: '40px'
+                                }}>
+                                    <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#fff', marginBottom: '8px' }}>
+                                        Welcome to Vikify
+                                    </h3>
+                                    <p style={{ color: '#b3b3b3', marginBottom: '24px', fontSize: '14px' }}>
+                                        Login with Spotify to see your playlists and recommendations.
+                                        You can still search and download songs without logging in.
+                                    </p>
+                                    <button
+                                        onClick={() => navigate('/onboarding')}
+                                        style={{
+                                            background: '#1db954',
+                                            color: '#000',
+                                            border: 'none',
+                                            padding: '12px 32px',
+                                            borderRadius: '24px',
+                                            fontSize: '14px',
+                                            fontWeight: '700',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Connect Spotify
+                                    </button>
+                                </div>
                             )}
 
-                            {/* New Releases */}
-                            {newReleases.length > 0 && (
-                                <Section
-                                    title="New Releases"
-                                    items={newReleases}
-                                    onPlay={handlePlayAlbum}
-                                />
-                            )}
+                            {/* Authenticated Content */}
+                            {isAuthenticated && (
+                                <>
+                                    {/* User Playlists */}
+                                    {userPlaylists.length > 0 && (
+                                        <Section
+                                            title="Your Playlists"
+                                            items={userPlaylists}
+                                            onPlay={handlePlayAlbum}
+                                        />
+                                    )}
 
-                            {/* Popular in Your Area - Local albums */}
-                            <Section
-                                title="Popular Right Now"
-                                items={albums.slice(0, 6)}
-                                onPlay={handlePlayAlbum}
-                            />
+                                    {/* Featured Playlists */}
+                                    {featured.length > 0 && (
+                                        <Section
+                                            title="Made For You"
+                                            items={featured}
+                                            onPlay={handlePlayAlbum}
+                                        />
+                                    )}
 
-                            {/* Jump Back In - Show more local content */}
-                            {albums.length > 6 && (
-                                <Section
-                                    title="Jump Back In"
-                                    items={albums.slice(6, 12)}
-                                    onPlay={handlePlayAlbum}
-                                />
+                                    {/* New Releases */}
+                                    {newReleases.length > 0 && (
+                                        <Section
+                                            title="New Releases"
+                                            items={newReleases}
+                                            onPlay={handlePlayAlbum}
+                                        />
+                                    )}
+                                </>
                             )}
                         </>
                     )

@@ -306,18 +306,16 @@ const Downloads = () => {
                                     <div
                                         key={`${song.id}-${index}`}
                                         onClick={() => handlePlay(song)}
+                                        className="downloads-grid track-row"
                                         style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: '16px 4fr 2fr 1fr 64px',
-                                            gap: '16px',
                                             padding: '8px 16px',
                                             borderRadius: '4px',
                                             cursor: 'pointer',
-                                            transition: 'background 0.2s'
+                                            transition: 'background 0.2s',
+                                            alignItems: 'center'
                                         }}
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                        className="track-row"
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: isThisSong ? '#1db954' : '#b3b3b3' }}>
                                             <span className="track-num">{index + 1}</span>
@@ -329,7 +327,7 @@ const Downloads = () => {
                                         </div>
 
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-                                            <div style={{ position: 'relative' }}>
+                                            <div style={{ position: 'relative', flexShrink: 0 }}>
                                                 <img
                                                     src={song.image}
                                                     alt={song.title}
@@ -354,7 +352,7 @@ const Downloads = () => {
                                                     </div>
                                                 )}
                                             </div>
-                                            <div style={{ minWidth: 0 }}>
+                                            <div style={{ minWidth: 0, overflow: 'hidden' }}>
                                                 <div style={{
                                                     color: isThisSong ? '#1db954' : '#fff',
                                                     fontSize: '16px',
@@ -372,11 +370,11 @@ const Downloads = () => {
                                             </div>
                                         </div>
 
-                                        <div style={{ display: 'flex', alignItems: 'center', color: '#b3b3b3', fontSize: '14px' }}>
+                                        <div className="hide-on-mobile" style={{ display: 'flex', alignItems: 'center', color: '#b3b3b3', fontSize: '14px' }}>
                                             {song.album || 'Unknown'}
                                         </div>
 
-                                        <div style={{ display: 'flex', alignItems: 'center', color: '#b3b3b3', fontSize: '14px' }}>
+                                        <div className="hide-on-mobile" style={{ display: 'flex', alignItems: 'center', color: '#b3b3b3', fontSize: '14px' }}>
                                             {formatDuration(song.duration)}
                                         </div>
 
@@ -384,7 +382,7 @@ const Downloads = () => {
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); removeDownload(song.id); }}
                                                 className="action-btn"
-                                                style={{ opacity: 0, padding: '4px', color: '#b3b3b3' }}
+                                                style={{ opacity: 0, padding: '4px', color: '#b3b3b3', background: 'none', border: 'none' }}
                                                 title="Remove"
                                             >
                                                 <Trash2 size={16} />
@@ -399,6 +397,20 @@ const Downloads = () => {
             </div>
 
             <style>{`
+                .downloads-grid {
+                    display: grid;
+                    grid-template-columns: 16px 4fr 2fr 1fr 64px;
+                    gap: 16px;
+                }
+                @media (max-width: 768px) {
+                    .downloads-grid {
+                        grid-template-columns: 24px 1fr 40px !important;
+                        gap: 12px;
+                    }
+                    .hide-on-mobile {
+                        display: none !important;
+                    }
+                }
                 .track-row:hover .track-num { display: none; }
                 .track-row:hover .track-play { display: block !important; }
                 .track-row:hover .action-btn { opacity: 1 !important; }
