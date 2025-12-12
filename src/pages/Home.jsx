@@ -185,7 +185,7 @@ const Home = () => {
                 <div className="quick-access-grid" style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(2, 1fr)',
-                    gap: '8px',
+                    gap: '12px',
                     marginBottom: '40px'
                 }}>
                     {quickAccess.map((item) => (
@@ -201,43 +201,44 @@ const Home = () => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 backgroundColor: 'rgba(255, 255, 255, 0.07)',
-                                borderRadius: '4px',
+                                borderRadius: '8px',
                                 overflow: 'hidden',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s ease',
-                                height: '56px'
+                                height: '64px'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)'}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.12)'}
                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.07)'}
                         >
                             <div style={{
-                                width: '56px',
-                                height: '56px',
+                                width: '64px',
+                                height: '64px',
                                 flexShrink: 0,
                                 background: item.gradient || '#282828',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                boxShadow: '4px 0 8px rgba(0,0,0,0.2)'
+                                borderRadius: '8px 0 0 8px',
+                                boxShadow: '4px 0 12px rgba(0,0,0,0.3)'
                             }}>
                                 {item.icon ? (
-                                    <Music2 size={24} color="#fff" />
+                                    <Music2 size={26} color="#fff" />
                                 ) : item.image ? (
                                     <img
                                         src={item.image}
                                         alt={item.title}
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px 0 0 8px' }}
                                         onError={(e) => { e.target.src = '/placeholder.svg'; }}
                                     />
                                 ) : (
-                                    <Music2 size={24} color="#fff" />
+                                    <Music2 size={26} color="#fff" />
                                 )}
                             </div>
                             <span style={{
                                 flex: 1,
-                                padding: '0 12px',
+                                padding: '0 16px',
                                 fontWeight: 700,
-                                fontSize: '13px',
+                                fontSize: '14px',
                                 color: '#fff',
                                 whiteSpace: 'nowrap',
                                 overflow: 'hidden',
@@ -302,31 +303,40 @@ const Home = () => {
                             {/* Authenticated Content */}
                             {isAuthenticated && (
                                 <>
-                                    {/* User Playlists */}
-                                    {userPlaylists.length > 0 && (
+                                    {/* User Playlists Only - No random recommendations */}
+                                    {userPlaylists.length > 0 ? (
                                         <Section
                                             title="Your Playlists"
                                             items={userPlaylists}
                                             onPlay={handlePlayAlbum}
                                         />
-                                    )}
-
-                                    {/* Featured Playlists */}
-                                    {featured.length > 0 && (
-                                        <Section
-                                            title="Made For You"
-                                            items={featured}
-                                            onPlay={handlePlayAlbum}
-                                        />
-                                    )}
-
-                                    {/* New Releases */}
-                                    {newReleases.length > 0 && (
-                                        <Section
-                                            title="New Releases"
-                                            items={newReleases}
-                                            onPlay={handlePlayAlbum}
-                                        />
+                                    ) : (
+                                        <div style={{
+                                            textAlign: 'center',
+                                            padding: '40px 20px',
+                                            background: 'rgba(255,255,255,0.03)',
+                                            borderRadius: '16px',
+                                            border: '1px solid rgba(255,255,255,0.06)'
+                                        }}>
+                                            <p style={{ color: '#b3b3b3', fontSize: '14px', marginBottom: '16px' }}>
+                                                No playlists found. Create one to get started!
+                                            </p>
+                                            <button
+                                                onClick={() => navigate('/search')}
+                                                style={{
+                                                    background: '#1db954',
+                                                    color: '#000',
+                                                    border: 'none',
+                                                    padding: '12px 24px',
+                                                    borderRadius: '24px',
+                                                    fontSize: '14px',
+                                                    fontWeight: '700',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Search Songs
+                                            </button>
+                                        </div>
                                     )}
                                 </>
                             )}
@@ -342,6 +352,35 @@ const Home = () => {
                 @keyframes pulse {
                     0%, 100% { transform: scale(1); opacity: 1; }
                     50% { transform: scale(1.1); opacity: 0.7; }
+                }
+                @keyframes shine {
+                    0% { background-position: -200% center; }
+                    100% { background-position: 200% center; }
+                }
+                .quick-access-tile {
+                    position: relative;
+                    border: 1px solid rgba(255,255,255,0.08);
+                }
+                .quick-access-tile::before {
+                    content: '';
+                    position: absolute;
+                    inset: 0;
+                    border-radius: 8px;
+                    padding: 1px;
+                    background: linear-gradient(135deg, transparent, rgba(255,255,255,0.1), transparent);
+                    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+                    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+                    -webkit-mask-composite: xor;
+                    mask-composite: exclude;
+                    pointer-events: none;
+                    opacity: 0;
+                    transition: opacity 0.3s;
+                }
+                .quick-access-tile:hover::before {
+                    opacity: 1;
+                    background: linear-gradient(135deg, #1db954, rgba(255,255,255,0.3), #1db954);
+                    background-size: 200% 200%;
+                    animation: shine 1.5s ease infinite;
                 }
                 .quick-access-tile:active {
                     transform: scale(0.98);

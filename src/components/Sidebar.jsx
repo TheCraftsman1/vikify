@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Search, Library, Plus, ArrowRight, Heart, Download, Music } from 'lucide-react';
+import { Home, Search, Library, Plus, ArrowRight, Heart, Download, Music, Settings } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { albums } from '../data/songs';
 
@@ -68,6 +68,7 @@ const Sidebar = () => {
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <NavItem to="/" icon={Home} label="Home" />
           <NavItem to="/search" icon={Search} label="Search" />
+          <NavItem to="/settings" icon={Settings} label="Settings" />
         </nav>
       </div>
 

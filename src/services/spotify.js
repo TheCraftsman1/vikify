@@ -181,3 +181,50 @@ export const getUserPlaylists = async (token) => {
         return [];
     }
 };
+
+/**
+ * Search Spotify for playlists, artists, and albums
+ */
+export const searchSpotify = async (query, limit = 10) => {
+    const token = await getAccessToken();
+    if (!token) return { playlists: [], artists: [], albums: [] };
+
+    try {
+        const response = await axios.get(`https://api.spotify.com/v1/search`, {
+            params: {
+                q: query,
+                type: 'playlist,artist,album',
+                limit: limit
+            },
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = response.data;
+
+        return {
+            playlists: (data.playlists?.items || []).filter(p => p).map(playlist => ({
+                id: playlist.id,
+                name: playlist.name,
+                image: playlist.images?.[0]?.url,
+                owner: playlist.owner?.display_name || 'Spotify',
+                tracks: playlist.tracks?.total || 0
+            })),
+            artists: (data.artists?.items || []).filter(a => a).map(artist => ({
+                id: artist.id,
+                name: artist.name,
+                image: artist.images?.[0]?.url,
+                followers: artist.followers?.total || 0
+            })),
+            albums: (data.albums?.items || []).filter(a => a).map(album => ({
+                id: album.id,
+                name: album.name,
+                image: album.images?.[0]?.url,
+                artist: album.artists?.map(a => a.name).join(', ') || 'Unknown',
+                releaseDate: album.release_date
+            }))
+        };
+    } catch (error) {
+        console.error('Error searching Spotify:', error);
+        return { playlists: [], artists: [], albums: [] };
+    }
+};
