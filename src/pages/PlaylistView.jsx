@@ -34,11 +34,11 @@ const PlaylistView = () => {
             const fetchSpotifyData = async () => {
                 setIsLoading(true);
                 try {
-                    // Try fetching as playlist first
-                    let data = await getSpotifyPlaylist(id);
+                    // Try fetching as album first (higher success rate)
+                    let data = await getSpotifyAlbum(id);
                     if (!data) {
-                        // Try as album
-                        data = await getSpotifyAlbum(id);
+                        // Fallback to playlist
+                        data = await getSpotifyPlaylist(id);
                     }
                     if (data) {
                         setFetchedAlbum(data);

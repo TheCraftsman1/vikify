@@ -53,19 +53,22 @@ const LikedSongs = () => {
 
             <div style={{ position: 'relative', padding: '24px', paddingBottom: '120px' }}>
                 {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '24px', marginBottom: '24px', paddingTop: '32px' }}>
-                    <div style={{
-                        width: '232px',
-                        height: '232px',
-                        borderRadius: '4px',
-                        background: 'linear-gradient(135deg, #450af5, #c4efd9)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        boxShadow: '0 4px 60px rgba(0,0,0,0.5)',
-                        flexShrink: 0
-                    }}>
-                        <Heart size={80} fill="#fff" color="#fff" />
+                <div className="liked-header" style={{ display: 'flex', alignItems: 'flex-end', gap: '24px', marginBottom: '24px', paddingTop: '32px' }}>
+                    <div className="liked-icon-wrapper" style={{ position: 'relative', flexShrink: 0 }}>
+                        <div className="liked-icon-box" style={{
+                            width: '232px',
+                            height: '232px',
+                            borderRadius: '12px',
+                            background: 'linear-gradient(135deg, #450af5, #c4efd9)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 4px 60px rgba(0,0,0,0.5)',
+                            position: 'relative',
+                            zIndex: 1
+                        }}>
+                            <Heart size={80} fill="#fff" color="#fff" />
+                        </div>
                     </div>
                     <div style={{ flex: 1 }}>
                         <span style={{ fontSize: '14px', fontWeight: 700, textTransform: 'uppercase' }}>Playlist</span>
@@ -272,12 +275,38 @@ const LikedSongs = () => {
             </div>
 
             <style>{`
+                @keyframes likedShine {
+                    0%, 100% { opacity: 0.4; }
+                    50% { opacity: 0.8; }
+                }
+                .liked-icon-wrapper::before {
+                    content: '';
+                    position: absolute;
+                    inset: -3px;
+                    background: linear-gradient(135deg, #450af5, #c4efd9, #450af5);
+                    background-size: 200% 200%;
+                    border-radius: 14px;
+                    z-index: 0;
+                    animation: likedShine 2s ease-in-out infinite;
+                }
                 .track-row:hover .track-num { display: none; }
                 .track-row:hover .track-play { display: block !important; }
                 .track-row:hover .action-btn { opacity: 1 !important; }
                 .action-btn:hover { color: #fff !important; }
                 @media (max-width: 768px) {
                     .hide-mobile { display: none !important; }
+                    .liked-header {
+                        flex-direction: column !important;
+                        align-items: center !important;
+                        text-align: center !important;
+                    }
+                    .liked-header h1 {
+                        font-size: 36px !important;
+                    }
+                    .liked-icon-box {
+                        width: 180px !important;
+                        height: 180px !important;
+                    }
                 }
             `}</style>
         </div>

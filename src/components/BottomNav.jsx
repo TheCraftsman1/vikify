@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Search, Library, Download } from 'lucide-react';
+import { Home, Search, Library, Settings } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 const BottomNav = () => {
@@ -23,7 +23,7 @@ const BottomNav = () => {
             <NavItem to="/" icon={Home} label="Home" />
             <NavItem to="/search" icon={Search} label="Search" />
             <NavItem to="/library" icon={Library} label="Library" />
-            <NavItem to="/downloads" icon={Download} label="Downloads" />
+            <NavItem to="/settings" icon={Settings} label="Settings" />
         </nav>
     );
 };

@@ -37,3 +37,8 @@ backend/*.pyc
 
 # Environment
 .env
+
+# Build Artifacts
+apk_extracted/
+vikify.zip
+search_song_click_test*

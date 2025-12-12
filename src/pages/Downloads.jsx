@@ -122,19 +122,25 @@ const Downloads = () => {
                     marginBottom: '32px',
                     paddingTop: '24px'
                 }}>
-                    {/* Download Icon Box */}
-                    <div style={{
-                        width: '180px',
-                        height: '180px',
-                        borderRadius: '8px',
-                        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        boxShadow: '0 8px 32px rgba(91, 56, 160, 0.5)',
+                    {/* Download Icon Box with Shine Border */}
+                    <div className="downloads-icon-wrapper" style={{
+                        position: 'relative',
                         marginBottom: '24px'
                     }}>
-                        <Download size={64} color="#fff" />
+                        <div className="downloads-icon-box" style={{
+                            width: '180px',
+                            height: '180px',
+                            borderRadius: '12px',
+                            background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 8px 32px rgba(91, 56, 160, 0.5)',
+                            position: 'relative',
+                            zIndex: 1
+                        }}>
+                            <Download size={64} color="#fff" />
+                        </div>
                     </div>
 
                     {/* Info Section */}
@@ -397,6 +403,20 @@ const Downloads = () => {
             </div>
 
             <style>{`
+                @keyframes downloadShine {
+                    0%, 100% { opacity: 0.5; transform: rotate(0deg); }
+                    50% { opacity: 1; transform: rotate(180deg); }
+                }
+                .downloads-icon-wrapper::before {
+                    content: '';
+                    position: absolute;
+                    inset: -3px;
+                    background: linear-gradient(135deg, #3b82f6, #8b5cf6, #3b82f6, #8b5cf6);
+                    background-size: 300% 300%;
+                    border-radius: 14px;
+                    z-index: 0;
+                    animation: downloadShine 3s ease-in-out infinite;
+                }
                 .downloads-grid {
                     display: grid;
                     grid-template-columns: 16px 4fr 2fr 1fr 64px;

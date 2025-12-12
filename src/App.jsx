@@ -13,6 +13,7 @@ import Library from './pages/Library';
 import Downloads from './pages/Downloads';
 import PlaylistView from './pages/PlaylistView';
 import LikedSongs from './pages/LikedSongs';
+import Settings from './pages/Settings';
 import { UIProvider } from './context/UIContext';
 import ProfileDrawer from './components/ProfileDrawer';
 import './App.css';
@@ -78,6 +79,8 @@ function AppContent() {
           <Route path="/downloads" element={<Downloads />} />
           <Route path="/liked" element={<LikedSongs />} />
           <Route path="/playlist/:id" element={<PlaylistView />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
         </Routes>
       </main>
 
