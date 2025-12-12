@@ -21,8 +21,14 @@ export const AuthProvider = ({ children }) => {
         const params = new URLSearchParams(window.location.search);
         const token = params.get('access_token');
         const refreshToken = params.get('refresh_token');
+        const error = params.get('auth_error');
 
-        if (token) {
+        if (error) {
+            console.error('[Auth] Login error:', error);
+            alert(`Spotify Login Failed: ${error}`);
+            // Clear URL params
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (token) {
             // Got tokens from OAuth callback
             setAccessToken(token);
             localStorage.setItem('spotify_access_token', token);
@@ -69,6 +75,13 @@ export const AuthProvider = ({ children }) => {
                 const urlParams = new URLSearchParams(queryString);
                 const token = urlParams.get('access_token');
                 const refreshToken = urlParams.get('refresh_token');
+                const error = urlParams.get('auth_error');
+
+                if (error) {
+                    console.error('[Auth] Login error:', error);
+                    alert(`Spotify Login Failed: ${error}`);
+                    return;
+                }
 
                 if (token) {
                     setAccessToken(token);
@@ -78,6 +91,8 @@ export const AuthProvider = ({ children }) => {
                     }
                     fetchUserProfile(token);
                     console.log('[Auth] Logged in via Deep Link!');
+                    // Force reload to update UI if needed
+                    window.location.reload();
                 }
             }
         };

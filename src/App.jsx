@@ -70,6 +70,7 @@ function AppContent() {
           <Route path="/liked" element={<LikedSongs />} />
           <Route path="/playlist/:id" element={<PlaylistView />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
         </Routes>
       </main>
 
