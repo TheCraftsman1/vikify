@@ -50,30 +50,32 @@ export const AuthProvider = ({ children }) => {
             setHasCompletedOnboarding(true);
         }
 
-        // Listen for Deep Links (Android)
-        App.addListener('appUrlOpen', (data) => {
-            console.log('[Auth] App opened with URL:', data.url);
-            if (data.url.includes('vikify://')) {
-                // Extract params from vikify://?access_token=...
-                // Only take the part after '?'
-                const queryString = data.url.split('?')[1];
-                if (queryString) {
-                    const urlParams = new URLSearchParams(queryString);
-                    const token = urlParams.get('access_token');
-                    const refreshToken = urlParams.get('refresh_token');
+        // Listen for Deep Links (Android/iOS)
+        try {
+            App.addListener('appUrlOpen', (data) => {
+                console.log('[Auth] App opened with URL:', data.url);
+                if (data.url.includes('vikify://')) {
+                    const queryString = data.url.split('?')[1];
+                    if (queryString) {
+                        const urlParams = new URLSearchParams(queryString);
+                        const token = urlParams.get('access_token');
+                        const refreshToken = urlParams.get('refresh_token');
 
-                    if (token) {
-                        setAccessToken(token);
-                        localStorage.setItem('spotify_access_token', token);
-                        if (refreshToken) {
-                            localStorage.setItem('spotify_refresh_token', refreshToken);
+                        if (token) {
+                            setAccessToken(token);
+                            localStorage.setItem('spotify_access_token', token);
+                            if (refreshToken) {
+                                localStorage.setItem('spotify_refresh_token', refreshToken);
+                            }
+                            fetchUserProfile(token);
+                            console.log('[Auth] Logged in via Deep Link!');
                         }
-                        fetchUserProfile(token);
-                        console.log('[Auth] Logged in via Deep Link!');
                     }
                 }
-            }
-        });
+            });
+        } catch (e) {
+            console.log('[Auth] Deep link listener not available (web mode)');
+        }
 
     }, []);
 
