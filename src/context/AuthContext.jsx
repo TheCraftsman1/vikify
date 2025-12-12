@@ -51,28 +51,45 @@ export const AuthProvider = ({ children }) => {
         }
 
         // Listen for Deep Links (Android/iOS)
+        const checkLaunchUrl = async () => {
+            try {
+                const launchUrl = await App.getLaunchUrl();
+                if (launchUrl && launchUrl.url && launchUrl.url.includes('vikify://')) {
+                    handleDeepLink(launchUrl.url);
+                }
+            } catch (e) {
+                console.log('[Auth] Failed to get launch URL');
+            }
+        };
+
+        const handleDeepLink = (url) => {
+            console.log('[Auth] Handling deep link:', url);
+            const queryString = url.split('?')[1];
+            if (queryString) {
+                const urlParams = new URLSearchParams(queryString);
+                const token = urlParams.get('access_token');
+                const refreshToken = urlParams.get('refresh_token');
+
+                if (token) {
+                    setAccessToken(token);
+                    localStorage.setItem('spotify_access_token', token);
+                    if (refreshToken) {
+                        localStorage.setItem('spotify_refresh_token', refreshToken);
+                    }
+                    fetchUserProfile(token);
+                    console.log('[Auth] Logged in via Deep Link!');
+                }
+            }
+        };
+
         try {
             App.addListener('appUrlOpen', (data) => {
                 console.log('[Auth] App opened with URL:', data.url);
                 if (data.url.includes('vikify://')) {
-                    const queryString = data.url.split('?')[1];
-                    if (queryString) {
-                        const urlParams = new URLSearchParams(queryString);
-                        const token = urlParams.get('access_token');
-                        const refreshToken = urlParams.get('refresh_token');
-
-                        if (token) {
-                            setAccessToken(token);
-                            localStorage.setItem('spotify_access_token', token);
-                            if (refreshToken) {
-                                localStorage.setItem('spotify_refresh_token', refreshToken);
-                            }
-                            fetchUserProfile(token);
-                            console.log('[Auth] Logged in via Deep Link!');
-                        }
-                    }
+                    handleDeepLink(data.url);
                 }
             });
+            checkLaunchUrl();
         } catch (e) {
             console.log('[Auth] Deep link listener not available (web mode)');
         }
