@@ -7,6 +7,7 @@ import { useCrossfade } from './CrossfadeContext';
 import { getRecommendations as getSpotifyRecommendations } from '../services/spotify';
 import { hapticMedium, hapticLight } from '../utils/haptics';
 import { updateNowPlaying, clearNowPlaying, onNowPlayingAction, isNative as isNativePlatform } from '../utils/nowPlaying';
+import { preloadService } from '../services/preloadService';
 
 const PlayerContext = createContext();
 
@@ -93,6 +94,16 @@ export const PlayerProvider = ({ children }) => {
     // Add useAuth hook inside component
     const { spotifyToken, isSpotifyAuthenticated } = useAuth();
     const { addToHistory } = useHistory();
+
+    // Preload next songs when current song changes
+    useEffect(() => {
+        if (currentSong && queue.length > 0) {
+            const currentIndex = queue.findIndex(s => s.id === currentSong.id);
+            if (currentIndex >= 0) {
+                preloadService.preloadQueue(queue, currentIndex, 3);
+            }
+        }
+    }, [currentSong, queue]);
 
     // Control audio playback - use activePlayer to select correct ref
     useEffect(() => {
