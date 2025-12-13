@@ -363,25 +363,31 @@ export const PlayerProvider = ({ children }) => {
         }
     }, [currentSong, fetchUpcomingSongs]);
 
-    // OPTIMIZATION: Prefetch next song's stream URL when current song starts playing
-    // This ensures instant transitions when playing through a playlist
+    // OPTIMIZATION: Prefetch next 3 songs' stream URLs when current song starts playing
+    // This ensures smoother transitions when playing through a playlist
     useEffect(() => {
         if (!isPlaying || !queue.length || queueIndex < 0) return;
 
-        const nextIdx = queueIndex + 1;
-        if (nextIdx >= queue.length) return; // No next song
+        const timers = [];
+        const PREFETCH_COUNT = 3; // Prefetch next 3 songs
 
-        const nextSong = queue[nextIdx];
-        if (!nextSong) return;
+        for (let i = 1; i <= PREFETCH_COUNT; i++) {
+            const nextIdx = queueIndex + i;
+            if (nextIdx >= queue.length) break;
 
-        // Delay prefetch slightly to prioritize current song's playback
-        const timer = setTimeout(() => {
-            console.log('[PlayerContext] Prefetching next song:', nextSong.title);
-            // Full searchYouTube with include_stream=true populates both caches
-            searchYouTube(`${nextSong.title} ${nextSong.artist}`).catch(() => { });
-        }, 2000); // Start prefetching 2 seconds after playback begins
+            const nextSong = queue[nextIdx];
+            if (!nextSong) continue;
 
-        return () => clearTimeout(timer);
+            // Stagger prefetches: 2s, 4s, 6s to avoid hammering backend
+            const timer = setTimeout(() => {
+                console.log(`[PlayerContext] Prefetching song ${i} ahead:`, nextSong.title);
+                searchYouTube(`${nextSong.title} ${nextSong.artist}`).catch(() => { });
+            }, i * 2000);
+
+            timers.push(timer);
+        }
+
+        return () => timers.forEach(t => clearTimeout(t));
     }, [isPlaying, queue, queueIndex]);
 
 
