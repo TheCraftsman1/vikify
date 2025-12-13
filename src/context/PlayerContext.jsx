@@ -597,9 +597,10 @@ export const PlayerProvider = ({ children }) => {
                 return;
             }
 
-            // After ~3s of no progress (2 ticks at 1.5s), attempt a controlled reload.
-            const cooldownMs = 20_000;
-            if (stallMonitorRef.current.stallCount >= 2 && now - lastReloadEpochMs > cooldownMs) {
+            // After ~15s of no progress (10 ticks at 1.5s), attempt a controlled reload.
+            // This is a last resort for truly stalled streams, not normal buffering.
+            const cooldownMs = 60_000; // 60 seconds between reload attempts
+            if (stallMonitorRef.current.stallCount >= 10 && now - lastReloadEpochMs > cooldownMs) {
                 stallMonitorRef.current.lastReloadEpochMs = now;
                 pendingSeekAfterReloadRef.current = currentTimeSec;
 
