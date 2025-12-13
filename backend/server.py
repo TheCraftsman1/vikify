@@ -575,41 +575,93 @@ def spotify_user_tracks():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/stream/<video_id>')
-def get_stream(video_id):
+@app.route('/stream/<song_id>')
+def get_stream(song_id):
+    """
+    Get audio stream URL using optimized resolver
+    Query params: title, artist (optional, for better resolution)
+    Returns: { success, url, source, time_taken, cached }
+    """
+    title = request.args.get('title', '')
+    artist = request.args.get('artist', '')
+    
     try:
-        # Use helper to resolve URL
-        info = resolve_audio_url(video_id)
+        # Use optimized stream resolver
+        url, source, elapsed = resolve_stream_sync(song_id, title, artist)
         
-        if info and info.get('url'):
-            direct_url = info.get('url')
-            quality = 'high' if info.get('abr', 0) >= 128 else 'standard'
-            
-            # Return DIRECT YouTube URL for better performance
-            # Only use proxy if client explicitly requests it or if direct fails
-            print(f"[Stream] ✅ Returning direct URL for: {video_id}")
-            
-            # Also provide proxy URL as fallback
-            proxy_url = url_for('proxy_audio_stream', video_id=video_id, _external=True)
-            if 'railway' in proxy_url and proxy_url.startswith('http:'):
-                proxy_url = proxy_url.replace('http:', 'https:')
+        if url:
+            # Periodic cache cleanup (1% of requests)
+            import random
+            if random.random() < 0.01:
+                cache.cleanup_expired()
             
             return jsonify({
                 'success': True,
-                'audioUrl': direct_url,  # Direct URL for better performance
-                'proxyUrl': proxy_url,   # Fallback if direct fails
-                'duration': info.get('duration'),
-                'quality': {
-                    'bitrate': info.get('abr'),
-                    'codec': info.get('acodec'),
-                    'level': quality
-                }
+                'url': url,
+                'source': source,
+                'time_taken': f"{elapsed:.2f}s",
+                'cached': source == 'cache'
             })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'All sources failed',
+                'time_taken': f"{elapsed:.2f}s"
+            }), 404
                     
     except Exception as e:
         print(f"[Stream] Error: {e}")
-    
-    return jsonify({'success': False, 'error': 'No audio streams'})
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/stream/preload', methods=['POST'])
+def preload_stream():
+    """
+    Preload a song in the background for instant playback later
+    Body: { songId, title, artist }
+    Returns immediately, resolves in background
+    """
+    try:
+        data = request.get_json() or {}
+        song_id = data.get('songId')
+        title = data.get('title', '')
+        artist = data.get('artist', '')
+        
+        if not song_id:
+            return jsonify({'success': False, 'error': 'Missing songId'}), 400
+        
+        # Check if already cached
+        cached_url = cache.get_url(song_id)
+        if cached_url:
+            return jsonify({
+                'success': True,
+                'cached': True,
+                'status': 'already_cached'
+            })
+        
+        # Start background resolution
+        async def _background_preload():
+            try:
+                print(f"[Preload] Background resolving {song_id}")
+                url, source, elapsed = await resolver.resolve(song_id, title, artist)
+                if url:
+                    print(f"[Preload] ✅ Resolved {song_id} from {source} in {elapsed:.2f}s")
+                else:
+                    print(f"[Preload] ❌ Failed to resolve {song_id}")
+            except Exception as e:
+                print(f"[Preload] Error: {e}")
+        
+        # Create background task
+        asyncio.create_task(_background_preload())
+        
+        return jsonify({
+            'success': True,
+            'cached': False,
+            'status': 'preloading'
+        })
+        
+    except Exception as e:
+        print(f"[Preload] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/proxy_stream/<video_id>')
 def proxy_audio_stream(video_id):
@@ -1057,9 +1109,10 @@ def api_cache_clear():
 
 @app.route('/health')
 def health():
+    """Health check with cache and resolver stats"""
     return jsonify({
         'status': 'ok',
-        'cache_size': len(cache.url_cache),
+        'cache_stats': cache.get_stats(),
         'resolver_stats': resolver.get_stats()
     })
 

@@ -9,6 +9,7 @@ import yt_dlp
 
 from cache_manager import cache
 from sources.cobalt import cobalt
+from sources.pytube_extractor import pytube_extractor
 from sources.fast_apis import try_fast_sources
 from sources.alternative_apis import try_alternative_sources
 from sources.instance_discovery import ensure_initialized
@@ -19,6 +20,7 @@ class StreamResolver:
         self.stats = {
             'cache': 0,
             'cobalt': 0,
+            'pytube': 0,
             'fast_apis': 0,
             'alternative': 0,
             'ytdlp': 0,
@@ -27,6 +29,7 @@ class StreamResolver:
         self.timings = {
             'cache': [],
             'cobalt': [],
+            'pytube': [],
             'fast_apis': [],
             'alternative': [],
             'ytdlp': []
@@ -59,7 +62,26 @@ class StreamResolver:
             self._record_timing('cache', elapsed)
             return (cached_url, 'cache', elapsed)
         
-        # Layer 2: Cobalt (primary, fast - usually <1s)
+        # Layer 2: Pytube (fast - usually 1-2s)
+        print(f"[Resolver] Trying Pytube for {video_id}")
+        try:
+            url = await asyncio.wait_for(
+                pytube_extractor.extract_audio(video_id), 
+                timeout=5.0
+            )
+            if url:
+                cache.set_url(video_id, url, 'pytube')
+                self.stats['pytube'] += 1
+                elapsed = time.time() - start_time
+                self._record_timing('pytube', elapsed)
+                print(f"[Resolver] ✅ Pytube succeeded in {elapsed:.2f}s")
+                return (url, 'pytube', elapsed)
+        except asyncio.TimeoutError:
+            print(f"[Resolver] ⏱️ Pytube timeout (5s)")
+        except Exception as e:
+            print(f"[Resolver] ❌ Pytube error: {e}")
+        
+        # Layer 3: Cobalt (alternative fast source)
         print(f"[Resolver] Trying Cobalt for {video_id}")
         try:
             url = await asyncio.wait_for(
@@ -78,7 +100,7 @@ class StreamResolver:
         except Exception as e:
             print(f"[Resolver] ❌ Cobalt error: {e}")
         
-        # Layer 3: Fast APIs - Piped/Invidious (race them)
+        # Layer 4: Fast APIs - Piped/Invidious (race them)
         print(f"[Resolver] Trying fast APIs for {video_id}")
         try:
             url = await asyncio.wait_for(
@@ -97,7 +119,7 @@ class StreamResolver:
         except Exception as e:
             print(f"[Resolver] ❌ Fast APIs error: {e}")
         
-        # Layer 4: Alternative APIs (SaveTube, Y2Mate, etc.)
+        # Layer 5: Alternative APIs (SaveTube, Y2Mate, etc.)
         print(f"[Resolver] Trying alternative APIs for {video_id}")
         try:
             url = await asyncio.wait_for(
@@ -116,7 +138,7 @@ class StreamResolver:
         except Exception as e:
             print(f"[Resolver] ❌ Alternative APIs error: {e}")
         
-        # Layer 5: yt-dlp (slow but reliable fallback)
+        # Layer 6: yt-dlp (slow but reliable fallback)
         print(f"[Resolver] Falling back to yt-dlp for {video_id}")
         try:
             url = await self._ytdlp_extract(video_id, song_title, song_artist)
@@ -216,6 +238,7 @@ class StreamResolver:
         
         if total > 0:
             result['cache_rate'] = f"{self.stats['cache'] / total * 100:.1f}%"
+            result['pytube_rate'] = f"{self.stats['pytube'] / total * 100:.1f}%"
             result['cobalt_rate'] = f"{self.stats['cobalt'] / total * 100:.1f}%"
             result['success_rate'] = f"{(total - self.stats['failed']) / total * 100:.1f}%"
         
