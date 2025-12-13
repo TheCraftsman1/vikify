@@ -82,10 +82,17 @@ const PlaylistView = () => {
     const isCurrentAlbumPlaying = currentSong && album.songs.some(s => s.id === currentSong.id);
 
     const handlePlayClick = () => {
+        console.log('[PlaylistView] handlePlayClick called');
+        console.log('[PlaylistView] album.songs:', album?.songs?.length, album?.songs);
+        console.log('[PlaylistView] isCurrentAlbumPlaying:', isCurrentAlbumPlaying);
+
         if (isCurrentAlbumPlaying) {
             togglePlay();
-        } else if (album.songs.length > 0) {
+        } else if (album?.songs?.length > 0) {
+            console.log('[PlaylistView] Playing first song:', album.songs[0]);
             playSong(album.songs[0], album.songs);
+        } else {
+            console.warn('[PlaylistView] No songs to play!');
         }
     };
 

@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
@@ -6,7 +6,6 @@ import Player from './components/Player';
 import BottomNav from './components/BottomNav';
 import DownloadProgress from './components/DownloadProgress';
 import SplashScreen from './components/SplashScreen';
-import PageLoader from './components/PageLoader';
 import { UIProvider } from './context/UIContext';
 import ProfileDrawer from './components/ProfileDrawer';
 import KeyboardHelp from './components/KeyboardHelp';
@@ -15,15 +14,15 @@ import { Capacitor } from '@capacitor/core';
 import { pruneSpotifyPublicCaches } from './utils/spotifyCache';
 import { pruneYouTubeCaches } from './utils/youtube';
 
-// Lazy-loaded pages for bundle splitting
-const Home = lazy(() => import('./pages/Home'));
-const Search = lazy(() => import('./pages/Search'));
-const Library = lazy(() => import('./pages/Library'));
-const Downloads = lazy(() => import('./pages/Downloads'));
-const PlaylistView = lazy(() => import('./pages/PlaylistView'));
-const LikedSongs = lazy(() => import('./pages/LikedSongs'));
-const Settings = lazy(() => import('./pages/Settings'));
-const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
+// Static imports for Capacitor compatibility (lazy loading breaks on Android)
+import Home from './pages/Home';
+import Search from './pages/Search';
+import Library from './pages/Library';
+import Downloads from './pages/Downloads';
+import PlaylistView from './pages/PlaylistView';
+import LikedSongs from './pages/LikedSongs';
+import Settings from './pages/Settings';
+import OnboardingPage from './pages/OnboardingPage';
 
 function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
@@ -74,11 +73,7 @@ function AppContent() {
 
   // Show onboarding for new users
   if (!hasCompletedOnboarding) {
-    return (
-      <Suspense fallback={<PageLoader />}>
-        <OnboardingPage />
-      </Suspense>
-    );
+    return <OnboardingPage />;
   }
 
   // Main app
@@ -92,18 +87,16 @@ function AppContent() {
 
       {/* Main Content */}
       <main className="main-area">
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/search" element={<Search />} />
-            <Route path="/library" element={<Library />} />
-            <Route path="/downloads" element={<Downloads />} />
-            <Route path="/liked" element={<LikedSongs />} />
-            <Route path="/playlist/:id" element={<PlaylistView />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/onboarding" element={<OnboardingPage />} />
-          </Routes>
-        </Suspense>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/search" element={<Search />} />
+          <Route path="/library" element={<Library />} />
+          <Route path="/downloads" element={<Downloads />} />
+          <Route path="/liked" element={<LikedSongs />} />
+          <Route path="/playlist/:id" element={<PlaylistView />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
+        </Routes>
       </main>
 
       {/* Player Bar */}
