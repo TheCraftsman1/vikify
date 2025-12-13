@@ -33,7 +33,9 @@ android/local.properties
 
 # Backend cache
 backend/__pycache__/
+backend/**/__pycache__/
 backend/*.pyc
+backend/**/*.pyc
 
 # Environment
 .env
