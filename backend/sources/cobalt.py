@@ -5,19 +5,27 @@ Primary audio extraction source - fast and reliable
 import aiohttp
 import asyncio
 import time
+import sys
+import os
 from typing import Optional, Dict, List
 
+# Add parent to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.anti_block import user_agents, rate_limiter
+
 # Public Cobalt instances (that don't require auth)
-# api.cobalt.tools requires Turnstile auth, so we use community instances
+# Sorted by reliability - updated regularly
 COBALT_INSTANCES = [
     'https://cobalt.canine.tools',
-    'https://capi.thatbear.dev',
-    'https://cobalt.nilaier.com',
+    'https://cobalt.wukko.me',
+    'https://cobalt-api.hyper.lol',
+    'https://api.cobalt.tools',  # May require auth but try anyway
+    'https://co.eepy.today',
 ]
 
 # Instance health tracking
 cobalt_health = {
-    instance: {'success': 0, 'fail': 0, 'last_used': 0, 'avg_time': 0} 
+    instance: {'success': 0, 'fail': 0, 'last_used': 0, 'avg_time': 0, 'consecutive_fails': 0} 
     for instance in COBALT_INSTANCES
 }
 
@@ -35,24 +43,38 @@ class CobaltExtractor:
         """
         video_url = f"https://www.youtube.com/watch?v={video_id}"
         
+        # Check rate limit for cobalt
+        if not await rate_limiter.wait_if_needed('cobalt'):
+            print("[Cobalt] Rate limited, skipping")
+            return None
+        
         # Try instances in order of health
         for instance in self._get_healthy_instances():
+            # Skip instances with too many consecutive failures
+            health = cobalt_health.get(instance, {})
+            if health.get('consecutive_fails', 0) >= 5:
+                continue
+            
             try:
                 start = time.time()
+                rate_limiter.record_request('cobalt')
                 url = await self._try_instance(instance, video_url)
                 elapsed = time.time() - start
                 
                 if url:
                     self._mark_success(instance, elapsed)
+                    rate_limiter.record_success('cobalt')
                     print(f"[Cobalt] ✅ Got URL from {instance} in {elapsed:.2f}s")
                     return url
                 else:
                     self._mark_failure(instance)
             except asyncio.TimeoutError:
                 self._mark_failure(instance)
+                rate_limiter.record_error('cobalt')
                 print(f"[Cobalt] ⏱️ {instance} timeout")
             except Exception as e:
                 self._mark_failure(instance)
+                rate_limiter.record_error('cobalt')
                 print(f"[Cobalt] ❌ {instance} failed: {e}")
                 continue
         
@@ -69,14 +91,18 @@ class CobaltExtractor:
             "audioFormat": "best",
         }
         
-        headers = {
+        # Use rotating headers
+        headers = user_agents.get_headers({
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "Vikify/1.0"
-        }
+        })
         
         async with aiohttp.ClientSession(timeout=self.timeout) as session:
             async with session.post(api_url, json=payload, headers=headers) as resp:
+                if resp.status == 429:  # Rate limited
+                    rate_limiter.record_error('cobalt', is_rate_limit=True)
+                    return None
+                
                 if resp.status != 200:
                     text = await resp.text()
                     print(f"[Cobalt] {instance} returned {resp.status}: {text[:100]}")
@@ -137,9 +163,12 @@ class CobaltExtractor:
     
     def _mark_success(self, instance: str, elapsed: float):
         """Mark instance as successful"""
+        if instance not in cobalt_health:
+            cobalt_health[instance] = {'success': 0, 'fail': 0, 'last_used': 0, 'avg_time': 0, 'consecutive_fails': 0}
         h = cobalt_health[instance]
         h['success'] += 1
         h['last_used'] = time.time()
+        h['consecutive_fails'] = 0  # Reset on success
         # Rolling average for time
         if h['avg_time'] == 0:
             h['avg_time'] = elapsed
@@ -148,7 +177,10 @@ class CobaltExtractor:
     
     def _mark_failure(self, instance: str):
         """Mark instance as failed"""
+        if instance not in cobalt_health:
+            cobalt_health[instance] = {'success': 0, 'fail': 0, 'last_used': 0, 'avg_time': 0, 'consecutive_fails': 0}
         cobalt_health[instance]['fail'] += 1
+        cobalt_health[instance]['consecutive_fails'] = cobalt_health[instance].get('consecutive_fails', 0) + 1
     
     def get_health_stats(self) -> Dict:
         """Get health statistics for all instances"""

@@ -15,6 +15,8 @@ import asyncio
 from cache_manager import cache
 from stream_resolver import resolver, resolve_stream_sync
 from sources.cobalt import cobalt
+from sources.instance_discovery import discovery
+from utils.anti_block import rate_limiter, user_agents, proxy_manager
 
 app = Flask(__name__)
 
@@ -1021,12 +1023,29 @@ def api_stream_batch():
 
 @app.route('/api/stats')
 def api_stats():
-    """Get system statistics"""
+    """Get comprehensive system statistics"""
     return jsonify({
         'cache': cache.get_stats(),
         'resolver': resolver.get_stats(),
-        'cobalt': cobalt.get_health_stats()
+        'cobalt': cobalt.get_health_stats(),
+        'instances': discovery.get_all_stats(),
+        'rate_limiter': rate_limiter.get_stats(),
+        'proxy': proxy_manager.get_stats()
     })
+
+
+@app.route('/api/instances/refresh', methods=['POST'])
+def api_refresh_instances():
+    """Refresh instance discovery"""
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(discovery.initialize())
+        return jsonify({
+            'success': True,
+            'instances': discovery.get_all_stats()
+        })
+    finally:
+        loop.close()
 
 
 @app.route('/api/cache/clear', methods=['POST'])

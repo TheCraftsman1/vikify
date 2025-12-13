@@ -1,6 +1,6 @@
 """
 Stream Resolver for Vikify
-Unified stream resolution with Cobalt-first strategy
+Unified stream resolution with anti-block measures and multiple sources
 """
 import asyncio
 import time
@@ -10,6 +10,9 @@ import yt_dlp
 from cache_manager import cache
 from sources.cobalt import cobalt
 from sources.fast_apis import try_fast_sources
+from sources.alternative_apis import try_alternative_sources
+from sources.instance_discovery import ensure_initialized
+from utils.anti_block import rate_limiter, user_agents
 
 class StreamResolver:
     def __init__(self):
@@ -17,6 +20,7 @@ class StreamResolver:
             'cache': 0,
             'cobalt': 0,
             'fast_apis': 0,
+            'alternative': 0,
             'ytdlp': 0,
             'failed': 0
         }
@@ -24,6 +28,7 @@ class StreamResolver:
             'cache': [],
             'cobalt': [],
             'fast_apis': [],
+            'alternative': [],
             'ytdlp': []
         }
     
@@ -78,7 +83,7 @@ class StreamResolver:
         try:
             url = await asyncio.wait_for(
                 try_fast_sources(video_id), 
-                timeout=4.0
+                timeout=6.0
             )
             if url:
                 cache.set_url(video_id, url, 'fast_api')
@@ -88,11 +93,30 @@ class StreamResolver:
                 print(f"[Resolver] ✅ Fast API succeeded in {elapsed:.2f}s")
                 return (url, 'fast_api', elapsed)
         except asyncio.TimeoutError:
-            print(f"[Resolver] ⏱️ Fast APIs timeout (4s)")
+            print(f"[Resolver] ⏱️ Fast APIs timeout (6s)")
         except Exception as e:
             print(f"[Resolver] ❌ Fast APIs error: {e}")
         
-        # Layer 4: yt-dlp (slow but reliable fallback)
+        # Layer 4: Alternative APIs (SaveTube, Y2Mate, etc.)
+        print(f"[Resolver] Trying alternative APIs for {video_id}")
+        try:
+            url = await asyncio.wait_for(
+                try_alternative_sources(video_id), 
+                timeout=10.0
+            )
+            if url:
+                cache.set_url(video_id, url, 'alternative')
+                self.stats['alternative'] += 1
+                elapsed = time.time() - start_time
+                self._record_timing('alternative', elapsed)
+                print(f"[Resolver] ✅ Alternative API succeeded in {elapsed:.2f}s")
+                return (url, 'alternative', elapsed)
+        except asyncio.TimeoutError:
+            print(f"[Resolver] ⏱️ Alternative APIs timeout (10s)")
+        except Exception as e:
+            print(f"[Resolver] ❌ Alternative APIs error: {e}")
+        
+        # Layer 5: yt-dlp (slow but reliable fallback)
         print(f"[Resolver] Falling back to yt-dlp for {video_id}")
         try:
             url = await self._ytdlp_extract(video_id, song_title, song_artist)
