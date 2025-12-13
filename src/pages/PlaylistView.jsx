@@ -9,6 +9,7 @@ import { albums } from '../data/songs';
 import { downloadSong } from '../utils/download';
 import AddToPlaylistModal from '../components/AddToPlaylistModal';
 import { getPlaylist as getSpotifyPlaylist, getAlbum as getSpotifyAlbum } from '../services/spotify';
+import { getCachedPlaylist, setCachedPlaylist } from '../utils/playlistCache';
 
 const PlaylistView = () => {
     const { id } = useParams();
@@ -31,6 +32,16 @@ const PlaylistView = () => {
 
     useEffect(() => {
         if (!customPlaylist && !localAlbum) {
+            // Try cache first
+            const cached = getCachedPlaylist(id);
+            if (cached) {
+                console.log('[PlaylistView] Using cached playlist');
+                setFetchedAlbum(cached);
+                // Refresh in background
+                fetchSpotifyDataBackground(id);
+                return;
+            }
+
             const fetchSpotifyData = async () => {
                 setIsLoading(true);
                 try {
@@ -42,6 +53,7 @@ const PlaylistView = () => {
                     }
                     if (data) {
                         setFetchedAlbum(data);
+                        setCachedPlaylist(id, data); // Cache it
                     }
                 } catch (e) {
                     console.error("Error fetching spotify data", e);
@@ -52,6 +64,22 @@ const PlaylistView = () => {
             fetchSpotifyData();
         }
     }, [id, customPlaylist, localAlbum]);
+
+    // Background refresh for cached playlists
+    const fetchSpotifyDataBackground = async (playlistId) => {
+        try {
+            let data = await getSpotifyAlbum(playlistId);
+            if (!data) {
+                data = await getSpotifyPlaylist(playlistId);
+            }
+            if (data) {
+                setFetchedAlbum(data);
+                setCachedPlaylist(playlistId, data);
+            }
+        } catch (e) {
+            // Silent fail for background refresh
+        }
+    };
 
     if (isLoading) {
         return (
