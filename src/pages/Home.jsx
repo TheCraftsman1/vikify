@@ -4,10 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '../context/PlayerContext';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
+import { useHistory } from '../context/HistoryContext';
 import { albums } from '../data/songs';
 import { getFeaturedPlaylists, getNewReleases, getPlaylist, getUserPlaylists } from '../services/spotify';
 import { useOnlineStatus } from '../utils/online';
-import { getRecentlyPlayed } from '../services/historyService';
 
 const Home = () => {
     const navigate = useNavigate();
@@ -15,6 +15,7 @@ const Home = () => {
     const { playSong, currentSong, isPlaying, togglePlay } = usePlayer();
     const { logout, user, isAuthenticated, accessToken } = useAuth();
     const { openProfileMenu } = useUI();
+    const { history: recentlyPlayed } = useHistory();
     const [featured, setFeatured] = useState([]);
 
     // Derived user data for avatar
@@ -22,7 +23,6 @@ const Home = () => {
     const userImage = isAuthenticated && user?.image ? user.image : null;
     const [newReleases, setNewReleases] = useState([]);
     const [userPlaylists, setUserPlaylists] = useState([]);
-    const [recentlyPlayed, setRecentlyPlayed] = useState([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
 
     useEffect(() => {
@@ -54,9 +54,6 @@ const Home = () => {
         };
 
         loadSpotifyData();
-
-        // Load listening history
-        setRecentlyPlayed(getRecentlyPlayed());
     }, [isAuthenticated, isOnline]);
 
     const getGreeting = () => {
@@ -101,6 +98,15 @@ const Home = () => {
 
         if (songsToPlay && songsToPlay.length > 0) {
             playSong(songsToPlay[0]);
+        }
+    };
+
+    const handlePlaySong = (e, song, allSongs) => {
+        e.stopPropagation();
+        if (currentSong?.id === song.id) {
+            togglePlay();
+        } else {
+            playSong(song, allSongs); // Play song within the context of recent history
         }
     };
 
@@ -177,152 +183,156 @@ const Home = () => {
                         }}>Podcasts</button>
                     </div>
                 </div>
-                <p style={{
-                    fontSize: '14px',
-                    color: 'rgba(255,255,255,0.6)',
-                    fontWeight: 400,
-                    marginBottom: '20px',
-                    padding: '0 16px'
-                }}>Discover something new today</p>
 
-                {/* Quick Access Grid - Spotify Style Horizontal Tiles */}
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(2, 1fr)',
-                    gap: '8px',
-                    marginBottom: '32px'
-                }}>
-                    {quickAccess.map((item) => (
-                        <div
-                            key={item.id}
-                            onClick={() => {
-                                if (item.id === 'liked') navigate('/liked');
-                                else if (item.id === 'downloads') navigate('/downloads');
-                                else navigate(`/playlist/${item.id}`);
-                            }}
-                            className="horizontal-playlist"
-                        >
-                            <div className="img-container">
-                                <div className="img-section" style={{ background: item.gradient || '#282828' }}>
-                                    {item.icon ? (
-                                        <Music2 size={24} color="#fff" />
-                                    ) : item.image ? (
-                                        <img
-                                            src={item.image}
-                                            alt={item.title}
-                                            onError={(e) => { e.target.src = '/placeholder.svg'; }}
-                                        />
-                                    ) : (
-                                        <Music2 size={24} color="#fff" />
-                                    )}
+                {/* Scrollable Content Area */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+                    {/* Recently Played Section */}
+                    {recentlyPlayed.length > 0 && (
+                        <SongSection
+                            title="Recently Played"
+                            songs={recentlyPlayed.slice(0, 8)} // Show top 8
+                            onPlay={handlePlaySong}
+                        />
+                    )}
+
+                    {/* Quick Access Grid - Spotify Style Horizontal Tiles */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, 1fr)',
+                        gap: '8px',
+                    }}>
+                        {quickAccess.map((item) => (
+                            <div
+                                key={item.id}
+                                onClick={() => {
+                                    if (item.id === 'liked') navigate('/liked');
+                                    else if (item.id === 'downloads') navigate('/downloads');
+                                    else navigate(`/playlist/${item.id}`);
+                                }}
+                                className="horizontal-playlist"
+                            >
+                                <div className="img-container">
+                                    <div className="img-section" style={{ background: item.gradient || '#282828' }}>
+                                        {item.icon ? (
+                                            <Music2 size={24} color="#fff" />
+                                        ) : item.image ? (
+                                            <img
+                                                src={item.image}
+                                                alt={item.title}
+                                                onError={(e) => { e.target.src = '/placeholder.svg'; }}
+                                            />
+                                        ) : (
+                                            <Music2 size={24} color="#fff" />
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="text-container">
+                                    <div className="text-section">
+                                        <span>{item.title}</span>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="text-container">
-                                <div className="text-section">
-                                    <span>{item.title}</span>
-                                </div>
+                        ))}
+                    </div>
+
+
+                    {/* Loading State or Main Content */}
+                    {
+                        isLoadingData ? (
+                            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                                <div className="loading-pulse" style={{
+                                    display: 'inline-block',
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '50%',
+                                    background: 'linear-gradient(45deg, #1db954, #1ed760)',
+                                    animation: 'pulse 1.5s ease-in-out infinite'
+                                }} />
+                                <p style={{ marginTop: '16px', color: '#b3b3b3', fontSize: '14px' }}>
+                                    Loading your music...
+                                </p>
                             </div>
-                        </div>
-                    ))}
-                </div>
+                        ) : (
+                            <>
+                                {/* Guest Mode: Show minimal content */}
+                                {!isAuthenticated && (
+                                    <div style={{
+                                        textAlign: 'center',
+                                        padding: '40px 20px',
+                                        background: 'rgba(255,255,255,0.05)',
+                                        borderRadius: '12px',
+                                        marginBottom: '40px'
+                                    }}>
+                                        <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#fff', marginBottom: '8px' }}>
+                                            Welcome to Vikify
+                                        </h3>
+                                        <p style={{ color: '#b3b3b3', marginBottom: '24px', fontSize: '14px' }}>
+                                            Login with Spotify to see your playlists and recommendations.
+                                            You can still search and download songs without logging in.
+                                        </p>
+                                        <button
+                                            onClick={() => navigate('/onboarding')}
+                                            style={{
+                                                background: '#1db954',
+                                                color: '#000',
+                                                border: 'none',
+                                                padding: '12px 32px',
+                                                borderRadius: '24px',
+                                                fontSize: '14px',
+                                                fontWeight: '700',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            Connect Spotify
+                                        </button>
+                                    </div>
+                                )}
 
-
-                {/* Loading State */}
-                {
-                    isLoadingData ? (
-                        <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                            <div className="loading-pulse" style={{
-                                display: 'inline-block',
-                                width: '40px',
-                                height: '40px',
-                                borderRadius: '50%',
-                                background: 'linear-gradient(45deg, #1db954, #1ed760)',
-                                animation: 'pulse 1.5s ease-in-out infinite'
-                            }} />
-                            <p style={{ marginTop: '16px', color: '#b3b3b3', fontSize: '14px' }}>
-                                Loading your music...
-                            </p>
-                        </div>
-                    ) : (
-                        <>
-                            {/* Guest Mode: Show minimal content */}
-                            {!isAuthenticated && (
-                                <div style={{
-                                    textAlign: 'center',
-                                    padding: '40px 20px',
-                                    background: 'rgba(255,255,255,0.05)',
-                                    borderRadius: '12px',
-                                    marginBottom: '40px'
-                                }}>
-                                    <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#fff', marginBottom: '8px' }}>
-                                        Welcome to Vikify
-                                    </h3>
-                                    <p style={{ color: '#b3b3b3', marginBottom: '24px', fontSize: '14px' }}>
-                                        Login with Spotify to see your playlists and recommendations.
-                                        You can still search and download songs without logging in.
-                                    </p>
-                                    <button
-                                        onClick={() => navigate('/onboarding')}
-                                        style={{
-                                            background: '#1db954',
-                                            color: '#000',
-                                            border: 'none',
-                                            padding: '12px 32px',
-                                            borderRadius: '24px',
-                                            fontSize: '14px',
-                                            fontWeight: '700',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        Connect Spotify
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* Authenticated Content */}
-                            {isAuthenticated && (
-                                <>
-                                    {/* User Playlists Only - No random recommendations */}
-                                    {userPlaylists.length > 0 ? (
-                                        <Section
-                                            title="Your Playlists"
-                                            items={userPlaylists}
-                                            onPlay={handlePlayAlbum}
-                                        />
-                                    ) : (
-                                        <div style={{
-                                            textAlign: 'center',
-                                            padding: '40px 20px',
-                                            background: 'rgba(255,255,255,0.03)',
-                                            borderRadius: '16px',
-                                            border: '1px solid rgba(255,255,255,0.06)'
-                                        }}>
-                                            <p style={{ color: '#b3b3b3', fontSize: '14px', marginBottom: '16px' }}>
-                                                No playlists found. Create one to get started!
-                                            </p>
-                                            <button
-                                                onClick={() => navigate('/search')}
-                                                style={{
-                                                    background: '#1db954',
-                                                    color: '#000',
-                                                    border: 'none',
-                                                    padding: '12px 24px',
-                                                    borderRadius: '24px',
-                                                    fontSize: '14px',
-                                                    fontWeight: '700',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                Search Songs
-                                            </button>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </>
-                    )
-                }
-
+                                {/* Authenticated Content */}
+                                {isAuthenticated && (
+                                    <>
+                                        {/* User Playlists Only - No random recommendations */}
+                                        {userPlaylists.length > 0 ? (
+                                            <Section
+                                                title="Your Playlists"
+                                                items={userPlaylists}
+                                                onPlay={handlePlayAlbum}
+                                            />
+                                        ) : (
+                                            <div style={{
+                                                textAlign: 'center',
+                                                padding: '40px 20px',
+                                                background: 'rgba(255,255,255,0.03)',
+                                                borderRadius: '16px',
+                                                border: '1px solid rgba(255,255,255,0.06)'
+                                            }}>
+                                                <p style={{ color: '#b3b3b3', fontSize: '14px', marginBottom: '16px' }}>
+                                                    No playlists found. Create one to get started!
+                                                </p>
+                                                <button
+                                                    onClick={() => navigate('/search')}
+                                                    style={{
+                                                        background: '#1db954',
+                                                        color: '#000',
+                                                        border: 'none',
+                                                        padding: '12px 24px',
+                                                        borderRadius: '24px',
+                                                        fontSize: '14px',
+                                                        fontWeight: '700',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Search Songs
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </>
+                        )
+                    }
+                </div> {/* End scrollable content */}
 
             </div >
 
@@ -393,6 +403,55 @@ const Section = ({ title, items, onPlay }) => {
                             <h3 className="playlist-card-title">{item.title}</h3>
                             <p className="playlist-card-description">
                                 {item.description || item.artist || 'Playlist'}
+                            </p>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+const SongSection = ({ title, songs, onPlay }) => {
+    const { currentSong, isPlaying } = usePlayer();
+
+    if (!songs || songs.length === 0) return null;
+
+    return (
+        <div style={{ marginBottom: '16px' }}>
+            <h2 className="playlist-header" style={{ marginBottom: '16px' }}>
+                {title}
+            </h2>
+            <div className="playlist-grid">
+                {songs.map((song) => {
+                    const isThisPlaying = currentSong?.id === song.id;
+                    return (
+                        <div
+                            key={song.id}
+                            onClick={(e) => onPlay && onPlay(e, song, songs)}
+                            className="playlist-card"
+                        >
+                            <div className="playlist-card-image">
+                                <img
+                                    src={song.image}
+                                    alt={song.title}
+                                    onError={(e) => { e.target.src = '/placeholder.svg'; }}
+                                    style={{ borderRadius: '4px' }} // Songs often square, not rounded heavy
+                                />
+                                <button
+                                    className="playlist-card-play-btn"
+                                    style={{ opacity: isThisPlaying ? 1 : undefined }}
+                                >
+                                    {isThisPlaying && isPlaying ? (
+                                        <Pause size={20} fill="#000" color="#000" />
+                                    ) : (
+                                        <Play size={20} fill="#000" color="#000" style={{ marginLeft: '2px' }} />
+                                    )}
+                                </button>
+                            </div>
+                            <h3 className="playlist-card-title">{song.title}</h3>
+                            <p className="playlist-card-description">
+                                {song.artist}
                             </p>
                         </div>
                     );

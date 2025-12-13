@@ -7,12 +7,14 @@ import {
 import { usePlayer } from '../context/PlayerContext';
 import { useLikedSongs } from '../context/LikedSongsContext';
 import MobileFullScreenPlayer from './MobileFullScreenPlayer';
+import LyricsOverlay from './LyricsOverlay';
 import { hapticLight, hapticSelection } from '../utils/haptics';
 
 const Player = () => {
     const {
         currentSong, isPlaying, togglePlay, progress, duration,
         seek, playNext, playPrevious, youtubeUrl, playerRef,
+        activePlayer, playerRefA, playerRefB, urlA, urlB,
         handleProgress, handleDuration, handleEnded, isLoading, onPlayerReady,
         upNextQueue, queue, playSong,
         volume, isMuted, changeVolume, toggleMute,
@@ -25,6 +27,7 @@ const Player = () => {
     const [isShuffle, setIsShuffle] = useState(false);
     const [repeatMode, setRepeatMode] = useState(0);
     const [showQueue, setShowQueue] = useState(false);
+    const [showLyrics, setShowLyrics] = useState(false);
     const [showSleepMenu, setShowSleepMenu] = useState(false);
     const [showMobileFullScreen, setShowMobileFullScreen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -60,19 +63,9 @@ const Player = () => {
 
     const currentSongLiked = currentSong ? isLiked(currentSong.id) : false;
 
+    // Just toggle state - PlayerContext's useEffect handles actual audio.play()/pause()
     const handlePlayPause = () => {
         togglePlay();
-        if (playerRef.current) {
-            const audio = playerRef.current;
-            if (audio.paused) {
-                audio.play().catch((err) => {
-                    console.error('[Player] play() failed, reverting UI:', err);
-                    togglePlay();
-                });
-            } else {
-                audio.pause();
-            }
-        }
     };
 
     const isYoutube = youtubeUrl && (youtubeUrl.includes('youtube.com') || youtubeUrl.includes('youtu.be'));
@@ -204,42 +197,52 @@ const Player = () => {
                 <div className="mobile-progress-indicator-fill" style={{ width: `${progressPercent}%` }} />
             </div>
 
-            {/* Audio Player */}
-            {youtubeUrl && (
-                <audio
-                    ref={playerRef}
-                    src={youtubeUrl}
-                    preload="auto"
-                    playsInline
-                    onTimeUpdate={(e) => handleProgress({ playedSeconds: e.currentTarget.currentTime })}
-                    onLoadedMetadata={(e) => {
-                        console.log('[Player] Audio loaded, duration:', e.currentTarget.duration);
-                        handleDuration(e.currentTarget.duration);
+            {/* Dual Audio Players for Crossfade */}
+            <audio
+                ref={playerRefA}
+                src={urlA}
+                preload="auto"
+                playsInline
+                onTimeUpdate={(e) => activePlayer === 'A' && handleProgress({ playedSeconds: e.currentTarget.currentTime }, 'A', currentSong?.id)}
+                onLoadedMetadata={(e) => {
+                    if (activePlayer === 'A') {
+                        console.log('[Player] Audio A loaded, duration:', e.currentTarget.duration, 'track:', currentSong?.id);
+                        handleDuration(e.currentTarget.duration, 'A', currentSong?.id);
                         onPlayerReady();
-                    }}
-                    onPlay={() => console.log('[Player] Playing!')}
-                    onError={async (e) => {
-                        console.error('[Player] Audio error:', e);
-                        const id = currentSong?.id || null;
-                        if (streamReloadGuardRef.current.songId !== id) {
-                            streamReloadGuardRef.current = { songId: id, attempts: 0 };
-                        }
-                        if (streamReloadGuardRef.current.attempts >= 1) return;
-                        streamReloadGuardRef.current.attempts += 1;
-                        try {
-                            const ok = await reloadCurrentStream?.();
-                            if (ok && playerRef.current) {
-                                playerRef.current.load?.();
-                                playerRef.current.play?.().catch(() => { });
-                            }
-                        } catch { }
-                    }}
-                    onEnded={handleEnded}
-                    style={{ display: 'none' }}
-                />
-            )}
+                    }
+                }}
+                onError={async (e) => {
+                    if (activePlayer === 'A') {
+                        console.error('[Player] Audio A error:', e);
+                        // Retry logic... (simplified for brevity, main logic in Context)
+                    }
+                }}
+                onEnded={() => activePlayer === 'A' && handleEnded(currentSong?.id)}
+                style={{ display: 'none' }}
+            />
+            <audio
+                ref={playerRefB}
+                src={urlB}
+                preload="auto"
+                playsInline
+                onTimeUpdate={(e) => activePlayer === 'B' && handleProgress({ playedSeconds: e.currentTarget.currentTime }, 'B', currentSong?.id)}
+                onLoadedMetadata={(e) => {
+                    if (activePlayer === 'B') {
+                        console.log('[Player] Audio B loaded, duration:', e.currentTarget.duration, 'track:', currentSong?.id);
+                        handleDuration(e.currentTarget.duration, 'B', currentSong?.id);
+                        onPlayerReady();
+                    }
+                }}
+                onError={async (e) => {
+                    if (activePlayer === 'B') {
+                        console.error('[Player] Audio B error:', e);
+                    }
+                }}
+                onEnded={() => activePlayer === 'B' && handleEnded(currentSong?.id)}
+                style={{ display: 'none' }}
+            />
 
-            {/* Left: Now Playing */}
+            {/* Left: Now Playing - Spotify style */}
             <div
                 className="player-now-playing"
                 onClick={() => isMobile && setShowMobileFullScreen(true)}
@@ -258,35 +261,42 @@ const Player = () => {
                 </div>
             </div>
 
-            {/* Mobile Player Controls */}
+            {/* Mobile Player Controls - Spotify style */}
             <div className="mobile-player-controls">
-                <button className="mobile-only-btn player-icon-btn" style={{ color: '#1db954', display: 'none' }} title="Connected Device">
-                    <Laptop2 size={20} />
+                {/* Device icon - green headphones style */}
+                <button className="mobile-device-btn" title="Connected Device">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#1db954">
+                        <path d="M12 1a9 9 0 0 0-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7a9 9 0 0 0-9-9z"/>
+                    </svg>
                 </button>
 
+                {/* Like button - Spotify checkmark style */}
                 <button
                     onClick={(e) => { e.stopPropagation(); if (currentSong) toggleLike(currentSong); }}
                     className={`mobile-like-btn ${currentSongLiked ? 'liked' : ''}`}
                     title={currentSongLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'}
                 >
                     {currentSongLiked ? (
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                            <path d="M13.5 4.5L6 12L2.5 8.5" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="12" fill="#1db954"/>
+                            <path d="M17.5 8.5L10 16L6.5 12.5" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                     ) : (
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                            <path d="M8 3V13M3 8H13" stroke="rgba(255,255,255,0.8)" strokeWidth="2" strokeLinecap="round" />
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="11" stroke="rgba(255,255,255,0.7)" strokeWidth="2"/>
+                            <path d="M12 7V17M7 12H17" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" />
                         </svg>
                     )}
                 </button>
 
+                {/* Play button - Spotify white triangle style */}
                 <button onClick={(e) => { e.stopPropagation(); handlePlayPause(); }} className="mobile-play-btn">
                     {isLoading ? (
-                        <Loader size={18} color="#000" className="animate-spin" />
+                        <Loader size={22} color="#fff" className="animate-spin" />
                     ) : isPlaying ? (
-                        <Pause size={18} fill="#000" color="#000" />
+                        <Pause size={26} fill="#fff" color="#fff" />
                     ) : (
-                        <Play size={18} fill="#000" color="#000" style={{ marginLeft: '2px' }} />
+                        <Play size={26} fill="#fff" color="#fff" style={{ marginLeft: '3px' }} />
                     )}
                 </button>
             </div>
@@ -360,7 +370,13 @@ const Player = () => {
 
             {/* Right: Extra Controls */}
             <div className="player-extra-controls hide-mobile">
-                <button className="player-icon-btn"><Mic2 size={16} /></button>
+                <button
+                    className={`player-icon-btn ${showLyrics ? 'active' : ''}`}
+                    onClick={() => setShowLyrics(!showLyrics)}
+                    title="Lyrics"
+                >
+                    <Mic2 size={16} />
+                </button>
 
                 <button onClick={() => setShowQueue(!showQueue)} className={`player-icon-btn ${showQueue ? 'active' : ''}`}>
                     <ListMusic size={16} />
@@ -464,6 +480,11 @@ const Player = () => {
                     <Maximize2 size={16} />
                 </button>
             </div>
+
+            {/* Lyrics Overlay */}
+            {showLyrics && (
+                <LyricsOverlay onClose={() => setShowLyrics(false)} />
+            )}
 
             {/* Full-Screen Overlay */}
             {isFullScreen && currentSong && (

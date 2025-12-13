@@ -56,19 +56,7 @@ const MobileFullScreenPlayer = ({ isOpen, onClose }) => {
 
     const handlePlayPause = () => {
         hapticMedium();
-        if (!playerRef.current) {
-            togglePlay();
-            return;
-        }
-        const audio = playerRef.current;
-        if (audio.paused) {
-            audio.play().then(() => {
-                if (!isPlaying) togglePlay();
-            }).catch(console.error);
-        } else {
-            audio.pause();
-            if (isPlaying) togglePlay();
-        }
+        togglePlay(); // PlayerContext's useEffect handles actual audio.play()/pause()
     };
 
     const handleDownloadCurrent = async () => {

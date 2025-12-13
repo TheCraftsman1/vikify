@@ -1,5 +1,5 @@
-import React from 'react';
-import { Play, Pause, Clock, Heart, Download, Shuffle, MoreHorizontal } from 'lucide-react';
+import React, { useState } from 'react';
+import { Play, Pause, Clock, Heart, Download, Shuffle, MoreHorizontal, ArrowDownCircle, CheckCircle2, Loader } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext';
 import { useLikedSongs } from '../context/LikedSongsContext';
 import { useOffline } from '../context/OfflineContext';
@@ -8,9 +8,16 @@ import { downloadSong } from '../utils/download';
 const LikedSongs = () => {
     const { playSong, currentSong, isPlaying, togglePlay, shufflePlay, shuffle } = usePlayer();
     const { getLikedSongs, toggleLike } = useLikedSongs();
-    const { isSongOffline } = useOffline();
+    const {
+        isSongOffline,
+        togglePlaylistDownload,
+        isPlaylistDownloaded,
+        downloadQueue,
+        downloadProgress
+    } = useOffline();
 
     const likedSongs = getLikedSongs();
+    const LIKED_PLAYLIST_ID = 'liked-songs';
 
     const formatDuration = (seconds) => {
         if (!seconds) return '0:00';
@@ -29,6 +36,7 @@ const LikedSongs = () => {
 
     const totalDuration = likedSongs.reduce((acc, s) => acc + (s.duration || 0), 0);
     const isCurrentPlaylistPlaying = currentSong && likedSongs.some(s => s.id === currentSong.id);
+    const isDownloaded = isPlaylistDownloaded(LIKED_PLAYLIST_ID);
 
     const handlePlayClick = () => {
         if (isCurrentPlaylistPlaying) {
@@ -120,6 +128,35 @@ const LikedSongs = () => {
                             >
                                 <Shuffle size={24} />
                             </button>
+
+                            {/* Download Toggle */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <button
+                                    onClick={() => togglePlaylistDownload(LIKED_PLAYLIST_ID, likedSongs)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        background: 'none',
+                                        border: 'none',
+                                        padding: '8px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <div style={{
+                                        width: '24px',
+                                        height: '24px',
+                                        borderRadius: '50%',
+                                        border: `2px solid ${isDownloaded ? '#1db954' : '#b3b3b3'}`,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        backgroundColor: isDownloaded ? '#1db954' : 'transparent'
+                                    }}>
+                                        <ArrowDownCircle size={16} color={isDownloaded ? '#000' : '#b3b3b3'} />
+                                    </div>
+                                </button>
+                            </div>
                         </>
                     )}
                 </div>
@@ -169,6 +206,8 @@ const LikedSongs = () => {
                             {likedSongs.map((song, index) => {
                                 const isThisSong = currentSong?.id === song.id;
                                 const isOffline = isSongOffline(song.id);
+                                const isDownloadingSong = downloadQueue.some(s => s.id === song.id) ||
+                                    (downloadProgress?.currentSong?.id === song.id && downloadProgress?.status === 'downloading');
 
                                 return (
                                     <div
@@ -211,15 +250,26 @@ const LikedSongs = () => {
                                                         position: 'absolute',
                                                         bottom: '-4px',
                                                         right: '-4px',
-                                                        width: '14px',
-                                                        height: '14px',
-                                                        borderRadius: '50%',
-                                                        backgroundColor: '#1db954',
+                                                        backgroundColor: '#121212',
+                                                        borderRadius: '50%'
+                                                    }}>
+                                                        <CheckCircle2 size={16} color="#1db954" fill="#1db954" />
+                                                    </div>
+                                                )}
+                                                {isDownloadingSong && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: 0,
+                                                        left: 0,
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        backgroundColor: 'rgba(0,0,0,0.5)',
                                                         display: 'flex',
                                                         alignItems: 'center',
-                                                        justifyContent: 'center'
+                                                        justifyContent: 'center',
+                                                        borderRadius: '4px'
                                                     }}>
-                                                        <Download size={8} color="#000" />
+                                                        <Loader size={20} className="spin" color="#1db954" />
                                                     </div>
                                                 )}
                                             </div>
@@ -236,8 +286,15 @@ const LikedSongs = () => {
                                                     fontSize: '14px',
                                                     whiteSpace: 'nowrap',
                                                     overflow: 'hidden',
-                                                    textOverflow: 'ellipsis'
-                                                }}>{song.artist}</div>
+                                                    textOverflow: 'ellipsis',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px'
+                                                }}>
+                                                    {isDownloadingSong && <span style={{ fontSize: '11px', color: '#1db954' }}>Downloading...</span>}
+                                                    {isOffline && !isDownloadingSong && <ArrowDownCircle size={12} color="#1db954" />}
+                                                    <span>{song.artist}</span>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -254,13 +311,6 @@ const LikedSongs = () => {
                                                 style={{ padding: '4px', color: '#1db954' }}
                                             >
                                                 <Heart size={16} fill="#1db954" />
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); downloadSong(song); }}
-                                                className="action-btn"
-                                                style={{ opacity: 0, padding: '4px', color: '#b3b3b3' }}
-                                            >
-                                                <Download size={16} />
                                             </button>
                                             <span style={{ color: '#b3b3b3', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>
                                                 {formatDuration(song.duration)}

@@ -2322,7 +2322,7 @@ img {
   }
 
   .player-bar {
-    padding: 10px 14px !important;
+    padding: 8px 12px !important;
     height: 100% !important;
     display: flex !important;
     align-items: center !important;
@@ -2332,12 +2332,13 @@ img {
     border-top: none !important;
   }
 
-  /* Mobile player controls - visible on mobile */
+  /* Mobile player controls - Spotify style */
   .mobile-player-controls {
     display: flex !important;
     align-items: center !important;
-    gap: 16px !important;
+    gap: 12px !important;
     flex-shrink: 0 !important;
+    padding-right: 4px !important;
   }
 
   .mobile-skip-btn {
@@ -2345,14 +2346,46 @@ img {
     padding: 4px !important;
   }
 
-  .mobile-play-btn {
-    width: 40px !important;
-    height: 40px !important;
-    border-radius: 50% !important;
-    background: #fff !important;
+  /* Device button - Spotify headphones icon */
+  .mobile-device-btn {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    cursor: pointer !important;
+  }
+
+  /* Like button - Spotify checkmark style */
+  .mobile-like-btn {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  .mobile-like-btn.liked {
+    background: transparent !important;
+  }
+
+  /* Play button - Spotify white icon (no background) */
+  .mobile-play-btn {
+    width: auto !important;
+    height: auto !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    cursor: pointer !important;
   }
 
   /* Hide desktop center and right controls on mobile */
@@ -2366,18 +2399,19 @@ img {
     width: auto !important;
     min-width: 0 !important;
     flex: 1 !important;
-    gap: 12px !important;
+    gap: 10px !important;
   }
 
   /* Album art - Spotify style */
   .player-album-art {
-    width: 48px !important;
-    height: 48px !important;
-    border-radius: 6px !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 4px !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+    flex-shrink: 0 !important;
   }
 
-  /* Song info - refined typography */
+  /* Song info - Spotify typography */
   .player-song-info {
     max-width: none !important;
     flex: 1 !important;
@@ -2386,26 +2420,17 @@ img {
 
   .player-song-title {
     font-size: 14px !important;
-    font-weight: 600 !important;
-    line-height: 1.35 !important;
+    font-weight: 700 !important;
+    line-height: 1.3 !important;
     letter-spacing: -0.01em;
+    color: #fff !important;
   }
 
   .player-song-artist {
     font-size: 12px !important;
-    line-height: 1.35 !important;
-    color: #a0a0a0 !important;
-  }
-
-  /* Mobile playback buttons - simplified */
-  .mobile-player-controls {
-    gap: 8px !important;
-  }
-
-  /* Make play button appropriate size */
-  .mobile-player-controls button[style*="borderRadius"] {
-    width: 36px !important;
-    height: 36px !important;
+    line-height: 1.3 !important;
+    color: #b3b3b3 !important;
+    font-weight: 400 !important;
   }
 
   .now-playing-image {
@@ -4384,22 +4409,21 @@ img {
   border-radius: var(--border-radius-sm);
 }
 
-/* Mobile Progress Indicator */
+/* Mobile Progress Indicator - Spotify style */
 .mobile-progress-indicator {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
-  background-color: rgba(255, 255, 255, 0.1);
+  height: 2px;
+  background-color: rgba(255, 255, 255, 0.2);
   overflow: hidden;
-  border-radius: 4px 4px 0 0;
 }
 
 .mobile-progress-indicator-fill {
   height: 100%;
-  background-color: var(--accent-primary);
-  transition: width 0.2s linear;
+  background-color: #1db954;
+  transition: width 0.1s linear;
 }
 
 /* Desktop Player Controls */
@@ -4464,8 +4488,7 @@ img {
     opacity: 1 !important;
   }
 
-  .player-bar>div:nth-child(2),
-  .player-bar>div:nth-child(3) {
+  .player-bar>.player-now-playing {
     display: flex !important;
   }
 
@@ -4508,17 +4531,16 @@ img {
     display: block !important;
   }
 
-  .player-bar>div:nth-child(5),
-  .player-bar>div:nth-child(6),
-  .player-bar>div:nth-child(7) {
+  /* Hide desktop controls on mobile using class selectors */
+  .player-bar .player-controls {
     display: none !important;
   }
 
-  .player-controls {
+  .player-bar .player-extra-controls {
     display: none !important;
   }
 
-  .player-extra-controls {
+  .player-bar .desktop-player-controls {
     display: none !important;
   }
 }

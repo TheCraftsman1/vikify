@@ -61,12 +61,15 @@ function AppContent() {
     return (
       <div style={{
         minHeight: '100vh',
-        backgroundColor: '#000',
+        backgroundColor: '#121212',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        gap: '16px'
       }}>
-        <img src="/logo.png" alt="Vikify" style={{ width: '80px', opacity: 0.5 }} />
+        <img src="/logo.png" alt="Vikify" style={{ width: '80px', opacity: 0.7 }} />
+        <div style={{ color: '#888', fontSize: '14px' }}>Loading...</div>
       </div>
     );
   }
@@ -117,12 +120,10 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <UIProvider>
-        <AppContent />
-        <KeyboardHelp />
-      </UIProvider>
-    </AuthProvider>
+    <UIProvider>
+      <AppContent />
+      <KeyboardHelp />
+    </UIProvider>
   );
 }
 

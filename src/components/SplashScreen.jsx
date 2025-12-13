@@ -54,6 +54,7 @@ const SplashScreen = ({ onComplete }) => {
                         height: '180px',
                         objectFit: 'contain'
                     }}
+                    onError={(e) => { e.target.style.display = 'none'; }}
                 />
             </div>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Pause, Clock, Download, Heart, Shuffle, MoreHorizontal, Plus, Trash2, Music, Loader } from 'lucide-react';
+import { Play, Pause, Clock, Download, Heart, Shuffle, MoreHorizontal, Plus, Trash2, Music, Loader, ArrowDownCircle, CheckCircle2 } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext';
 import { useLikedSongs } from '../context/LikedSongsContext';
 import { usePlaylists } from '../context/PlaylistContext';
@@ -17,7 +17,13 @@ const PlaylistView = () => {
     const { playSong, currentSong, isPlaying, togglePlay, shufflePlay, shuffle } = usePlayer();
     const { isLiked, toggleLike } = useLikedSongs();
     const { getPlaylist, removeFromPlaylist, deletePlaylist } = usePlaylists();
-    const { isSongOffline, downloadPlaylist, isDownloading } = useOffline();
+    const {
+        isSongOffline,
+        togglePlaylistDownload,
+        isPlaylistDownloaded,
+        downloadQueue,
+        downloadProgress
+    } = useOffline();
 
     const [addToPlaylistSong, setAddToPlaylistSong] = useState(null);
     const [fetchedAlbum, setFetchedAlbum] = useState(null);
@@ -108,16 +114,14 @@ const PlaylistView = () => {
 
     const totalDuration = album.songs ? album.songs.reduce((acc, s) => acc + (s.duration || 0), 0) : 0;
     const isCurrentAlbumPlaying = currentSong && album.songs.some(s => s.id === currentSong.id);
+    const isDownloaded = isPlaylistDownloaded(id);
 
     const handlePlayClick = () => {
         console.log('[PlaylistView] handlePlayClick called');
-        console.log('[PlaylistView] album.songs:', album?.songs?.length, album?.songs);
-        console.log('[PlaylistView] isCurrentAlbumPlaying:', isCurrentAlbumPlaying);
 
         if (isCurrentAlbumPlaying) {
             togglePlay();
         } else if (album?.songs?.length > 0) {
-            console.log('[PlaylistView] Playing first song:', album.songs[0]);
             playSong(album.songs[0], album.songs);
         } else {
             console.warn('[PlaylistView] No songs to play!');
@@ -247,27 +251,38 @@ const PlaylistView = () => {
                     >
                         <Shuffle size={24} />
                     </button>
-                    {/* Download All Button */}
+
+                    {/* Spotify-like Download Toggle */}
                     {album.songs.length > 0 && (
-                        <button
-                            onClick={() => downloadPlaylist(album.songs, album.title)}
-                            disabled={isDownloading}
-                            style={{
-                                color: isDownloading ? '#555' : '#b3b3b3',
-                                padding: '8px',
-                                cursor: isDownloading ? 'not-allowed' : 'pointer'
-                            }}
-                            onMouseEnter={(e) => !isDownloading && (e.currentTarget.style.color = '#1db954')}
-                            onMouseLeave={(e) => !isDownloading && (e.currentTarget.style.color = '#b3b3b3')}
-                            title={isDownloading ? 'Download in progress...' : 'Download all for offline'}
-                        >
-                            {isDownloading ? (
-                                <Loader size={24} className="spin" />
-                            ) : (
-                                <Download size={24} />
-                            )}
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <button
+                                onClick={() => togglePlaylistDownload(id, album.songs)}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: '8px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <div style={{
+                                    width: '24px',
+                                    height: '24px',
+                                    borderRadius: '50%',
+                                    border: `2px solid ${isDownloaded ? '#1db954' : '#b3b3b3'}`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    backgroundColor: isDownloaded ? '#1db954' : 'transparent'
+                                }}>
+                                    <ArrowDownCircle size={16} color={isDownloaded ? '#000' : '#b3b3b3'} />
+                                </div>
+                            </button>
+                        </div>
                     )}
+
                     {customPlaylist && (
                         <button
                             onClick={handleDeletePlaylist}
@@ -332,6 +347,8 @@ const PlaylistView = () => {
                                 const isThisSong = currentSong?.id === song.id;
                                 const liked = isLiked(song.id);
                                 const isOffline = isSongOffline(song.id);
+                                const isDownloadingSong = downloadQueue.some(s => s.id === song.id) ||
+                                    (downloadProgress?.currentSong?.id === song.id && downloadProgress?.status === 'downloading');
 
                                 return (
                                     <div
@@ -373,15 +390,26 @@ const PlaylistView = () => {
                                                         position: 'absolute',
                                                         bottom: '-4px',
                                                         right: '-4px',
-                                                        width: '14px',
-                                                        height: '14px',
-                                                        borderRadius: '50%',
-                                                        backgroundColor: '#1db954',
+                                                        backgroundColor: '#121212',
+                                                        borderRadius: '50%'
+                                                    }}>
+                                                        <CheckCircle2 size={16} color="#1db954" fill="#1db954" />
+                                                    </div>
+                                                )}
+                                                {isDownloadingSong && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: 0,
+                                                        left: 0,
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        backgroundColor: 'rgba(0,0,0,0.5)',
                                                         display: 'flex',
                                                         alignItems: 'center',
-                                                        justifyContent: 'center'
+                                                        justifyContent: 'center',
+                                                        borderRadius: '4px'
                                                     }}>
-                                                        <Download size={8} color="#000" />
+                                                        <Loader size={20} className="spin" color="#1db954" />
                                                     </div>
                                                 )}
                                             </div>
@@ -398,8 +426,15 @@ const PlaylistView = () => {
                                                     fontSize: '14px',
                                                     whiteSpace: 'nowrap',
                                                     overflow: 'hidden',
-                                                    textOverflow: 'ellipsis'
-                                                }}>{song.artist}</div>
+                                                    textOverflow: 'ellipsis',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px'
+                                                }}>
+                                                    {isDownloadingSong && <span style={{ fontSize: '11px', color: '#1db954' }}>Downloading...</span>}
+                                                    {isOffline && !isDownloadingSong && <ArrowDownCircle size={12} color="#1db954" />}
+                                                    <span>{song.artist}</span>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -440,14 +475,6 @@ const PlaylistView = () => {
                                                     <Trash2 size={16} />
                                                 </button>
                                             )}
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); downloadSong(song); }}
-                                                className="action-btn"
-                                                style={{ opacity: 0, padding: '4px', color: '#b3b3b3' }}
-                                                title="Download"
-                                            >
-                                                <Download size={16} />
-                                            </button>
                                             <span style={{ color: '#b3b3b3', fontSize: '14px', fontVariantNumeric: 'tabular-nums', minWidth: '40px', textAlign: 'right' }}>
                                                 {formatDuration(song.duration)}
                                             </span>

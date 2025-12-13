@@ -2,10 +2,11 @@ import React, { createContext, useContext, useState, useRef, useEffect, useCallb
 import { searchYouTube, getRelatedSongs } from '../utils/youtube';
 import { getAudioBlob } from '../utils/offlineDB';
 import { useAuth } from './AuthContext';
+import { useHistory } from './HistoryContext';
+import { useCrossfade } from './CrossfadeContext';
 import { getRecommendations as getSpotifyRecommendations } from '../services/spotify';
 import { hapticMedium, hapticLight } from '../utils/haptics';
 import { updateNowPlaying, clearNowPlaying, onNowPlayingAction, isNative as isNativePlatform } from '../utils/nowPlaying';
-import { addToHistory } from '../services/historyService';
 
 const PlayerContext = createContext();
 
@@ -19,13 +20,40 @@ export const usePlayer = () => useContext(PlayerContext);
 
 export const PlayerProvider = ({ children }) => {
     const [currentSong, setCurrentSong] = useState(null);
+    const [nextSong, setNextSong] = useState(null); // Song capable of being crossfaded to
     const [isPlaying, setIsPlaying] = useState(false);
     const [queue, setQueue] = useState([]); // Current playlist queue
     const [originalQueue, setOriginalQueue] = useState([]); // Store original order for unshuffle
     const [queueIndex, setQueueIndex] = useState(-1); // Current index in queue
     const [progress, setProgress] = useState(0);
     const [duration, setDuration] = useState(0);
-    const [youtubeUrl, setYoutubeUrl] = useState(null);
+
+    // Dual Player State for Crossfade
+    const [activePlayer, setActivePlayer] = useState('A'); // 'A' or 'B'
+    const [urlA, setUrlA] = useState(null);
+    const [urlB, setUrlB] = useState(null);
+    const playerRefA = useRef(null);
+    const playerRefB = useRef(null);
+    const activePlayerRef = useRef('A'); // Keep ref in sync for callbacks
+
+    // Update activePlayerRef when activePlayer changes
+    useEffect(() => {
+        activePlayerRef.current = activePlayer;
+    }, [activePlayer]);
+
+    // Helper to get current active audio element (safe for callbacks)
+    const getActiveAudio = useCallback(() => {
+        return activePlayerRef.current === 'A' ? playerRefA.current : playerRefB.current;
+    }, []);
+
+    // Legacy support (points to active player)
+    const playerRef = activePlayer === 'A' ? playerRefA : playerRefB;
+    const youtubeUrl = activePlayer === 'A' ? urlA : urlB;
+    const setYoutubeUrl = (url) => {
+        if (activePlayer === 'A') setUrlA(url);
+        else setUrlB(url);
+    };
+
     const [isLoading, setIsLoading] = useState(false);
     const [autoplay, setAutoplay] = useState(true);
     const [shuffle, setShuffle] = useState(false); // Shuffle mode
@@ -36,12 +64,17 @@ export const PlayerProvider = ({ children }) => {
     const [sleepTimer, setSleepTimer] = useState(null); // Minutes left, null = off
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [audioQuality, setAudioQuality] = useState(null); // {bitrate, codec, level}
-    const playerRef = useRef(null);
+
     const blobUrlRef = useRef(null);
     const sleepTimerRef = useRef(null);
     const progressRafRef = useRef(null);
     const pendingProgressRef = useRef(null);
     const isLoadingRef = useRef(false); // Sync guard against race conditions
+    const currentTrackIdRef = useRef(null); // Track ID for event guards
+    const playbackGenRef = useRef(0); // Generation counter to invalidate stale events
+
+    // Crossfade Hook
+    const { startCrossfade, enabled: crossfadeEnabled, duration: crossfadeDuration } = useCrossfade();
 
     // Stream-stall recovery (YouTube direct URLs can intermittently stall/expire)
     const pendingSeekAfterReloadRef = useRef(null); // seconds
@@ -59,18 +92,22 @@ export const PlayerProvider = ({ children }) => {
 
     // Add useAuth hook inside component
     const { spotifyToken, isSpotifyAuthenticated } = useAuth();
+    const { addToHistory } = useHistory();
 
-    // Control audio playback
+    // Control audio playback - use activePlayer to select correct ref
     useEffect(() => {
-        const audio = playerRef.current;
+        const audio = activePlayer === 'A' ? playerRefA.current : playerRefB.current;
+        console.log('[PlayerContext] Play effect triggered, isPlaying:', isPlaying, 'audio:', audio ? 'exists' : 'null', 'src:', audio?.src?.substring(0, 50));
         if (!audio) return;
 
         if (isPlaying) {
+            console.log('[PlayerContext] Calling audio.play()');
             audio.play().catch(e => console.warn('[Player] Play failed:', e));
         } else {
+            console.log('[PlayerContext] Calling audio.pause()');
             audio.pause();
         }
-    }, [isPlaying]);
+    }, [isPlaying, activePlayer]);
 
     // Position State Update Function
     const updatePositionState = useCallback((specificPosition = null) => {
@@ -104,10 +141,11 @@ export const PlayerProvider = ({ children }) => {
             ]
         });
 
-        // Play handler
+        // Play handler - use getActiveAudio() for current audio element
         navigator.mediaSession.setActionHandler('play', () => {
             hapticLight();
-            if (playerRef.current?.paused) playerRef.current.play();
+            const audio = getActiveAudio();
+            if (audio?.paused) audio.play();
             setIsPlaying(true);
         });
 
@@ -131,8 +169,9 @@ export const PlayerProvider = ({ children }) => {
 
         // Seek to handler (for notification seek bar)
         navigator.mediaSession.setActionHandler('seekto', (details) => {
-            if (details.seekTime !== undefined && playerRef.current) {
-                playerRef.current.currentTime = details.seekTime;
+            const audio = getActiveAudio();
+            if (details.seekTime !== undefined && audio) {
+                audio.currentTime = details.seekTime;
                 setProgress(details.seekTime);
                 updatePositionState(details.seekTime);
             }
@@ -140,10 +179,11 @@ export const PlayerProvider = ({ children }) => {
 
         // Seek backward handler (skip back 10 seconds)
         navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+            const audio = getActiveAudio();
             const skipTime = details.seekOffset || 10;
-            if (playerRef.current) {
-                const newTime = Math.max(0, playerRef.current.currentTime - skipTime);
-                playerRef.current.currentTime = newTime;
+            if (audio) {
+                const newTime = Math.max(0, audio.currentTime - skipTime);
+                audio.currentTime = newTime;
                 setProgress(newTime);
                 updatePositionState(newTime);
             }
@@ -151,10 +191,11 @@ export const PlayerProvider = ({ children }) => {
 
         // Seek forward handler (skip forward 10 seconds)
         navigator.mediaSession.setActionHandler('seekforward', (details) => {
+            const audio = getActiveAudio();
             const skipTime = details.seekOffset || 10;
-            if (playerRef.current && duration > 0) {
-                const newTime = Math.min(duration, playerRef.current.currentTime + skipTime);
-                playerRef.current.currentTime = newTime;
+            if (audio && duration > 0) {
+                const newTime = Math.min(duration, audio.currentTime + skipTime);
+                audio.currentTime = newTime;
                 setProgress(newTime);
                 updatePositionState(newTime);
             }
@@ -162,14 +203,15 @@ export const PlayerProvider = ({ children }) => {
 
         // Stop handler
         navigator.mediaSession.setActionHandler('stop', () => {
+            const audio = getActiveAudio();
             setIsPlaying(false);
-            if (playerRef.current) {
-                playerRef.current.currentTime = 0;
+            if (audio) {
+                audio.currentTime = 0;
                 setProgress(0);
             }
         });
 
-    }, [currentSong, duration, updatePositionState]);
+    }, [currentSong, duration, updatePositionState, getActiveAudio]);
 
     // Native Android notification shade controls (fallback when MediaSession notification isn't shown by WebView)
     useEffect(() => {
@@ -225,15 +267,16 @@ export const PlayerProvider = ({ children }) => {
         if (!isNativePlatform()) return;
 
         const sub = onNowPlayingAction(({ action, positionMs }) => {
+            const audio = getActiveAudio();
             switch (action) {
                 case 'com.vikify.app.NOW_PLAY':
-                    if (playerRef.current?.paused) {
-                        playerRef.current.play().catch(() => { });
+                    if (audio?.paused) {
+                        audio.play().catch(() => { });
                     }
                     setIsPlaying(true);
                     break;
                 case 'com.vikify.app.NOW_PAUSE':
-                    playerRef.current?.pause?.();
+                    audio?.pause?.();
                     setIsPlaying(false);
                     break;
                 case 'com.vikify.app.NOW_NEXT':
@@ -243,14 +286,14 @@ export const PlayerProvider = ({ children }) => {
                     playPreviousRef.current?.();
                     break;
                 case 'com.vikify.app.NOW_STOP':
-                    playerRef.current?.pause?.();
+                    audio?.pause?.();
                     setIsPlaying(false);
                     clearNowPlaying();
                     break;
                 case 'com.vikify.app.NOW_SEEK_TO':
-                    if (typeof positionMs === 'number' && playerRef.current) {
+                    if (typeof positionMs === 'number' && audio) {
                         const t = Math.max(0, (positionMs || 0) / 1000);
-                        playerRef.current.currentTime = t;
+                        audio.currentTime = t;
                         setProgress(t);
                         updatePositionState(t);
                     }
@@ -263,7 +306,7 @@ export const PlayerProvider = ({ children }) => {
         return () => {
             sub?.remove?.();
         };
-    }, []);
+    }, [getActiveAudio, updatePositionState]);
 
     // Update Playback State
     useEffect(() => {
@@ -363,33 +406,126 @@ export const PlayerProvider = ({ children }) => {
         }
     }, [currentSong, fetchUpcomingSongs]);
 
-    // OPTIMIZATION: Prefetch next 3 songs' stream URLs when current song starts playing
-    // This ensures smoother transitions when playing through a playlist
+    // ----------------------------------------------------------------------------------
+    // CROSSFADE & PRELOADING LOGIC
+    // ----------------------------------------------------------------------------------
+
+    // 1. Identify next song for preloading
     useEffect(() => {
-        if (!isPlaying || !queue.length || queueIndex < 0) return;
+        if (!currentSong || (!queue.length && !upNextQueue.length)) return;
 
-        const timers = [];
-        const PREFETCH_COUNT = 3; // Prefetch next 3 songs
-
-        for (let i = 1; i <= PREFETCH_COUNT; i++) {
-            const nextIdx = queueIndex + i;
-            if (nextIdx >= queue.length) break;
-
-            const nextSong = queue[nextIdx];
-            if (!nextSong) continue;
-
-            // Stagger prefetches: 2s, 4s, 6s to avoid hammering backend
-            const timer = setTimeout(() => {
-                console.log(`[PlayerContext] Prefetching song ${i} ahead:`, nextSong.title);
-                searchYouTube(`${nextSong.title} ${nextSong.artist}`).catch(() => { });
-            }, i * 2000);
-
-            timers.push(timer);
+        let next = null;
+        // Priority 1: Next in current queue
+        if (queue.length > 0 && queueIndex < queue.length - 1) {
+            next = queue[queueIndex + 1];
+        }
+        // Priority 2: Autoplay/Suggested
+        else if (autoplay && upNextQueue.length > 0) {
+            next = upNextQueue[0];
         }
 
-        return () => timers.forEach(t => clearTimeout(t));
-    }, [isPlaying, queue, queueIndex]);
+        // Only update if changed (prevents loops)
+        if (next && next.id !== nextSong?.id) {
+            console.log('[Crossfade] Identified next song:', next.title);
+            setNextSong(next);
+        } else if (!next) {
+            setNextSong(null);
+        }
+    }, [currentSong, queue, queueIndex, upNextQueue, autoplay]);
 
+    // 2. Load URL for next song into INACTIVE player
+    useEffect(() => {
+        if (!nextSong) return;
+
+        // Determine target (inactive) player
+        const targetPlayer = activePlayer === 'A' ? 'B' : 'A';
+        const targetSetUrl = targetPlayer === 'A' ? setUrlA : setUrlB;
+        const targetUrl = targetPlayer === 'A' ? urlA : urlB;
+
+        // Validations
+        if (targetUrl) return; // Already loaded? (simplistic check)
+
+        const loadNextUrl = async () => {
+            console.log(`[Crossfade] Preloading ${nextSong.title} into Player ${targetPlayer}`);
+
+            // Check offline cache first
+            const cachedBlob = await getAudioBlob(nextSong.id);
+            if (cachedBlob) {
+                const blobUrl = URL.createObjectURL(cachedBlob);
+                targetSetUrl(blobUrl);
+                return;
+            }
+
+            // Fallback to Online
+            if (!navigator.onLine) return;
+
+            try {
+                const url = await searchYouTube(`${nextSong.title} ${nextSong.artist}`);
+                if (url) targetSetUrl(url);
+            } catch (e) {
+                console.warn('[Crossfade] Preload failed', e);
+            }
+        };
+
+        // Delay preloading slightly to prioritize current playback resources?
+        // Actually, trigger when we are > 50% through current song?
+        // For now, load immediately when identified to ensure availability.
+        loadNextUrl();
+
+    }, [nextSong, activePlayer]);
+
+    // 3. Monitor for Crossfade Trigger
+    useEffect(() => {
+        if (!crossfadeEnabled || !isPlaying || !currentSong || !nextSong) return;
+        if (duration < 15) return; // Skip crossfade for short songs
+
+        const timeRemaining = duration - progress;
+
+        // Trigger window: between (duration - fadeTime) and end
+        if (timeRemaining <= crossfadeDuration && timeRemaining > 0.5) {
+
+            // Helper to get refs
+            const outgoing = activePlayer === 'A' ? playerRefA.current : playerRefB.current;
+            const incoming = activePlayer === 'A' ? playerRefB.current : playerRefA.current;
+            const incomingUrl = activePlayer === 'A' ? urlB : urlA;
+
+            // Guard: ensure incoming is ready
+            // readyState 3 = HAVE_FUTURE_DATA, 4 = HAVE_ENOUGH_DATA
+            if (incoming && incomingUrl && incoming.readyState >= 3) {
+                triggerCrossfade(outgoing, incoming);
+            } else if (incoming && incomingUrl && incoming.readyState < 3) {
+                // Force load if not ready?
+                incoming.load();
+            }
+        }
+    }, [progress, duration, crossfadeEnabled, isPlaying, nextSong, activePlayer, crossfadeDuration, urlA, urlB]);
+
+    // 4. Execute Crossfade
+    const triggerCrossfade = useCallback((outgoing, incoming) => {
+        console.log('[Crossfade] Triggering transition...');
+
+        if (startCrossfade(outgoing, incoming)) {
+            // Swap Active Player State immediately so UI updates
+            const nextP = activePlayer === 'A' ? 'B' : 'A';
+            setActivePlayer(nextP);
+            setCurrentSong(nextSong);
+
+            // Update Queue Index logic
+            if (queue.length > 0 && queueIndex < queue.length - 1) {
+                setQueueIndex(prev => prev + 1);
+            } else if (autoplay && upNextQueue.length > 0) {
+                // Transitioning to autoplay song
+                // Note: Ideally we move upNextQueue[0] to Queue, but simple logic:
+                setUpNextQueue(prev => prev.slice(1));
+            }
+
+            // History
+            addToHistory(nextSong);
+
+            // Clear prepared next song to prevent double-trigger
+            setNextSong(null);
+        }
+    }, [activePlayer, nextSong, queue, queueIndex, autoplay, upNextQueue, startCrossfade, addToHistory]);
 
     /**
      * Play a song
@@ -412,10 +548,35 @@ export const PlayerProvider = ({ children }) => {
 
         isLoadingRef.current = true;
         setIsLoading(true);
+
+        // CRITICAL: Update trackId ref FIRST to invalidate stale events from previous song
+        const prevTrackId = currentTrackIdRef.current;
+        currentTrackIdRef.current = song.id;
+        playbackGenRef.current += 1;
+        const thisGen = playbackGenRef.current;
+        console.log(`[Autoplay] Track change: ${prevTrackId} → ${song.id} (gen=${thisGen})`);
+
         setCurrentSong(song);
+        setNextSong(null); // Reset pending crossfades
         setIsPlaying(false);
         setProgress(0);
-        setYoutubeUrl(null);
+        setDuration(0); // Reset duration immediately
+        console.log(`[Autoplay] State reset: progress=0, duration=0 for ${song.title}`);
+
+        // HARD RESET PLAYERS for immediate click
+        // Only keep Active Player logic simple: Reset to 'A' or keep current?
+        // Let's keep current active player, just change URL.
+        const targetSetUrl = activePlayer === 'A' ? setUrlA : setUrlB;
+        const otherSetUrl = activePlayer === 'A' ? setUrlB : setUrlA;
+
+        // Stop both
+        if (playerRefA.current) { playerRefA.current.pause(); playerRefA.current.currentTime = 0; }
+        if (playerRefB.current) { playerRefB.current.pause(); playerRefB.current.currentTime = 0; }
+
+        // Reset URLs
+        targetSetUrl(null);
+        otherSetUrl(null); // Clear other buffer
+
         setIsOfflinePlayback(false);
 
         // Track in listening history
@@ -448,7 +609,7 @@ export const PlayerProvider = ({ children }) => {
                 console.log("[PlayerContext] ✅ Playing from offline cache!");
                 const blobUrl = URL.createObjectURL(cachedBlob);
                 blobUrlRef.current = blobUrl;
-                setYoutubeUrl(blobUrl);
+                targetSetUrl(blobUrl);
                 setIsOfflinePlayback(true);
                 isLoadingRef.current = false;
                 setIsLoading(false);
@@ -458,7 +619,7 @@ export const PlayerProvider = ({ children }) => {
             // Priority 2: Local file
             if (song.url && !song.url.startsWith('http')) {
                 console.log("[PlayerContext] ✅ Playing local file");
-                setYoutubeUrl(song.url);
+                targetSetUrl(song.url);
             }
             // Priority 3: Online - search YouTube
             else {
@@ -474,10 +635,10 @@ export const PlayerProvider = ({ children }) => {
 
                 if (audioUrl) {
                     console.log("[PlayerContext] ✅ Got audio stream!");
-                    setYoutubeUrl(audioUrl);
+                    targetSetUrl(audioUrl);
                 } else if (song.previewUrl) {
                     console.log("[PlayerContext] ⚠️ Using iTunes preview");
-                    setYoutubeUrl(song.previewUrl);
+                    targetSetUrl(song.previewUrl);
                 } else {
                     console.error("[PlayerContext] ❌ No audio source");
                     isLoadingRef.current = false;
@@ -487,7 +648,7 @@ export const PlayerProvider = ({ children }) => {
         } catch (error) {
             console.error("[PlayerContext] Error:", error);
             if (song.previewUrl) {
-                setYoutubeUrl(song.previewUrl);
+                targetSetUrl(song.previewUrl);
             }
         }
 
@@ -501,9 +662,10 @@ export const PlayerProvider = ({ children }) => {
 
         // If we reloaded an expired/stalled stream, seek back before resuming playback.
         const pending = pendingSeekAfterReloadRef.current;
-        if (typeof pending === 'number' && playerRef.current) {
+        const audio = getActiveAudio();
+        if (typeof pending === 'number' && audio) {
             try {
-                playerRef.current.currentTime = Math.max(0, pending);
+                audio.currentTime = Math.max(0, pending);
                 setProgress(Math.max(0, pending));
             } catch {
                 // ignore
@@ -516,7 +678,7 @@ export const PlayerProvider = ({ children }) => {
     // Detect buffering/stalls that don't fire "error" (common with expiring stream URLs)
     // and attempt a single safe recovery: refresh stream URL and seek back.
     useEffect(() => {
-        const audio = playerRef.current;
+        const audio = getActiveAudio();
         if (!audio) return;
         if (!currentSong) return;
 
@@ -562,11 +724,11 @@ export const PlayerProvider = ({ children }) => {
         audio.addEventListener('canplay', onCanPlay);
 
         const interval = setInterval(async () => {
-            if (!playerRef.current) return;
+            const a = getActiveAudio();
+            if (!a) return;
             if (!isPlaying) return;
             if (!navigator.onLine) return;
 
-            const a = playerRef.current;
             if (a.seeking) return;
 
             const now = Date.now();
@@ -632,6 +794,7 @@ export const PlayerProvider = ({ children }) => {
     }, [currentSong, youtubeUrl, isOfflinePlayback, isPlaying, reloadCurrentStream]);
 
     const togglePlay = () => {
+        console.log('[PlayerContext] togglePlay called, current isPlaying:', isPlaying);
         hapticLight();
         setIsPlaying(!isPlaying);
     };
@@ -672,8 +835,9 @@ export const PlayerProvider = ({ children }) => {
         }
 
         // If at beginning, restart current song
-        if (playerRef.current) {
-            playerRef.current.currentTime = 0;
+        const audio = getActiveAudio();
+        if (audio) {
+            audio.currentTime = 0;
             setProgress(0);
         }
     };
@@ -747,8 +911,9 @@ export const PlayerProvider = ({ children }) => {
     };
 
     const seek = (time) => {
-        if (playerRef.current) {
-            playerRef.current.currentTime = time;
+        const audio = getActiveAudio();
+        if (audio) {
+            audio.currentTime = time;
             setProgress(time);
         }
     };
@@ -758,20 +923,22 @@ export const PlayerProvider = ({ children }) => {
         const vol = Math.max(0, Math.min(1, newVolume));
         setVolume(vol);
         setIsMuted(vol === 0);
-        if (playerRef.current) {
-            playerRef.current.volume = vol;
+        const audio = getActiveAudio();
+        if (audio) {
+            audio.volume = vol;
         }
-    }, []);
+    }, [getActiveAudio]);
 
     const toggleMute = useCallback(() => {
         setIsMuted(prev => {
             const newMuted = !prev;
-            if (playerRef.current) {
-                playerRef.current.volume = newMuted ? 0 : volume;
+            const audio = getActiveAudio();
+            if (audio) {
+                audio.volume = newMuted ? 0 : volume;
             }
             return newMuted;
         });
-    }, [volume]);
+    }, [volume, getActiveAudio]);
 
     // Sleep Timer
     const startSleepTimer = useCallback((minutes) => {
@@ -823,6 +990,7 @@ export const PlayerProvider = ({ children }) => {
             // Don't trigger if typing in an input
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+            const audio = getActiveAudio();
             switch (e.code) {
                 case 'Space':
                     e.preventDefault();
@@ -831,9 +999,9 @@ export const PlayerProvider = ({ children }) => {
                 case 'ArrowRight':
                     if (e.shiftKey) {
                         // Skip forward 10 seconds
-                        if (playerRef.current) {
+                        if (audio) {
                             const newTime = Math.min(duration, progress + 10);
-                            playerRef.current.currentTime = newTime;
+                            audio.currentTime = newTime;
                             setProgress(newTime);
                         }
                     } else {
@@ -843,9 +1011,9 @@ export const PlayerProvider = ({ children }) => {
                 case 'ArrowLeft':
                     if (e.shiftKey) {
                         // Skip backward 10 seconds
-                        if (playerRef.current) {
+                        if (audio) {
                             const newTime = Math.max(0, progress - 10);
-                            playerRef.current.currentTime = newTime;
+                            audio.currentTime = newTime;
                             setProgress(newTime);
                         }
                     } else {
@@ -896,7 +1064,16 @@ export const PlayerProvider = ({ children }) => {
         };
     }, []);
 
-    const handleProgress = (state) => {
+    const handleProgress = useCallback((state, playerId, trackId) => {
+        // Guard: Ignore progress from inactive players
+        if (playerId && playerId !== activePlayer) return;
+
+        // Guard: Ignore stale progress events from previous tracks
+        if (trackId && trackId !== currentTrackIdRef.current) {
+            console.log(`[Autoplay] Ignoring stale progress: trackId=${trackId}, current=${currentTrackIdRef.current}`);
+            return;
+        }
+
         const next = state?.playedSeconds;
         if (typeof next !== 'number' || Number.isNaN(next)) return;
 
@@ -909,21 +1086,81 @@ export const PlayerProvider = ({ children }) => {
                 setProgress(pendingProgressRef.current);
             }
         });
-    };
-    const handleDuration = (d) => setDuration(d);
-    const handleEnded = () => playNext();
+    }, [activePlayer]);
+
+    const handleDuration = useCallback((d, playerId, trackId) => {
+        // Guard: Ignore duration from inactive players to prevent stale state
+        if (playerId && playerId !== activePlayer) {
+            console.log(`[Autoplay] Ignoring duration from ${playerId} (Active: ${activePlayer})`);
+            return;
+        }
+
+        // Guard: Ignore stale duration events from previous tracks (ROOT CAUSE FIX)
+        if (trackId && trackId !== currentTrackIdRef.current) {
+            console.log(`[Autoplay] ⚠️ BLOCKED stale duration: trackId=${trackId}, current=${currentTrackIdRef.current}, duration=${d}`);
+            return;
+        }
+
+        console.log(`[Autoplay] ✅ Duration set: ${d}s for track=${trackId || currentTrackIdRef.current}`);
+        setDuration(d);
+    }, [activePlayer]);
+
+    const handleEnded = useCallback((trackId) => {
+        // Guard: Ignore ended events from previous tracks to prevent double-skip
+        if (trackId && trackId !== currentTrackIdRef.current) {
+            console.log(`[Autoplay] ⚠️ BLOCKED stale ended event: trackId=${trackId}, current=${currentTrackIdRef.current}`);
+            return;
+        }
+        console.log(`[Autoplay] Song ended: ${trackId || currentTrackIdRef.current}, triggering playNext`);
+        playNext();
+    }, []);
 
     return (
         <PlayerContext.Provider value={{
-            currentSong, isPlaying, queue, queueIndex, progress, duration,
-            youtubeUrl, isLoading, playerRef, autoplay, upNextQueue,
-            isOfflinePlayback, shuffle, volume, isMuted, sleepTimer, isFullScreen,
-            playSong, togglePlay, toggleAutoplay, toggleShuffle, shufflePlay,
-            playNext, playPrevious, changeVolume, toggleMute,
-            startSleepTimer, cancelSleepTimer, toggleFullScreen,
-            addToQueue, clearQueue, skipAutoplaySong, seek, handleProgress, handleDuration,
-            handleEnded, onPlayerReady,
-            reloadCurrentStream, prefetchSong
+            currentSong,
+            setCurrentSong,
+            nextSong, // Exposed for debug or UI
+            isPlaying,
+            togglePlay,
+            progress,
+            duration,
+            youtubeUrl, // Legacy (active)
+            setYoutubeUrl, // Legacy (active)
+            activePlayer,
+            playerRefA,
+            playerRefB,
+            urlA,
+            urlB,
+            seek,
+            playNext,
+            playPrevious,
+            queue,
+            upNextQueue,
+            playSong,
+            addToQueue,
+            playerRef, // Legacy (active)
+            handleProgress,
+            handleDuration,
+            handleEnded,
+            isLoading,
+            onPlayerReady,
+            volume,
+            isMuted,
+            changeVolume,
+            toggleMute,
+            sleepTimer,
+            startSleepTimer,
+            cancelSleepTimer,
+            isFullScreen,
+            toggleFullScreen,
+            reloadCurrentStream,
+            prefetchSong,
+            shuffle,
+            toggleShuffle,
+            shufflePlay,
+            skipAutoplaySong,
+            toggleAutoplay,
+            autoplay
         }}>
             {children}
         </PlayerContext.Provider>
