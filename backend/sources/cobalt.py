@@ -7,11 +7,12 @@ import asyncio
 import time
 from typing import Optional, Dict, List
 
-# Multiple Cobalt instances for redundancy
+# Public Cobalt instances (that don't require auth)
+# api.cobalt.tools requires Turnstile auth, so we use community instances
 COBALT_INSTANCES = [
-    'https://api.cobalt.tools',
-    'https://co.wuk.sh',
-    'https://cobalt.api.timelessnesses.me',
+    'https://cobalt.canine.tools',
+    'https://capi.thatbear.dev',
+    'https://cobalt.nilaier.com',
 ]
 
 # Instance health tracking
@@ -22,7 +23,7 @@ cobalt_health = {
 
 class CobaltExtractor:
     def __init__(self):
-        self.timeout = aiohttp.ClientTimeout(total=5)
+        self.timeout = aiohttp.ClientTimeout(total=8)
     
     async def extract_audio(self, video_id: str) -> Optional[str]:
         """
@@ -59,14 +60,13 @@ class CobaltExtractor:
     
     async def _try_instance(self, instance: str, video_url: str) -> Optional[str]:
         """Try to get audio from specific Cobalt instance"""
-        api_url = f"{instance}/api/json"
+        # Cobalt API uses POST / (root endpoint)
+        api_url = f"{instance}/"
         
         payload = {
             "url": video_url,
-            "isAudioOnly": True,
-            "aFormat": "best",  # best, mp3, ogg, wav, opus
-            "filenamePattern": "basic",
-            "downloadMode": "audio"
+            "downloadMode": "audio",
+            "audioFormat": "best",
         }
         
         headers = {
@@ -78,7 +78,8 @@ class CobaltExtractor:
         async with aiohttp.ClientSession(timeout=self.timeout) as session:
             async with session.post(api_url, json=payload, headers=headers) as resp:
                 if resp.status != 200:
-                    print(f"[Cobalt] {instance} returned status {resp.status}")
+                    text = await resp.text()
+                    print(f"[Cobalt] {instance} returned {resp.status}: {text[:100]}")
                     return None
                 
                 data = await resp.json()
@@ -101,19 +102,17 @@ class CobaltExtractor:
             # Multiple options - pick audio
             picker = data.get('picker', [])
             for item in picker:
-                if item.get('type') == 'audio':
+                item_type = item.get('type', '')
+                if item_type == 'audio' or 'audio' in item_type:
                     return item.get('url')
             # Fallback to first item
             if picker:
                 return picker[0].get('url')
         
         elif status == 'error':
-            error = data.get('text', 'Unknown error')
-            print(f"[Cobalt] API error: {error}")
-            return None
-        
-        elif status == 'rate-limit':
-            print(f"[Cobalt] Rate limited")
+            error = data.get('error', {})
+            code = error.get('code', 'Unknown error')
+            print(f"[Cobalt] API error: {code}")
             return None
         
         # Try to find URL in response anyway
