@@ -574,19 +574,22 @@ def get_stream(video_id):
         info = resolve_audio_url(video_id)
         
         if info and info.get('url'):
-            # Return PROXY URL to frontend to bypass local IP restrictions
-            # This ensures playback works on Railway/Mobile where direct Google links allow-list only server IP
+            direct_url = info.get('url')
+            quality = 'high' if info.get('abr', 0) >= 128 else 'standard'
+            
+            # Return DIRECT YouTube URL for better performance
+            # Only use proxy if client explicitly requests it or if direct fails
+            print(f"[Stream] ✅ Returning direct URL for: {video_id}")
+            
+            # Also provide proxy URL as fallback
             proxy_url = url_for('proxy_audio_stream', video_id=video_id, _external=True)
-            # Use https if on railway (url_for might return http if not configured for proxy)
             if 'railway' in proxy_url and proxy_url.startswith('http:'):
                 proxy_url = proxy_url.replace('http:', 'https:')
             
-            quality = 'high' if info.get('abr', 0) >= 128 else 'standard'
-            print(f"[Stream] ✅ Returning proxy for: {video_id}")
-            
             return jsonify({
                 'success': True,
-                'audioUrl': proxy_url,
+                'audioUrl': direct_url,  # Direct URL for better performance
+                'proxyUrl': proxy_url,   # Fallback if direct fails
                 'duration': info.get('duration'),
                 'quality': {
                     'bitrate': info.get('abr'),
