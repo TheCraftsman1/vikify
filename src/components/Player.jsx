@@ -30,7 +30,7 @@ const Player = () => {
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
     const [dominantColor, setDominantColor] = useState('#121212');
 
-    // Scrubbing: seek on release (better for mobile streaming)
+    // Scrubbing state
     const [isScrubbing, setIsScrubbing] = useState(false);
     const [scrubTime, setScrubTime] = useState(0);
     const activeScrubElRef = useRef(null);
@@ -58,21 +58,16 @@ const Player = () => {
         }
     }, [currentSong?.image]);
 
-    // Check if current song is liked
     const currentSongLiked = currentSong ? isLiked(currentSong.id) : false;
 
-    // Unified play/pause handler with Optimistic UI Update
     const handlePlayPause = () => {
-        // optimistically update UI immediately to prevent lag
         togglePlay();
-
-        // Handle Audio Element (Required for mobile browsers to link audio to user interaction)
         if (playerRef.current) {
             const audio = playerRef.current;
             if (audio.paused) {
                 audio.play().catch((err) => {
                     console.error('[Player] play() failed, reverting UI:', err);
-                    togglePlay(); // Revert on failure
+                    togglePlay();
                 });
             } else {
                 audio.pause();
@@ -131,11 +126,7 @@ const Player = () => {
         lastSelectionSecondRef.current = Math.floor(nextTime);
         setScrubTime(nextTime);
         hapticLight();
-        try {
-            e.currentTarget.setPointerCapture?.(e.pointerId);
-        } catch {
-            // ignore
-        }
+        try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { }
     };
 
     const onScrubPointerMove = (e) => {
@@ -157,23 +148,11 @@ const Player = () => {
         }
     };
 
-    const onScrubPointerUp = (e) => {
-        e.preventDefault();
-        endScrub(e.clientX, e.currentTarget);
-    };
-
-    const onScrubPointerCancel = (e) => {
-        e.preventDefault();
-        endScrub(e.clientX, e.currentTarget);
-    };
+    const onScrubPointerUp = (e) => { e.preventDefault(); endScrub(e.clientX, e.currentTarget); };
+    const onScrubPointerCancel = (e) => { e.preventDefault(); endScrub(e.clientX, e.currentTarget); };
 
     useEffect(() => {
-        return () => {
-            if (rafRef.current) {
-                cancelAnimationFrame(rafRef.current);
-                rafRef.current = null;
-            }
-        };
+        return () => { if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; } };
     }, []);
 
     const handleVolumeChange = (e) => {
@@ -191,34 +170,17 @@ const Player = () => {
     // Empty state
     if (!currentSong) {
         return (
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                height: '100%',
-                padding: '0 16px',
-                backgroundColor: '#000',
-                borderTop: '1px solid #282828'
-            }}>
+            <div className="player-bar">
                 <div style={{ width: '30%', minWidth: '180px' }} />
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <button disabled style={{ color: '#4d4d4d' }}><Shuffle size={16} /></button>
-                        <button disabled style={{ color: '#4d4d4d' }}><SkipBack size={20} /></button>
-                        <div style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            backgroundColor: '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            opacity: 0.6
-                        }}>
+                        <button disabled className="player-icon-btn"><Shuffle size={16} /></button>
+                        <button disabled className="player-icon-btn"><SkipBack size={20} /></button>
+                        <div className="player-main-play-btn" style={{ opacity: 0.6 }}>
                             <Play size={16} fill="#000" color="#000" style={{ marginLeft: '2px' }} />
                         </div>
-                        <button disabled style={{ color: '#4d4d4d' }}><SkipForward size={20} /></button>
-                        <button disabled style={{ color: '#4d4d4d' }}><Repeat size={16} /></button>
+                        <button disabled className="player-icon-btn"><SkipForward size={20} /></button>
+                        <button disabled className="player-icon-btn"><Repeat size={16} /></button>
                     </div>
                 </div>
                 <div style={{ width: '30%', minWidth: '180px' }} />
@@ -226,43 +188,30 @@ const Player = () => {
         );
     }
 
+    const progressPercent = (displayedProgress / (duration || 1)) * 100;
+
     return (
-        <div className="player-bar" style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            height: '100%',
-            padding: '0 16px',
-            backgroundColor: '#000',
-            borderTop: '1px solid #282828',
-            position: 'relative'
-        }}>
-            {/* Mobile Progress Indicator - thin bar at top */}
-            <div className="mobile-progress-indicator" style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '3px',
-                backgroundColor: 'rgba(255,255,255,0.1)',
-                overflow: 'hidden',
-                borderRadius: '4px 4px 0 0'
-            }}>
-                <div style={{
-                    height: '100%',
-                    backgroundColor: '#1db954',
-                    width: `${(progress / (duration || 1)) * 100}%`,
-                    transition: 'width 0.2s linear'
-                }} />
+        <div
+            className="player-bar"
+            style={{
+                position: 'relative',
+                '--dominant-color': dominantColor,
+                background: isMobile ? `linear-gradient(90deg, ${dominantColor} 0%, rgba(18,18,18,0.98) 100%)` : '#000'
+            }}
+        >
+            {/* Mobile Progress Indicator */}
+            <div className="mobile-progress-indicator">
+                <div className="mobile-progress-indicator-fill" style={{ width: `${progressPercent}%` }} />
             </div>
-            {/* Audio Player - uses native audio for all sources including YouTube streams */}
+
+            {/* Audio Player */}
             {youtubeUrl && (
                 <audio
                     ref={playerRef}
                     src={youtubeUrl}
-                    onTimeUpdate={(e) => {
-                        handleProgress({ playedSeconds: e.currentTarget.currentTime });
-                    }}
+                    preload="auto"
+                    playsInline
+                    onTimeUpdate={(e) => handleProgress({ playedSeconds: e.currentTarget.currentTime })}
                     onLoadedMetadata={(e) => {
                         console.log('[Player] Audio loaded, duration:', e.currentTarget.duration);
                         handleDuration(e.currentTarget.duration);
@@ -271,122 +220,53 @@ const Player = () => {
                     onPlay={() => console.log('[Player] Playing!')}
                     onError={async (e) => {
                         console.error('[Player] Audio error:', e);
-
-                        // Prevent infinite retry loops.
                         const id = currentSong?.id || null;
                         if (streamReloadGuardRef.current.songId !== id) {
                             streamReloadGuardRef.current = { songId: id, attempts: 0 };
                         }
-
                         if (streamReloadGuardRef.current.attempts >= 1) return;
                         streamReloadGuardRef.current.attempts += 1;
-
                         try {
                             const ok = await reloadCurrentStream?.();
                             if (ok && playerRef.current) {
                                 playerRef.current.load?.();
-                                playerRef.current.play?.().catch(() => {});
+                                playerRef.current.play?.().catch(() => { });
                             }
-                        } catch {
-                            // ignore
-                        }
+                        } catch { }
                     }}
                     onEnded={handleEnded}
                     style={{ display: 'none' }}
                 />
             )}
 
-            {/* Left: Now Playing - flex:1 to take remaining space, min-width:0 for truncation */}
-            {/* On mobile, this becomes a clickable area to open full-screen player */}
+            {/* Left: Now Playing */}
             <div
                 className="player-now-playing"
                 onClick={() => isMobile && setShowMobileFullScreen(true)}
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    flex: 1,
-                    minWidth: 0,
-                    overflow: 'hidden',
-                    cursor: isMobile ? 'pointer' : 'default'
-                }}
+                style={{ cursor: isMobile ? 'pointer' : 'default' }}
             >
-                <div className="player-album-art" style={{ width: '48px', height: '48px', flexShrink: 0, borderRadius: '6px', overflow: 'hidden' }}>
+                <div className="player-album-art">
                     <img
                         src={currentSong.image}
                         alt={currentSong.title}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         onError={(e) => { e.target.src = '/placeholder.svg'; }}
                     />
                 </div>
-                <div className="player-song-info" style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                    <div className="player-song-title" style={{
-                        color: '#fff',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                    }}>{currentSong.title}</div>
-                    <div className="player-song-artist" style={{
-                        color: '#b3b3b3',
-                        fontSize: '12px',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                    }}>{currentSong.artist}</div>
+                <div className="player-song-info">
+                    <div className="player-song-title">{currentSong.title}</div>
+                    <div className="player-song-artist">{currentSong.artist}</div>
                 </div>
             </div>
 
-            {/* Mobile Mini Player Controls - Spotify style */}
-            <div
-                className="mobile-player-controls"
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    flexShrink: 0
-                }}
-            >
-                {/* Device/Headphones icon - shows connection status */}
-                <button
-                    className="mobile-only-btn"
-                    onClick={(e) => { e.stopPropagation(); }}
-                    style={{
-                        color: '#1db954',
-                        padding: '4px',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        display: 'none' // Will be shown via CSS on mobile
-                    }}
-                    title="Connected Device"
-                >
+            {/* Mobile Player Controls */}
+            <div className="mobile-player-controls">
+                <button className="mobile-only-btn player-icon-btn" style={{ color: '#1db954', display: 'none' }} title="Connected Device">
                     <Laptop2 size={20} />
                 </button>
 
-                {/* Like button - Spotify style checkmark when liked */}
                 <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        if (currentSong) {
-                            toggleLike(currentSong);
-                        }
-                    }}
-                    className="mobile-like-btn"
-                    style={{
-                        width: '26px',
-                        height: '26px',
-                        borderRadius: '50%',
-                        background: currentSongLiked ? '#1db954' : 'transparent',
-                        border: currentSongLiked ? 'none' : '2px solid rgba(255,255,255,0.5)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                        transform: 'scale(1)'
-                    }}
+                    onClick={(e) => { e.stopPropagation(); if (currentSong) toggleLike(currentSong); }}
+                    className={`mobile-like-btn ${currentSongLiked ? 'liked' : ''}`}
                     title={currentSongLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'}
                 >
                     {currentSongLiked ? (
@@ -400,23 +280,7 @@ const Player = () => {
                     )}
                 </button>
 
-                {/* Play/Pause Button */}
-                <button
-                    onClick={(e) => { e.stopPropagation(); handlePlayPause(); }}
-                    className="mobile-play-btn"
-                    style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '50%',
-                        background: '#fff',
-                        border: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                    }}
-                >
+                <button onClick={(e) => { e.stopPropagation(); handlePlayPause(); }} className="mobile-play-btn">
                     {isLoading ? (
                         <Loader size={18} color="#000" className="animate-spin" />
                     ) : isPlaying ? (
@@ -427,36 +291,12 @@ const Player = () => {
                 </button>
             </div>
 
-            {/* Desktop Controls - Hidden on Mobile */}
-            <div
-                className="hide-mobile desktop-player-controls"
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '16px',
-                    flexShrink: 0
-                }}
-            >
-                <button
-                    onClick={playPrevious}
-                    style={{ color: '#fff', padding: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
-                >
+            {/* Desktop Controls */}
+            <div className="desktop-player-controls hide-mobile">
+                <button onClick={playPrevious} className="player-icon-btn">
                     <SkipBack size={22} fill="currentColor" />
                 </button>
-                <button
-                    onClick={handlePlayPause}
-                    style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '50%',
-                        background: '#fff',
-                        border: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer'
-                    }}
-                >
+                <button onClick={handlePlayPause} className="player-main-play-btn medium">
                     {isLoading ? (
                         <Loader size={20} color="#000" className="animate-spin" />
                     ) : isPlaying ? (
@@ -465,52 +305,21 @@ const Player = () => {
                         <Play size={22} fill="#000" color="#000" style={{ marginLeft: '2px' }} />
                     )}
                 </button>
-                <button
-                    onClick={playNext}
-                    style={{ color: '#fff', padding: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
-                >
+                <button onClick={playNext} className="player-icon-btn">
                     <SkipForward size={22} fill="currentColor" />
                 </button>
             </div>
 
-
-
-            {/* Center: Controls */}
-            <div className="player-controls" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', maxWidth: '40%', width: '100%' }}>
+            {/* Center: Controls + Progress */}
+            <div className="player-controls">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <button
-                        onClick={() => setIsShuffle(!isShuffle)}
-                        className="hide-mobile"
-                        style={{ color: isShuffle ? '#1db954' : '#b3b3b3', padding: '4px' }}
-                        onMouseEnter={(e) => !isShuffle && (e.currentTarget.style.color = '#fff')}
-                        onMouseLeave={(e) => !isShuffle && (e.currentTarget.style.color = '#b3b3b3')}
-                    >
+                    <button onClick={() => setIsShuffle(!isShuffle)} className={`player-icon-btn hide-mobile ${isShuffle ? 'active' : ''}`}>
                         <Shuffle size={16} />
                     </button>
-                    <button
-                        onClick={playPrevious}
-                        style={{ color: '#b3b3b3', padding: '4px' }}
-                        onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
-                        onMouseLeave={(e) => e.currentTarget.style.color = '#b3b3b3'}
-                    >
+                    <button onClick={playPrevious} className="player-icon-btn">
                         <SkipBack size={20} fill="currentColor" />
                     </button>
-                    <button
-                        onClick={handlePlayPause}
-                        disabled={isLoading}
-                        style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            backgroundColor: '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'transform 0.1s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.06)'}
-                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                    >
+                    <button onClick={handlePlayPause} disabled={isLoading} className="player-main-play-btn">
                         {isLoading ? (
                             <Loader size={16} color="#000" className="animate-spin" />
                         ) : isPlaying ? (
@@ -519,267 +328,121 @@ const Player = () => {
                             <Play size={16} fill="#000" color="#000" style={{ marginLeft: '2px' }} />
                         )}
                     </button>
-                    <button
-                        onClick={playNext}
-                        style={{ color: '#b3b3b3', padding: '4px' }}
-                        onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
-                        onMouseLeave={(e) => e.currentTarget.style.color = '#b3b3b3'}
-                    >
+                    <button onClick={playNext} className="player-icon-btn">
                         <SkipForward size={20} fill="currentColor" />
                     </button>
-                    <button
-                        onClick={() => setRepeatMode((repeatMode + 1) % 3)}
-                        className="hide-mobile"
-                        style={{ color: repeatMode > 0 ? '#1db954' : '#b3b3b3', padding: '4px', position: 'relative' }}
-                        onMouseEnter={(e) => repeatMode === 0 && (e.currentTarget.style.color = '#fff')}
-                        onMouseLeave={(e) => repeatMode === 0 && (e.currentTarget.style.color = '#b3b3b3')}
-                    >
+                    <button onClick={() => setRepeatMode((repeatMode + 1) % 3)} className={`player-icon-btn hide-mobile ${repeatMode > 0 ? 'active' : ''}`} style={{ position: 'relative' }}>
                         <Repeat size={16} />
-                        {repeatMode === 2 && <span style={{ position: 'absolute', bottom: '-2px', right: '-2px', fontSize: '10px', color: '#1db954' }}>1</span>}
+                        {repeatMode === 2 && <span className="player-sleep-badge">1</span>}
                     </button>
                 </div>
 
                 {/* Progress Bar */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', maxWidth: '600px' }}>
-                    <span style={{ fontSize: '11px', color: '#b3b3b3', fontVariantNumeric: 'tabular-nums', minWidth: '40px', textAlign: 'right' }}>
-                        {formatTime(displayedProgress)}
-                    </span>
+                    <span className="player-time player-time-left">{formatTime(displayedProgress)}</span>
                     <div
+                        className="player-progress-wrapper"
                         onPointerDown={onScrubPointerDown}
                         onPointerMove={onScrubPointerMove}
                         onPointerUp={onScrubPointerUp}
                         onPointerCancel={onScrubPointerCancel}
                         onClick={handleSeek}
-                        style={{
-                            flex: 1,
-                            cursor: 'pointer',
-                            position: 'relative',
-                            height: '20px',
-                            touchAction: 'none',
-                            WebkitTapHighlightColor: 'transparent'
-                        }}
-                        className="progress-bar"
                     >
-                        <div
-                            style={{
-                                position: 'absolute',
-                                left: 0,
-                                right: 0,
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                height: '4px',
-                                backgroundColor: 'rgba(255,255,255,0.1)',
-                                borderRadius: '2px'
-                            }}
-                        >
-                            <div style={{
-                                height: '100%',
-                                backgroundColor: '#fff',
-                                borderRadius: '2px',
-                                width: `${(displayedProgress / (duration || 1)) * 100}%`,
-                                position: 'relative'
-                            }} className="progress-fill">
-                                <div className="progress-thumb" style={{
-                                    position: 'absolute',
-                                    right: '-6px',
-                                    top: '-4px',
-                                    width: '12px',
-                                    height: '12px',
-                                    backgroundColor: '#fff',
-                                    borderRadius: '50%',
-                                    opacity: 0,
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
-                                }} />
+                        <div className="player-progress-track">
+                            <div className="player-progress-fill" style={{ width: `${progressPercent}%` }}>
+                                <div className="player-progress-thumb" />
                             </div>
                         </div>
                     </div>
-                    <span style={{ fontSize: '11px', color: '#b3b3b3', fontVariantNumeric: 'tabular-nums', minWidth: '40px' }}>
-                        {formatTime(duration)}
-                    </span>
+                    <span className="player-time player-time-right">{formatTime(duration)}</span>
                 </div>
             </div>
 
-            {/* Right: Volume & Extra - hidden on mobile */}
-            <div className="hide-mobile player-extra-controls" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', width: '30%', minWidth: '180px' }}>
-                <button style={{ color: '#b3b3b3', padding: '4px' }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#b3b3b3'}>
-                    <Mic2 size={16} />
-                </button>
-                <button
-                    style={{ color: showQueue ? '#1db954' : '#b3b3b3', padding: '4px' }}
-                    onClick={() => setShowQueue(!showQueue)}
-                    onMouseEnter={(e) => !showQueue && (e.currentTarget.style.color = '#fff')}
-                    onMouseLeave={(e) => !showQueue && (e.currentTarget.style.color = '#b3b3b3')}>
+            {/* Right: Extra Controls */}
+            <div className="player-extra-controls hide-mobile">
+                <button className="player-icon-btn"><Mic2 size={16} /></button>
+
+                <button onClick={() => setShowQueue(!showQueue)} className={`player-icon-btn ${showQueue ? 'active' : ''}`}>
                     <ListMusic size={16} />
                 </button>
 
+                {/* Queue Panel */}
                 {showQueue && (
-                    <div style={{
-                        position: 'fixed',
-                        bottom: '90px',
-                        right: '16px',
-                        width: '350px',
-                        maxHeight: 'calc(100vh - 180px)',
-                        backgroundColor: '#121212',
-                        borderRadius: '8px',
-                        padding: '16px',
-                        boxShadow: '0 -4px 32px rgba(0,0,0,0.5)',
-                        overflowY: 'auto',
-                        zIndex: 1000,
-                        border: '1px solid #282828'
-                    }}>
-                        <h3 style={{ margin: '0 0 16px', color: '#fff', fontSize: '18px', fontWeight: 'bold' }}>Queue</h3>
+                    <div className="player-queue-panel">
+                        <h3 className="player-queue-title">Queue</h3>
 
-                        <div style={{ marginBottom: '24px' }}>
-                            <h4 style={{ color: '#b3b3b3', fontSize: '14px', marginBottom: '12px' }}>Now Playing</h4>
+                        <div className="player-queue-section">
+                            <h4 className="player-queue-section-title">Now Playing</h4>
                             {currentSong && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <img src={currentSong.image} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px' }}
-                                        onError={(e) => { e.target.src = '/placeholder.svg'; }} />
-                                    <div>
-                                        <div style={{ color: '#1db954', fontSize: '14px', fontWeight: '500' }}>{currentSong.title}</div>
-                                        <div style={{ color: '#b3b3b3', fontSize: '12px' }}>{currentSong.artist}</div>
+                                <div className="player-queue-item">
+                                    <img src={currentSong.image} alt="" className="player-queue-item-image" onError={(e) => { e.target.src = '/placeholder.svg'; }} />
+                                    <div className="player-queue-item-info">
+                                        <div className="player-queue-item-title playing">{currentSong.title}</div>
+                                        <div className="player-queue-item-artist">{currentSong.artist}</div>
                                     </div>
-                                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
-                                        <div style={{ width: '3px', height: '12px', background: '#1db954', animation: 'eq 1s infinite' }}></div>
-                                        <div style={{ width: '3px', height: '12px', background: '#1db954', animation: 'eq 0.8s infinite' }}></div>
-                                        <div style={{ width: '3px', height: '12px', background: '#1db954', animation: 'eq 1.2s infinite' }}></div>
+                                    <div className="player-eq-bars">
+                                        <div className="player-eq-bar"></div>
+                                        <div className="player-eq-bar"></div>
+                                        <div className="player-eq-bar"></div>
                                     </div>
                                 </div>
                             )}
                         </div>
 
                         {queue.length > 0 && (
-                            <div style={{ marginBottom: '24px' }}>
-                                <h4 style={{ color: '#b3b3b3', fontSize: '14px', marginBottom: '12px' }}>Next in Queue</h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {queue.map((song, i) => (
-                                        <div key={i} className="queue-item" onClick={() => playSong(song)}
-                                            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px', borderRadius: '4px', cursor: 'pointer' }}>
-                                            <div style={{ color: '#b3b3b3', fontSize: '14px', width: '20px' }}>{i + 1}</div>
-                                            <img src={song.image} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px' }}
-                                                onError={(e) => { e.target.src = '/placeholder.svg'; }} />
-                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ color: '#fff', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
-                                                <div style={{ color: '#b3b3b3', fontSize: '12px' }}>{song.artist}</div>
-                                            </div>
+                            <div className="player-queue-section">
+                                <h4 className="player-queue-section-title">Next in Queue</h4>
+                                {queue.map((song, i) => (
+                                    <div key={i} className="player-queue-item" onClick={() => playSong(song)}>
+                                        <div style={{ color: '#b3b3b3', fontSize: '14px', width: '20px' }}>{i + 1}</div>
+                                        <img src={song.image} alt="" className="player-queue-item-image" onError={(e) => { e.target.src = '/placeholder.svg'; }} />
+                                        <div className="player-queue-item-info">
+                                            <div className="player-queue-item-title">{song.title}</div>
+                                            <div className="player-queue-item-artist">{song.artist}</div>
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
 
                         {upNextQueue.length > 0 && (
-                            <div>
-                                <h4 style={{ color: '#b3b3b3', fontSize: '14px', marginBottom: '12px' }}>Next From: Autoplay</h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {upNextQueue.map((song, i) => (
-                                        <div key={i} className="queue-item" onClick={() => playSong(song)}
-                                            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px', borderRadius: '4px', cursor: 'pointer' }}>
-                                            <img src={song.image} alt="" style={{ width: '40px', height: '40px', borderRadius: '4px' }}
-                                                onError={(e) => { e.target.src = '/placeholder.svg'; }} />
-                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ color: '#fff', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
-                                                <div style={{ color: '#b3b3b3', fontSize: '12px' }}>{song.artist}</div>
-                                            </div>
+                            <div className="player-queue-section">
+                                <h4 className="player-queue-section-title">Next From: Autoplay</h4>
+                                {upNextQueue.map((song, i) => (
+                                    <div key={i} className="player-queue-item" onClick={() => playSong(song)}>
+                                        <img src={song.image} alt="" className="player-queue-item-image" onError={(e) => { e.target.src = '/placeholder.svg'; }} />
+                                        <div className="player-queue-item-info">
+                                            <div className="player-queue-item-title">{song.title}</div>
+                                            <div className="player-queue-item-artist">{song.artist}</div>
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
                 )}
 
-                {/* Sleep Timer Button */}
+                {/* Sleep Timer */}
                 <div style={{ position: 'relative' }}>
-                    <button
-                        onClick={() => setShowSleepMenu(!showSleepMenu)}
-                        style={{
-                            color: sleepTimer ? '#1db954' : '#b3b3b3',
-                            padding: '4px',
-                            position: 'relative'
-                        }}
-                        onMouseEnter={(e) => !sleepTimer && (e.currentTarget.style.color = '#fff')}
-                        onMouseLeave={(e) => !sleepTimer && (e.currentTarget.style.color = '#b3b3b3')}
-                        title={sleepTimer ? `Sleep in ${sleepTimer} min` : 'Sleep Timer'}
-                    >
+                    <button onClick={() => setShowSleepMenu(!showSleepMenu)} className={`player-icon-btn ${sleepTimer ? 'active' : ''}`} title={sleepTimer ? `Sleep in ${sleepTimer} min` : 'Sleep Timer'}>
                         <Timer size={16} />
-                        {sleepTimer && (
-                            <span style={{
-                                position: 'absolute',
-                                top: '-4px',
-                                right: '-4px',
-                                fontSize: '9px',
-                                background: '#1db954',
-                                color: '#000',
-                                borderRadius: '50%',
-                                width: '14px',
-                                height: '14px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 'bold'
-                            }}>{sleepTimer}</span>
-                        )}
+                        {sleepTimer && <span className="player-sleep-badge">{sleepTimer}</span>}
                     </button>
 
-                    {/* Sleep Timer Dropdown */}
                     {showSleepMenu && (
-                        <div style={{
-                            position: 'absolute',
-                            bottom: '40px',
-                            right: '0',
-                            backgroundColor: '#282828',
-                            borderRadius: '8px',
-                            padding: '8px 0',
-                            minWidth: '150px',
-                            boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
-                            zIndex: 1000
-                        }}>
-                            <div style={{ padding: '8px 16px', color: '#b3b3b3', fontSize: '12px', fontWeight: '600' }}>
-                                SLEEP TIMER
-                            </div>
+                        <div className="player-sleep-menu">
+                            <div className="player-sleep-menu-title">SLEEP TIMER</div>
                             {[5, 15, 30, 45, 60, 90].map(mins => (
                                 <button
                                     key={mins}
                                     onClick={() => { startSleepTimer(mins); setShowSleepMenu(false); }}
-                                    style={{
-                                        display: 'block',
-                                        width: '100%',
-                                        padding: '10px 16px',
-                                        textAlign: 'left',
-                                        color: sleepTimer === mins ? '#1db954' : '#fff',
-                                        fontSize: '14px',
-                                        background: 'none',
-                                        border: 'none',
-                                        cursor: 'pointer'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    className={`player-sleep-menu-item ${sleepTimer === mins ? 'active' : ''}`}
                                 >
                                     {mins} minutes
                                 </button>
                             ))}
                             {sleepTimer && (
-                                <button
-                                    onClick={() => { cancelSleepTimer(); setShowSleepMenu(false); }}
-                                    style={{
-                                        display: 'block',
-                                        width: '100%',
-                                        padding: '10px 16px',
-                                        textAlign: 'left',
-                                        color: '#ff5555',
-                                        fontSize: '14px',
-                                        background: 'none',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        borderTop: '1px solid #404040',
-                                        marginTop: '4px'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
+                                <button onClick={() => { cancelSleepTimer(); setShowSleepMenu(false); }} className="player-sleep-menu-item cancel">
                                     Turn off timer
                                 </button>
                             )}
@@ -787,214 +450,71 @@ const Player = () => {
                     )}
                 </div>
 
-                <button style={{ color: '#b3b3b3', padding: '4px' }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#b3b3b3'}>
-                    <Laptop2 size={16} />
-                </button>
+                <button className="player-icon-btn"><Laptop2 size={16} /></button>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '125px' }}>
-                    <button
-                        onClick={toggleMute}
-                        style={{ color: '#b3b3b3', padding: '4px' }}
-                        onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
-                        onMouseLeave={(e) => e.currentTarget.style.color = '#b3b3b3'}
-                    >
-                        {getVolumeIcon()}
-                    </button>
-                    <div
-                        onClick={handleVolumeChange}
-                        style={{
-                            flex: 1,
-                            height: '4px',
-                            backgroundColor: 'rgba(255,255,255,0.1)',
-                            borderRadius: '2px',
-                            cursor: 'pointer'
-                        }}
-                        className="volume-bar"
-                    >
-                        <div style={{
-                            height: '100%',
-                            backgroundColor: '#fff',
-                            borderRadius: '2px',
-                            width: `${(isMuted ? 0 : volume) * 100}%`
-                        }} className="volume-fill" />
+                {/* Volume */}
+                <div className="player-volume-wrapper">
+                    <button onClick={toggleMute} className="player-icon-btn">{getVolumeIcon()}</button>
+                    <div onClick={handleVolumeChange} className="player-volume-bar">
+                        <div className="player-volume-fill" style={{ width: `${(isMuted ? 0 : volume) * 100}%` }} />
                     </div>
                 </div>
 
-                <button
-                    onClick={toggleFullScreen}
-                    style={{ color: '#b3b3b3', padding: '4px' }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#b3b3b3'}
-                    title="Full screen (F)"
-                >
+                <button onClick={toggleFullScreen} className="player-icon-btn" title="Full screen (F)">
                     <Maximize2 size={16} />
                 </button>
             </div>
 
-            {/* Full-Screen Now Playing Overlay */}
+            {/* Full-Screen Overlay */}
             {isFullScreen && currentSong && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: `linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.95) 100%), 
-                                 url(${currentSong.image}) center/cover no-repeat`,
-                    backdropFilter: 'blur(100px)',
-                    zIndex: 9999,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    animation: 'fadeIn 0.3s ease'
-                }}>
-                    {/* Close Button */}
-                    <button
-                        onClick={toggleFullScreen}
-                        style={{
-                            position: 'absolute',
-                            top: '24px',
-                            right: '24px',
-                            color: '#fff',
-                            padding: '8px',
-                            background: 'rgba(255,255,255,0.1)',
-                            borderRadius: '50%',
-                            transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                    >
+                <div
+                    className="player-fullscreen-overlay"
+                    style={{ background: `linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.95) 100%), url(${currentSong.image}) center/cover no-repeat` }}
+                >
+                    <button onClick={toggleFullScreen} className="player-fullscreen-close">
                         <ChevronDown size={24} />
                     </button>
 
-                    {/* Sleep Timer Badge */}
                     {sleepTimer && (
-                        <div style={{
-                            position: 'absolute',
-                            top: '24px',
-                            left: '24px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            background: 'rgba(29, 185, 84, 0.2)',
-                            padding: '8px 16px',
-                            borderRadius: '20px',
-                            color: '#1db954'
-                        }}>
+                        <div className="player-fullscreen-sleep-badge">
                             <Timer size={16} />
-                            <span style={{ fontSize: '14px', fontWeight: '500' }}>
-                                Sleep in {sleepTimer} min
-                            </span>
+                            <span style={{ fontSize: '14px', fontWeight: '500' }}>Sleep in {sleepTimer} min</span>
                         </div>
                     )}
 
-                    {/* Album Art */}
-                    <div style={{
-                        width: 'min(400px, 60vw)',
-                        aspectRatio: '1',
-                        borderRadius: '8px',
-                        overflow: 'hidden',
-                        boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
-                        marginBottom: '48px'
-                    }}>
-                        <img
-                            src={currentSong.image}
-                            alt={currentSong.title}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            onError={(e) => { e.target.src = '/placeholder.svg'; }}
-                        />
+                    <div className="player-fullscreen-album-art">
+                        <img src={currentSong.image} alt={currentSong.title} onError={(e) => { e.target.src = '/placeholder.svg'; }} />
                     </div>
 
-                    {/* Song Info */}
-                    <div style={{ textAlign: 'center', marginBottom: '32px', maxWidth: '80%' }}>
-                        <h1 style={{
-                            fontSize: 'clamp(24px, 5vw, 48px)',
-                            fontWeight: '700',
-                            color: '#fff',
-                            marginBottom: '8px',
-                            textShadow: '0 2px 10px rgba(0,0,0,0.3)'
-                        }}>
-                            {currentSong.title}
-                        </h1>
-                        <p style={{
-                            fontSize: 'clamp(16px, 3vw, 24px)',
-                            color: '#b3b3b3'
-                        }}>
-                            {currentSong.artist}
-                        </p>
+                    <div className="player-fullscreen-info">
+                        <h1 className="player-fullscreen-title">{currentSong.title}</h1>
+                        <p className="player-fullscreen-artist">{currentSong.artist}</p>
                     </div>
 
-                    {/* Progress Bar */}
-                    <div style={{ width: 'min(600px, 80%)', marginBottom: '24px' }}>
+                    <div className="player-fullscreen-progress">
                         <div
+                            className="player-fullscreen-progress-bar"
                             onPointerDown={onScrubPointerDown}
                             onPointerMove={onScrubPointerMove}
                             onPointerUp={onScrubPointerUp}
                             onPointerCancel={onScrubPointerCancel}
                             onClick={handleSeek}
-                            style={{
-                                width: '100%',
-                                cursor: 'pointer',
-                                marginBottom: '8px',
-                                position: 'relative',
-                                height: '24px',
-                                touchAction: 'none',
-                                WebkitTapHighlightColor: 'transparent'
-                            }}
                         >
-                            <div
-                                style={{
-                                    position: 'absolute',
-                                    left: 0,
-                                    right: 0,
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    height: '6px',
-                                    backgroundColor: 'rgba(255,255,255,0.2)',
-                                    borderRadius: '3px'
-                                }}
-                            >
-                                <div style={{
-                                    height: '100%',
-                                    backgroundColor: '#1db954',
-                                    borderRadius: '3px',
-                                    width: `${(displayedProgress / (duration || 1)) * 100}%`,
-                                    transition: 'width 0.1s linear'
-                                }} />
+                            <div className="player-fullscreen-progress-track">
+                                <div className="player-fullscreen-progress-fill" style={{ width: `${progressPercent}%` }} />
                             </div>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b3b3b3', fontSize: '14px' }}>
+                        <div className="player-fullscreen-times">
                             <span>{formatTime(displayedProgress)}</span>
                             <span>{formatTime(duration)}</span>
                         </div>
                     </div>
 
-                    {/* Controls */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-                        <button
-                            onClick={playPrevious}
-                            style={{ color: '#fff', padding: '8px' }}
-                        >
+                    <div className="player-fullscreen-controls">
+                        <button onClick={playPrevious} className="player-fullscreen-skip-btn">
                             <SkipBack size={32} fill="currentColor" />
                         </button>
-                        <button
-                            onClick={handlePlayPause}
-                            style={{
-                                width: '72px',
-                                height: '72px',
-                                borderRadius: '50%',
-                                backgroundColor: '#fff',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                transition: 'transform 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                        >
+                        <button onClick={handlePlayPause} className="player-main-play-btn large">
                             {isLoading ? (
                                 <Loader size={32} color="#000" className="animate-spin" />
                             ) : isPlaying ? (
@@ -1003,118 +523,16 @@ const Player = () => {
                                 <Play size={32} fill="#000" color="#000" style={{ marginLeft: '4px' }} />
                             )}
                         </button>
-                        <button
-                            onClick={playNext}
-                            style={{ color: '#fff', padding: '8px' }}
-                        >
+                        <button onClick={playNext} className="player-fullscreen-skip-btn">
                             <SkipForward size={32} fill="currentColor" />
                         </button>
                     </div>
 
-                    {/* Keyboard Shortcuts Hint */}
-                    <div style={{
-                        position: 'absolute',
-                        bottom: '24px',
-                        color: 'rgba(255,255,255,0.4)',
-                        fontSize: '12px'
-                    }}>
-                        Press <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: '4px' }}>F</kbd> or <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: '4px' }}>Esc</kbd> to exit
+                    <div className="player-fullscreen-hint">
+                        Press <kbd>F</kbd> or <kbd>Esc</kbd> to exit
                     </div>
                 </div>
             )}
-
-            <style>{`
-                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                .animate-spin { animation: spin 1s linear infinite; }
-                .progress-bar:hover { height: 6px !important; }
-                .progress-bar:hover .progress-fill { background-color: #1db954 !important; }
-                .progress-bar:hover .progress-thumb { opacity: 1 !important; }
-                .volume-bar:hover .volume-fill { background-color: #1db954 !important; }
-                
-                /* Mobile Player Bar Styles - Override nth-child rules */
-                @media (max-width: 768px) {
-                    .player-bar {
-                        background: linear-gradient(90deg, ${dominantColor} 0%, rgba(18,18,18,0.98) 100%) !important;
-                        border-radius: 8px !important;
-                        margin: 4px 8px !important;
-                        padding: 10px 14px !important;
-                        height: auto !important;
-                        min-height: 64px !important;
-                    }
-                    
-                    /* CRITICAL: Override the nth-child(3) hiding rule */
-                    .player-bar > .mobile-player-controls {
-                        display: flex !important;
-                        visibility: visible !important;
-                        opacity: 1 !important;
-                    }
-                    
-                    /* Also use nth-child to override index.css */
-                    .player-bar > div:nth-child(2),
-                    .player-bar > div:nth-child(3) {
-                        display: flex !important;
-                    }
-                    
-                    .desktop-player-controls {
-                        display: none !important;
-                    }
-                    
-                    .mobile-player-controls {
-                        display: flex !important;
-                        align-items: center !important;
-                        gap: 10px !important;
-                    }
-                    
-                    .mobile-only-btn {
-                        display: flex !important;
-                    }
-                    
-                    .player-now-playing {
-                        flex: 1 !important;
-                        min-width: 0 !important;
-                    }
-                    
-                    .player-album-art {
-                        width: 48px !important;
-                        height: 48px !important;
-                        border-radius: 6px !important;
-                    }
-                    
-                    .player-song-title {
-                        font-size: 15px !important;
-                        font-weight: 600 !important;
-                    }
-                    
-                    .player-song-artist {
-                        font-size: 12px !important;
-                        color: rgba(255,255,255,0.7) !important;
-                    }
-                    
-                    /* Mobile progress indicator - visible on mobile */
-                    .mobile-progress-indicator {
-                        display: block !important;
-                    }
-                    
-                    /* Hide center and right desktop controls */
-                    .player-bar > div:nth-child(5),
-                    .player-bar > div:nth-child(6),
-                    .player-bar > div:nth-child(7) {
-                        display: none !important;
-                    }
-                }
-                
-                @media (min-width: 769px) {
-                    .mobile-player-controls {
-                        display: none !important;
-                    }
-                    
-                    /* Hide mobile progress indicator on desktop */
-                    .mobile-progress-indicator {
-                        display: none !important;
-                    }
-                }
-            `}</style>
 
             {/* Mobile Full Screen Player */}
             <MobileFullScreenPlayer

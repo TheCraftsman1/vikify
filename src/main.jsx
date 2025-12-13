@@ -10,8 +10,8 @@ import { OfflineProvider } from './context/OfflineContext';
 import { PlaylistProvider } from './context/PlaylistContext';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// Debug logging capture
-if (typeof window !== 'undefined') {
+// Debug logging capture - only in development mode
+if (import.meta.env.DEV && typeof window !== 'undefined') {
   window.logs = [];
   const captureLog = (type, args) => {
     const message = args.map(arg =>

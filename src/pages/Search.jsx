@@ -62,9 +62,9 @@ const Search = () => {
         playlists: activeFilter === 'all' || activeFilter === 'playlists' ? playlists : []
     };
 
-    const handleSearch = async (e) => {
-        e.preventDefault();
-        if (!query.trim()) return;
+    const performSearch = async (nextQuery) => {
+        const q = (nextQuery ?? query).trim();
+        if (!q) return;
 
         if (!isOnline) {
             setLoading(false);
@@ -76,32 +76,33 @@ const Search = () => {
         setLoading(true);
         setResults([]);
         setPlaylists([]);
-        setActiveFilter('all'); // Reset filter on new search
+        setActiveFilter('all');
 
         try {
             if (isSpotifyAuthenticated && spotifyToken) {
-                // Spotify Search (Tracks + Playlists)
-                const spotifyResults = await searchSpotify(query, spotifyToken, 'playlist,track');
+                const spotifyResults = await searchSpotify(q, spotifyToken, 'playlist,track');
 
-                if (spotifyResults.songs) {
-                    setResults(spotifyResults.songs);
-                }
-                if (spotifyResults.playlists) {
-                    setPlaylists(spotifyResults.playlists);
-                }
+                if (spotifyResults.songs) setResults(spotifyResults.songs);
+                if (spotifyResults.playlists) setPlaylists(spotifyResults.playlists);
             } else {
-                // Fallback: iTunes Search (Songs only)
-                const response = await axios.get(`${BACKEND_URL}/itunes/search?q=${encodeURIComponent(query)}&limit=30`);
+                const response = await axios.get(
+                    `${BACKEND_URL}/itunes/search?q=${encodeURIComponent(q)}&limit=30`,
+                    { timeout: 12000 }
+                );
                 if (response.data.success) {
                     setResults(response.data.results);
                 }
             }
-
         } catch (error) {
-            console.error("Search failed:", error);
+            console.error('Search failed:', error);
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSearch = async (e) => {
+        e.preventDefault();
+        await performSearch(query);
     };
 
     const handleAddPlaylist = (e, playlist) => {
@@ -261,7 +262,13 @@ const Search = () => {
                         <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', color: '#fff' }}>Start browsing</h2>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                             {categories.map(cat => (
-                                <div key={cat.id} style={{
+                                <div
+                                    key={cat.id}
+                                    onClick={() => {
+                                        setQuery(cat.title);
+                                        performSearch(cat.title);
+                                    }}
+                                    style={{
                                     backgroundColor: cat.color,
                                     height: '100px',
                                     borderRadius: '4px',

@@ -53,11 +53,11 @@ const LikedSongs = () => {
 
             <div style={{ position: 'relative', padding: '24px', paddingBottom: '120px' }}>
                 {/* Header */}
-                <div className="liked-header" style={{ display: 'flex', alignItems: 'flex-end', gap: '24px', marginBottom: '24px', paddingTop: '32px' }}>
+                <div className="liked-header" style={{ display: 'flex', alignItems: 'flex-end', gap: '20px', marginBottom: '24px', paddingTop: '24px', flexWrap: 'wrap' }}>
                     <div className="liked-icon-wrapper" style={{ position: 'relative', flexShrink: 0 }}>
                         <div className="liked-icon-box" style={{
-                            width: '232px',
-                            height: '232px',
+                            width: 'min(200px, 56vw)',
+                            height: 'min(200px, 56vw)',
                             borderRadius: '12px',
                             background: 'linear-gradient(135deg, #450af5, #c4efd9)',
                             display: 'flex',
@@ -73,7 +73,7 @@ const LikedSongs = () => {
                     <div style={{ flex: 1 }}>
                         <span style={{ fontSize: '14px', fontWeight: 700, textTransform: 'uppercase' }}>Playlist</span>
                         <h1 style={{
-                            fontSize: '72px',
+                            fontSize: 'clamp(36px, 9vw, 72px)',
                             fontWeight: 900,
                             marginTop: '8px',
                             marginBottom: '24px',
@@ -149,7 +149,7 @@ const LikedSongs = () => {
                         {/* Table Header */}
                         <div style={{
                             display: 'grid',
-                            gridTemplateColumns: '16px 4fr 3fr 64px',
+                            gridTemplateColumns: '32px 4fr 3fr 72px',
                             gap: '16px',
                             padding: '8px 16px',
                             borderBottom: '1px solid rgba(255,255,255,0.1)',
@@ -176,7 +176,7 @@ const LikedSongs = () => {
                                         onClick={() => handleSongClick(song)}
                                         style={{
                                             display: 'grid',
-                                            gridTemplateColumns: '16px 4fr 3fr 64px',
+                                            gridTemplateColumns: '32px 4fr 3fr 72px',
                                             gap: '16px',
                                             padding: '8px 16px',
                                             borderRadius: '4px',

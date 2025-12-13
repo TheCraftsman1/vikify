@@ -262,11 +262,16 @@ ytmusic = YTMusic()
 @app.route('/search')
 def search():
     query = request.args.get('q', '')
+    include_stream = request.args.get('include_stream', 'false').lower() == 'true'
+    
     if not query:
         return jsonify({'error': 'No query provided', 'success': False}), 400
     
     clean_q = clean_query(query)
-    print(f"[Search] Query: {clean_q}")
+    print(f"[Search] Query: {clean_q} (include_stream={include_stream})")
+    
+    video_id = None
+    response_data = None
     
     # Method 1: Try ytmusicapi first (FAST & ACCURATE)
     try:
@@ -285,49 +290,81 @@ def search():
             image = top_result.get('thumbnails', [{}])[-1].get('url') # Get largest thumbnail
 
             print(f"[Search] ✅ Found via YTMusic: {video_id} - {title}")
-            return jsonify({
+            response_data = {
                 'success': True,
                 'videoId': video_id,
                 'title': title,
                 'artist': artist_name,
                 'image': image,
                 'youtubeUrl': f'https://www.youtube.com/watch?v={video_id}'
-            })
+            }
             
     except Exception as e:
         print(f"[Search] ytmusicapi error: {e}")
         # Fallback to yt-dlp if ytmusicapi fails logic continues below...
 
     # Method 2: Fallback to yt-dlp (SLOWER but robust backup)
-    try:
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': True,
-            'default_search': 'ytsearch1',
-        }
-        
-        print(f"[Search] Falling back to yt-dlp for: {clean_q}")
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            result = ydl.extract_info(f"ytsearch1:{clean_q}", download=False)
+    if not response_data:
+        try:
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': True,
+                'default_search': 'ytsearch1',
+            }
             
-            if result and result.get('entries'):
-                video = result['entries'][0]
-                video_id = video.get('id')
-                title = video.get('title', '')
+            print(f"[Search] Falling back to yt-dlp for: {clean_q}")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                result = ydl.extract_info(f"ytsearch1:{clean_q}", download=False)
                 
-                print(f"[Search] ✅ Found via yt-dlp: {video_id} - {title}")
-                return jsonify({
-                    'success': True,
-                    'videoId': video_id,
-                    'title': title,
-                    'youtubeUrl': f'https://www.youtube.com/watch?v={video_id}'
-                })
-                
-    except Exception as e:
-        print(f"[Search] yt-dlp error: {e}")
+                if result and result.get('entries'):
+                    video = result['entries'][0]
+                    video_id = video.get('id')
+                    title = video.get('title', '')
+                    
+                    print(f"[Search] ✅ Found via yt-dlp: {video_id} - {title}")
+                    response_data = {
+                        'success': True,
+                        'videoId': video_id,
+                        'title': title,
+                        'youtubeUrl': f'https://www.youtube.com/watch?v={video_id}'
+                    }
+                    
+        except Exception as e:
+            print(f"[Search] yt-dlp error: {e}")
     
-    return jsonify({'success': False, 'error': 'No results'})
+    if not response_data:
+        return jsonify({'success': False, 'error': 'No results'})
+    
+    # OPTIMIZATION: If include_stream is true, also resolve the audio stream URL
+    # This eliminates a separate /stream call, reducing latency by ~500-2000ms
+    if include_stream and video_id:
+        try:
+            print(f"[Search] Resolving stream for {video_id}...")
+            info = resolve_audio_url(video_id)
+            
+            if info and info.get('url'):
+                # Build proxy URL
+                proxy_url = url_for('proxy_audio_stream', video_id=video_id, _external=True)
+                # Use https if on railway
+                if 'railway' in proxy_url and proxy_url.startswith('http:'):
+                    proxy_url = proxy_url.replace('http:', 'https:')
+                
+                quality = 'high' if info.get('abr', 0) >= 128 else 'standard'
+                
+                response_data['audioUrl'] = proxy_url
+                response_data['duration'] = info.get('duration')
+                response_data['quality'] = {
+                    'bitrate': info.get('abr'),
+                    'codec': info.get('acodec'),
+                    'level': quality
+                }
+                print(f"[Search] ✅ Stream included: {quality} quality")
+        except Exception as e:
+            print(f"[Search] Stream resolution failed (non-fatal): {e}")
+            # Continue without stream - frontend can request /stream separately as fallback
+    
+    return jsonify(response_data)
 
 # ============== ITUNES SEARCH PROXY ==============
 

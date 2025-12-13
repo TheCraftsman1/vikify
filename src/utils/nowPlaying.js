@@ -5,10 +5,10 @@ const NowPlaying = registerPlugin('NowPlaying');
 
 export const isNative = () => Capacitor.isNativePlatform();
 
-export async function updateNowPlaying({ title, artist, isPlaying, positionSeconds, durationSeconds }) {
+export async function updateNowPlaying({ title, artist, isPlaying, positionSeconds, durationSeconds, artworkUrl }) {
   if (!isNative()) return;
   try {
-    await NowPlaying.update({ title, artist, isPlaying, positionSeconds, durationSeconds });
+    await NowPlaying.update({ title, artist, isPlaying, positionSeconds, durationSeconds, artworkUrl });
   } catch (e) {
     console.warn('[NowPlaying] update failed:', e);
   }

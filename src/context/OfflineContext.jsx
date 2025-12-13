@@ -2,7 +2,21 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { saveAudioBlob, getAudioBlob, getAllOfflineSongs, deleteAudioBlob, getStorageUsage } from '../utils/offlineDB';
 import { downloadSong } from '../utils/download';
 
-const OfflineContext = createContext();
+const DEFAULT_OFFLINE_CONTEXT = {
+    offlineSongIds: new Set(),
+    downloadProgress: null,
+    isOnline: true,
+    storageUsage: { used: 0, songs: 0, usedMB: '0' },
+    isDownloading: false,
+    loadOfflineSongs: async () => {},
+    downloadSingleSong: async () => false,
+    downloadPlaylist: async () => ({ success: 0, failed: 0 }),
+    getCachedAudioUrl: async () => null,
+    isSongOffline: () => false,
+    removeFromOffline: async () => {},
+};
+
+const OfflineContext = createContext(DEFAULT_OFFLINE_CONTEXT);
 
 export const useOffline = () => useContext(OfflineContext);
 

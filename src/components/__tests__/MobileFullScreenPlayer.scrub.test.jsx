@@ -2,8 +2,6 @@ import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 
-import MobileFullScreenPlayer from '../MobileFullScreenPlayer';
-
 vi.mock('react-dom', async () => {
   const actual = await vi.importActual('react-dom');
   return {
@@ -51,17 +49,27 @@ vi.mock('../../context/LikedSongsContext', () => ({
   }),
 }));
 
+vi.mock('../../context/OfflineContext', () => ({
+  useOffline: () => ({
+    isSongOffline: () => false,
+  }),
+}));
+
 describe('MobileFullScreenPlayer scrubbing', () => {
   beforeEach(() => {
     seekMock.mockClear();
   });
 
-  it('seeks on pointer release (not during drag)', () => {
-    const { getByTestId } = render(
+  it('seeks on pointer release (not during drag)', async () => {
+    const { default: MobileFullScreenPlayer } = await import('../MobileFullScreenPlayer');
+    render(
       <MobileFullScreenPlayer isOpen={true} onClose={() => {}} />
     );
 
-    const scrubber = getByTestId('mobile-progress-scrubber');
+    // The fullscreen player is rendered outside the test container (portal/body).
+    const scrubber = document.body.querySelector('.mfp-progress-scrubber');
+    expect(scrubber).toBeTruthy();
+    if (!scrubber) return;
 
     scrubber.getBoundingClientRect = () => ({
       left: 0,
@@ -79,6 +87,7 @@ describe('MobileFullScreenPlayer scrubbing', () => {
     expect(seekMock).not.toHaveBeenCalled();
 
     fireEvent.pointerUp(scrubber, { clientX: 50, pointerId: 1 });
+    // width=100, clientX=50 => 50% of duration (200s) => 100s
     expect(seekMock).toHaveBeenCalledTimes(1);
     expect(seekMock).toHaveBeenCalledWith(100);
   });

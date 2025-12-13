@@ -113,10 +113,12 @@ const Home = () => {
                 transition: 'background 0.5s ease'
             }} />
 
-            <div style={{ position: 'relative', padding: '24px', paddingBottom: '140px' }}>
+            <div style={{ position: 'relative', padding: '16px', paddingBottom: '140px' }}>
                 {/* Header / Greeting */}
-                <div style={{ padding: '24px 16px 16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <div style={{ padding: '16px 8px 12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
+                        <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>{getGreeting()}</h2>
+
                         {/* Profile Avatar */}
                         <div
                             onClick={openProfileMenu}
@@ -131,45 +133,43 @@ const Home = () => {
                                 fontSize: '14px',
                                 fontWeight: 700,
                                 color: userImage ? 'transparent' : '#000',
-                                cursor: 'pointer'
+                                cursor: 'pointer',
+                                flexShrink: 0
                             }}
                         >
                             {!userImage && userInitials}
                         </div>
-                        {/* Categories Chips */}
-                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none' }}>
-                            <button style={{
-                                background: 'rgba(255,255,255,0.1)',
-                                border: 'none',
-                                borderRadius: '16px',
-                                padding: '6px 16px',
-                                color: '#fff',
-                                fontSize: '12px',
-                                fontWeight: 600
-                            }}>All</button>
-                            <button style={{
-                                background: 'transparent',
-                                border: 'none',
-                                borderRadius: '16px',
-                                padding: '6px 16px',
-                                color: '#fff',
-                                fontSize: '12px',
-                                fontWeight: 600
-                            }}>Music</button>
-                            <button style={{
-                                background: 'transparent',
-                                border: 'none',
-                                borderRadius: '16px',
-                                padding: '6px 16px',
-                                color: '#fff',
-                                fontSize: '12px',
-                                fontWeight: 600
-                            }}>Podcasts</button>
-                        </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <h2 style={{ fontSize: '24px', fontWeight: 700 }}>{getGreeting()}</h2>
+                    {/* Categories Chips */}
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '4px' }}>
+                        <button style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            borderRadius: '16px',
+                            padding: '6px 16px',
+                            color: '#fff',
+                            fontSize: '12px',
+                            fontWeight: 600
+                        }}>All</button>
+                        <button style={{
+                            background: 'transparent',
+                            border: 'none',
+                            borderRadius: '16px',
+                            padding: '6px 16px',
+                            color: '#fff',
+                            fontSize: '12px',
+                            fontWeight: 600
+                        }}>Music</button>
+                        <button style={{
+                            background: 'transparent',
+                            border: 'none',
+                            borderRadius: '16px',
+                            padding: '6px 16px',
+                            color: '#fff',
+                            fontSize: '12px',
+                            fontWeight: 600
+                        }}>Podcasts</button>
                     </div>
                 </div>
                 <p style={{

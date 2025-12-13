@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Search, Grid, List, Plus, Heart, Download, Pause, Music, ArrowUpDown, Settings, Clock, Bell, UserPlus, X } from 'lucide-react';
+import { Play, Search, Grid, List, Plus, Heart, Download, Pause, Music, ArrowUpDown } from 'lucide-react';
 import { albums } from '../data/songs';
 import { usePlayer } from '../context/PlayerContext';
 import { useLikedSongs } from '../context/LikedSongsContext';

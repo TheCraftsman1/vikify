@@ -111,24 +111,67 @@ export const getYouTubeStreamUrl = async (videoId) => {
     return audioUrl;
 };
 
-
 /**
  * Search for a video and get its direct audio stream URL
+ * OPTIMIZED: Uses combined endpoint to get videoId + audioUrl in ONE call
  * Returns audio URL directly (not YouTube URL)
  */
 export const searchYouTube = async (query) => {
     console.log(`[YouTube] Searching: ${query}`);
+    const key = normalizeQueryKey(query);
 
     try {
-        // Step 1: Resolve (and cache) the videoId for this query
-        const videoId = await getYouTubeVideoId(query);
-        if (!videoId) return null;
-        console.log(`[YouTube] Found video: ${videoId}`);
+        // Check if we already have a cached stream URL for this query's video
+        const cachedVideoId = videoIdCache.get(key);
+        if (cachedVideoId) {
+            const cachedStreamUrl = streamUrlCache.get(cachedVideoId);
+            if (cachedStreamUrl && isValidHttpUrl(cachedStreamUrl)) {
+                console.log('[YouTube] ✅ Cache hit for stream URL!');
+                return cachedStreamUrl;
+            }
+        }
 
-        // Step 2: Resolve a fresh direct audio stream URL (short cache)
-        const audioUrl = await getYouTubeStreamUrl(videoId);
+        if (isOffline()) return null;
+
+        // OPTIMIZED: Single call with include_stream=true
+        // Backend returns videoId + audioUrl together, eliminating one roundtrip
+        const response = await withRetry(
+            async () => {
+                const searchResponse = await axios.get(`${BACKEND_URL}/search`, {
+                    params: { q: query, include_stream: 'true' },
+                    timeout: 25000, // Slightly longer timeout since it does more work
+                });
+                return searchResponse.data;
+            },
+            {
+                retries: 2,
+                baseDelayMs: 400,
+                shouldRetry: (e) => isLikelyTransientNetworkError(e),
+            }
+        );
+
+        if (!response?.success || !response?.videoId) {
+            console.log('[YouTube] No results found');
+            return null;
+        }
+
+        // Cache the videoId
+        videoIdCache.set(key, response.videoId);
+        console.log(`[YouTube] Found video: ${response.videoId}`);
+
+        // If audioUrl was included (optimization worked!), use it directly
+        if (response.audioUrl && isValidHttpUrl(response.audioUrl)) {
+            streamUrlCache.set(response.videoId, response.audioUrl);
+            console.log('[YouTube] ✅ Got audio stream in single call! (optimized)');
+            return response.audioUrl;
+        }
+
+        // Fallback: If audioUrl wasn't included, fetch it separately
+        // This can happen if stream resolution failed on backend
+        console.log('[YouTube] Falling back to separate /stream call...');
+        const audioUrl = await getYouTubeStreamUrl(response.videoId);
         if (audioUrl) {
-            console.log('[YouTube] ✅ Got direct audio stream!');
+            console.log('[YouTube] ✅ Got direct audio stream (fallback)');
             return audioUrl;
         }
     } catch (e) {

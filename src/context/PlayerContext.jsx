@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
-import { searchYouTube, getRelatedSongs, prefetchYouTubeVideoId } from '../utils/youtube';
+import { searchYouTube, getRelatedSongs } from '../utils/youtube';
 import { getAudioBlob } from '../utils/offlineDB';
 import { useAuth } from './AuthContext';
 import { getRecommendations as getSpotifyRecommendations } from '../services/spotify';
@@ -40,6 +40,16 @@ export const PlayerProvider = ({ children }) => {
     const sleepTimerRef = useRef(null);
     const progressRafRef = useRef(null);
     const pendingProgressRef = useRef(null);
+
+    // Stream-stall recovery (YouTube direct URLs can intermittently stall/expire)
+    const pendingSeekAfterReloadRef = useRef(null); // seconds
+    const stallMonitorRef = useRef({
+        lastTime: 0,
+        lastCheckEpochMs: 0,
+        stallCount: 0,
+        lastReloadEpochMs: 0,
+        songId: null,
+    });
 
     // Refs for Media Session handlers (to avoid stale closures)
     const playNextRef = useRef(null);
@@ -173,7 +183,8 @@ export const PlayerProvider = ({ children }) => {
             artist: currentSong.artist || '',
             isPlaying: !!isPlaying,
             positionSeconds: progress || 0,
-            durationSeconds: duration || 0
+            durationSeconds: duration || 0,
+            artworkUrl: currentSong.image || null
         });
     }, [currentSong, isPlaying, duration]);
 
@@ -191,7 +202,8 @@ export const PlayerProvider = ({ children }) => {
                 artist: currentSong.artist || '',
                 isPlaying: !!isPlaying,
                 positionSeconds: progress || 0,
-                durationSeconds: duration || 0
+                durationSeconds: duration || 0,
+                artworkUrl: currentSong.image || null
             });
         };
 
@@ -214,7 +226,7 @@ export const PlayerProvider = ({ children }) => {
             switch (action) {
                 case 'com.vikify.app.NOW_PLAY':
                     if (playerRef.current?.paused) {
-                        playerRef.current.play().catch(() => {});
+                        playerRef.current.play().catch(() => { });
                     }
                     setIsPlaying(true);
                     break;
@@ -297,9 +309,11 @@ export const PlayerProvider = ({ children }) => {
                 setUpNextQueue(shuffled);
                 console.log('[Autoplay] YouTube Preloaded:', shuffled.map(s => s.title));
 
-                // Prefetch stable videoIds (fast + avoids repeating /search)
-                shuffled.slice(0, 3).forEach((s) => {
-                    prefetchYouTubeVideoId(`${s.title} ${s.artist}`);
+                // OPTIMIZED: Prefetch FULL stream URLs (not just videoIds) for instant transitions
+                // This runs searchYouTube with include_stream=true, populating both caches
+                shuffled.slice(0, 2).forEach((s) => {
+                    // Fire and forget - don't await, let it run in background
+                    searchYouTube(`${s.title} ${s.artist}`).catch(() => { });
                 });
             }
         } catch (e) {
@@ -335,6 +349,26 @@ export const PlayerProvider = ({ children }) => {
         }
     }, [currentSong, fetchUpcomingSongs]);
 
+    // OPTIMIZATION: Prefetch next song's stream URL when current song starts playing
+    // This ensures instant transitions when playing through a playlist
+    useEffect(() => {
+        if (!isPlaying || !queue.length || queueIndex < 0) return;
+
+        const nextIdx = queueIndex + 1;
+        if (nextIdx >= queue.length) return; // No next song
+
+        const nextSong = queue[nextIdx];
+        if (!nextSong) return;
+
+        // Delay prefetch slightly to prioritize current song's playback
+        const timer = setTimeout(() => {
+            console.log('[PlayerContext] Prefetching next song:', nextSong.title);
+            // Full searchYouTube with include_stream=true populates both caches
+            searchYouTube(`${nextSong.title} ${nextSong.artist}`).catch(() => { });
+        }, 2000); // Start prefetching 2 seconds after playback begins
+
+        return () => clearTimeout(timer);
+    }, [isPlaying, queue, queueIndex]);
 
 
     /**
@@ -429,7 +463,137 @@ export const PlayerProvider = ({ children }) => {
     const onPlayerReady = () => {
         console.log("[PlayerContext] Audio ready, starting playback");
         setIsPlaying(true);
+
+        // If we reloaded an expired/stalled stream, seek back before resuming playback.
+        const pending = pendingSeekAfterReloadRef.current;
+        if (typeof pending === 'number' && playerRef.current) {
+            try {
+                playerRef.current.currentTime = Math.max(0, pending);
+                setProgress(Math.max(0, pending));
+            } catch {
+                // ignore
+            } finally {
+                pendingSeekAfterReloadRef.current = null;
+            }
+        }
     };
+
+    // Detect buffering/stalls that don't fire "error" (common with expiring stream URLs)
+    // and attempt a single safe recovery: refresh stream URL and seek back.
+    useEffect(() => {
+        const audio = playerRef.current;
+        if (!audio) return;
+        if (!currentSong) return;
+
+        // Reset per-song state
+        if (stallMonitorRef.current.songId !== currentSong.id) {
+            stallMonitorRef.current = {
+                lastTime: 0,
+                lastCheckEpochMs: 0,
+                stallCount: 0,
+                lastReloadEpochMs: 0,
+                songId: currentSong.id,
+            };
+            pendingSeekAfterReloadRef.current = null;
+        }
+
+        // Only monitor online streaming (offline blobs/local files shouldn't be reloaded)
+        if (!youtubeUrl || isOfflinePlayback) return;
+
+        const markProgress = () => {
+            stallMonitorRef.current.lastTime = audio.currentTime || 0;
+            stallMonitorRef.current.lastCheckEpochMs = Date.now();
+            stallMonitorRef.current.stallCount = 0;
+        };
+
+        const onPlaying = () => {
+            setIsLoading(false);
+            markProgress();
+        };
+
+        const onWaiting = () => {
+            // UI hint; recovery is handled by the interval below.
+            setIsLoading(true);
+        };
+
+        const onCanPlay = () => {
+            setIsLoading(false);
+        };
+
+        audio.addEventListener('timeupdate', markProgress);
+        audio.addEventListener('playing', onPlaying);
+        audio.addEventListener('waiting', onWaiting);
+        audio.addEventListener('stalled', onWaiting);
+        audio.addEventListener('canplay', onCanPlay);
+
+        const interval = setInterval(async () => {
+            if (!playerRef.current) return;
+            if (!isPlaying) return;
+            if (!navigator.onLine) return;
+
+            const a = playerRef.current;
+            if (a.seeking) return;
+
+            const now = Date.now();
+            const currentTimeSec = a.currentTime || 0;
+            const { lastTime, lastCheckEpochMs, stallCount, lastReloadEpochMs } = stallMonitorRef.current;
+
+            // If time is advancing, all good.
+            const advancing = Math.abs(currentTimeSec - lastTime) > 0.08;
+            if (advancing) {
+                stallMonitorRef.current.lastTime = currentTimeSec;
+                stallMonitorRef.current.lastCheckEpochMs = now;
+                stallMonitorRef.current.stallCount = 0;
+                return;
+            }
+
+            // Ignore very early startup or cases where we have no baseline yet.
+            if (!lastCheckEpochMs) {
+                stallMonitorRef.current.lastTime = currentTimeSec;
+                stallMonitorRef.current.lastCheckEpochMs = now;
+                return;
+            }
+
+            // If we're not sufficiently buffered, count as a stall tick.
+            // readyState: 0=HAVE_NOTHING, 1=HAVE_METADATA, 2=HAVE_CURRENT_DATA, 3=HAVE_FUTURE_DATA, 4=HAVE_ENOUGH_DATA
+            const underBuffered = (a.readyState || 0) < 3;
+            if (underBuffered) {
+                stallMonitorRef.current.stallCount = stallCount + 1;
+                setIsLoading(true);
+            } else {
+                // If we have buffer but time doesn't advance, don't overreact.
+                return;
+            }
+
+            // After ~3s of no progress (2 ticks at 1.5s), attempt a controlled reload.
+            const cooldownMs = 20_000;
+            if (stallMonitorRef.current.stallCount >= 2 && now - lastReloadEpochMs > cooldownMs) {
+                stallMonitorRef.current.lastReloadEpochMs = now;
+                pendingSeekAfterReloadRef.current = currentTimeSec;
+
+                console.warn('[PlayerContext] Detected stalled stream; attempting refresh', {
+                    songId: currentSong.id,
+                    t: currentTimeSec,
+                });
+
+                const ok = await reloadCurrentStream();
+                if (!ok) {
+                    // If refresh fails, clear pending seek so we don't seek incorrectly later.
+                    pendingSeekAfterReloadRef.current = null;
+                    setIsLoading(false);
+                }
+            }
+        }, 1500);
+
+        return () => {
+            clearInterval(interval);
+            audio.removeEventListener('timeupdate', markProgress);
+            audio.removeEventListener('playing', onPlaying);
+            audio.removeEventListener('waiting', onWaiting);
+            audio.removeEventListener('stalled', onWaiting);
+            audio.removeEventListener('canplay', onCanPlay);
+        };
+    }, [currentSong, youtubeUrl, isOfflinePlayback, isPlaying, reloadCurrentStream]);
 
     const togglePlay = () => {
         hapticLight();
