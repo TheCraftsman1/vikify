@@ -74,23 +74,23 @@ class PreloadService {
         // Mark as preloading
         this.preloadingSet.add(songId);
 
-        try {
-            // Fire prefetch request (doesn't wait for completion)
-            await streamService.prefetch(song);
-
-            // Mark as preloaded
-            this.preloadCache.set(songId, {
-                timestamp: Date.now(),
-                preloading: false
+        // Fire prefetch request (fire-and-forget, don't await)
+        streamService.prefetch(song)
+            .then(() => {
+                // Mark as preloaded on success
+                this.preloadCache.set(songId, {
+                    timestamp: Date.now(),
+                    preloading: false
+                });
+                console.log(`[PreloadService] ✅ Preloaded ${songId}`);
+            })
+            .catch((error) => {
+                console.warn(`[PreloadService] Failed to preload ${songId}:`, error.message);
+            })
+            .finally(() => {
+                // Remove from preloading set
+                this.preloadingSet.delete(songId);
             });
-
-            console.log(`[PreloadService] ✅ Preloaded ${songId}`);
-        } catch (error) {
-            console.warn(`[PreloadService] Failed to preload ${songId}:`, error.message);
-        } finally {
-            // Remove from preloading set
-            this.preloadingSet.delete(songId);
-        }
     }
 
     /**

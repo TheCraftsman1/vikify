@@ -27,7 +27,7 @@ class PytubeExtractor:
         Extract audio stream URL from YouTube video
         
         Args:
-            video_id: YouTube video ID (11 characters)
+            video_id: YouTube video ID (typically 11 characters)
             
         Returns:
             Audio stream URL or None if failed
@@ -35,7 +35,7 @@ class PytubeExtractor:
         if not PYTUBE_AVAILABLE:
             return None
         
-        if not video_id or len(video_id) != 11:
+        if not video_id or len(video_id) < 10:
             print(f"[Pytube] Invalid video ID: {video_id}")
             return None
         
@@ -79,9 +79,22 @@ class PytubeExtractor:
             
             # Sort by bitrate (highest quality first)
             # pytubefix returns streams with .abr attribute
+            def parse_bitrate(stream):
+                """Parse bitrate from stream, returning numeric value"""
+                try:
+                    abr = stream.abr
+                    if not abr:
+                        return 0
+                    # Extract numeric value from strings like "128kbps", "128 kbps", etc.
+                    import re
+                    match = re.search(r'(\d+)', str(abr))
+                    return int(match.group(1)) if match else 0
+                except:
+                    return 0
+            
             sorted_streams = sorted(
                 audio_streams,
-                key=lambda s: int(s.abr.replace('kbps', '')) if s.abr else 0,
+                key=parse_bitrate,
                 reverse=True
             )
             
