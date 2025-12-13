@@ -8,6 +8,8 @@ import { PlayerProvider } from './context/PlayerContext';
 import { LikedSongsProvider } from './context/LikedSongsContext';
 import { OfflineProvider } from './context/OfflineContext';
 import { PlaylistProvider } from './context/PlaylistContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { CrossfadeProvider } from './context/CrossfadeContext';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // Debug logging capture - only in development mode
@@ -43,17 +45,21 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <OfflineProvider>
-          <LikedSongsProvider>
-            <PlaylistProvider>
-              <PlayerProvider>
-                <ErrorBoundary>
-                  <App />
-                </ErrorBoundary>
-              </PlayerProvider>
-            </PlaylistProvider>
-          </LikedSongsProvider>
-        </OfflineProvider>
+        <ThemeProvider>
+          <CrossfadeProvider>
+            <OfflineProvider>
+              <LikedSongsProvider>
+                <PlaylistProvider>
+                  <PlayerProvider>
+                    <ErrorBoundary>
+                      <App />
+                    </ErrorBoundary>
+                  </PlayerProvider>
+                </PlaylistProvider>
+              </LikedSongsProvider>
+            </OfflineProvider>
+          </CrossfadeProvider>
+        </ThemeProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,

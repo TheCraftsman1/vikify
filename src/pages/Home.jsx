@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Pause, Music2 } from 'lucide-react';
+import { Play, Pause, Music2, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '../context/PlayerContext';
 import { useAuth } from '../context/AuthContext';
@@ -7,6 +7,7 @@ import { useUI } from '../context/UIContext';
 import { albums } from '../data/songs';
 import { getFeaturedPlaylists, getNewReleases, getPlaylist, getUserPlaylists } from '../services/spotify';
 import { useOnlineStatus } from '../utils/online';
+import { getRecentlyPlayed } from '../services/historyService';
 
 const Home = () => {
     const navigate = useNavigate();
@@ -21,6 +22,7 @@ const Home = () => {
     const userImage = isAuthenticated && user?.image ? user.image : null;
     const [newReleases, setNewReleases] = useState([]);
     const [userPlaylists, setUserPlaylists] = useState([]);
+    const [recentlyPlayed, setRecentlyPlayed] = useState([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
 
     useEffect(() => {
@@ -52,6 +54,9 @@ const Home = () => {
         };
 
         loadSpotifyData();
+
+        // Load listening history
+        setRecentlyPlayed(getRecentlyPlayed());
     }, [isAuthenticated, isOnline]);
 
     const getGreeting = () => {

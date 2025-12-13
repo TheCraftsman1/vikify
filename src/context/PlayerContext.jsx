@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext';
 import { getRecommendations as getSpotifyRecommendations } from '../services/spotify';
 import { hapticMedium, hapticLight } from '../utils/haptics';
 import { updateNowPlaying, clearNowPlaying, onNowPlayingAction, isNative as isNativePlatform } from '../utils/nowPlaying';
+import { addToHistory } from '../services/historyService';
 
 const PlayerContext = createContext();
 
@@ -402,6 +403,9 @@ export const PlayerProvider = ({ children }) => {
         setProgress(0);
         setYoutubeUrl(null);
         setIsOfflinePlayback(false);
+
+        // Track in listening history
+        addToHistory(song);
 
         // If a playlist queue is provided, set it
         if (playlistQueue && Array.isArray(playlistQueue) && playlistQueue.length > 0) {
