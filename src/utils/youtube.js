@@ -51,6 +51,35 @@ export const prefetchYouTubeVideoId = async (query) => {
     }
 };
 
+/**
+ * Prefetch stream URLs for multiple video IDs (for preloading queue)
+ * Uses batch endpoint for efficiency
+ */
+export const prefetchStreamUrls = async (videoIds) => {
+    if (!videoIds?.length || isOffline()) return;
+    
+    // Filter out already cached IDs
+    const uncachedIds = videoIds.filter(id => !streamUrlCache.get(id));
+    if (!uncachedIds.length) return;
+    
+    try {
+        const response = await axios.post(`${BACKEND_URL}/api/stream/batch`, {
+            ids: uncachedIds.slice(0, 5) // Max 5 at a time
+        }, { timeout: 30000 });
+        
+        if (response.data?.results) {
+            for (const [videoId, result] of Object.entries(response.data.results)) {
+                if (result.success && result.url && isValidHttpUrl(result.url)) {
+                    streamUrlCache.set(videoId, result.url);
+                    console.log(`[YouTube] 📦 Preloaded ${videoId} via ${result.source}`);
+                }
+            }
+        }
+    } catch (e) {
+        console.log('[YouTube] Batch prefetch failed:', e.message);
+    }
+};
+
 export const getYouTubeVideoId = async (query) => {
     const key = normalizeQueryKey(query);
     if (!key) return null;
@@ -82,7 +111,7 @@ export const getYouTubeVideoId = async (query) => {
     return result;
 };
 
-export const getYouTubeStreamUrl = async (videoId) => {
+export const getYouTubeStreamUrl = async (videoId, title = '', artist = '') => {
     if (!videoId) return null;
 
     const cached = streamUrlCache.get(videoId);
@@ -92,6 +121,21 @@ export const getYouTubeStreamUrl = async (videoId) => {
 
     const audioUrl = await withRetry(
         async () => {
+            // Try new Cobalt-first endpoint first (much faster)
+            try {
+                const cobaltResponse = await axios.get(`${BACKEND_URL}/api/stream/${videoId}`, {
+                    params: { title, artist },
+                    timeout: 15000,
+                });
+                if (cobaltResponse.data?.success && cobaltResponse.data?.url && isValidHttpUrl(cobaltResponse.data.url)) {
+                    console.log(`[YouTube] ⚡ Stream via ${cobaltResponse.data.source} (${cobaltResponse.data.time})`);
+                    return cobaltResponse.data.url;
+                }
+            } catch (cobaltError) {
+                console.log('[YouTube] Cobalt-first failed, trying legacy...');
+            }
+            
+            // Fallback to legacy /stream endpoint
             const streamResponse = await axios.get(`${BACKEND_URL}/stream/${videoId}`, {
                 timeout: 20000,
             });

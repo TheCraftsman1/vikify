@@ -9,6 +9,12 @@ import time
 import requests
 import base64
 import urllib.parse
+import asyncio
+
+# Import new stream resolver components
+from cache_manager import cache
+from stream_resolver import resolver, resolve_stream_sync
+from sources.cobalt import cobalt
 
 app = Flask(__name__)
 
@@ -936,14 +942,114 @@ def get_spotify_recommendations():
     # All methods failed - return empty but success so frontend doesn't error
     return jsonify({'success': True, 'tracks': []})
 
+
+# ============================================================================
+# NEW COBALT-FIRST STREAM RESOLVER ENDPOINTS
+# ============================================================================
+
+@app.route('/api/stream/<video_id>')
+def api_stream(video_id):
+    """
+    Get audio stream URL using Cobalt-first strategy
+    
+    Priority:
+    1. Cache (instant)
+    2. Cobalt.tools (fast, <1s)
+    3. Piped/Invidious (race, <4s)
+    4. yt-dlp (fallback, reliable)
+    """
+    title = request.args.get('title', '')
+    artist = request.args.get('artist', '')
+    
+    try:
+        # Run async resolver
+        url, source, elapsed = resolve_stream_sync(video_id, title, artist)
+        
+        if url:
+            return jsonify({
+                'success': True,
+                'url': url,
+                'source': source,
+                'time': f"{elapsed:.2f}s",
+                'cached': source == 'cache'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'All sources failed',
+                'time': f"{elapsed:.2f}s"
+            }), 404
+            
+    except Exception as e:
+        print(f"[API] Stream error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/stream/batch', methods=['POST'])
+def api_stream_batch():
+    """
+    Batch resolve multiple video IDs (for preloading)
+    Request body: { "ids": ["id1", "id2", ...] }
+    """
+    data = request.get_json() or {}
+    video_ids = data.get('ids', [])[:10]  # Max 10 at a time
+    
+    results = {}
+    for vid in video_ids:
+        try:
+            url, source, elapsed = resolve_stream_sync(vid, '', '')
+            results[vid] = {
+                'success': bool(url),
+                'url': url,
+                'source': source,
+                'time': f"{elapsed:.2f}s"
+            }
+        except Exception as e:
+            results[vid] = {
+                'success': False,
+                'error': str(e)
+            }
+    
+    return jsonify({
+        'success': True,
+        'results': results
+    })
+
+
+@app.route('/api/stats')
+def api_stats():
+    """Get system statistics"""
+    return jsonify({
+        'cache': cache.get_stats(),
+        'resolver': resolver.get_stats(),
+        'cobalt': cobalt.get_health_stats()
+    })
+
+
+@app.route('/api/cache/clear', methods=['POST'])
+def api_cache_clear():
+    """Clear all caches (admin endpoint)"""
+    cache.clear_all()
+    return jsonify({'success': True, 'message': 'Cache cleared'})
+
+
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok'})
+    return jsonify({
+        'status': 'ok',
+        'cache_size': len(cache.url_cache),
+        'resolver_stats': resolver.get_stats()
+    })
 
 if __name__ == '__main__':
-    print("🎵 Vikify Backend Server (yt-dlp)")
-    print("   /search?q=song+name  - Search YouTube")
-    print("   /stream/<video_id>   - Get audio stream URL")
+    print("🎵 Vikify Backend Server (Cobalt-First)")
+    print("   /api/stream/<video_id>  - Get audio stream URL (Cobalt-first)")
+    print("   /api/stats              - System statistics")
+    print("   /search?q=song+name     - Search YouTube")
+    print("   /stream/<video_id>      - Legacy stream endpoint")
     print("   /download/<video_id> - Download audio as MP3")
     print(f"   Cache dir: {TEMP_DIR}")
     print("")
