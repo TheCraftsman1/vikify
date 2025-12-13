@@ -9,6 +9,7 @@ import SplashScreen from './components/SplashScreen';
 import PageLoader from './components/PageLoader';
 import { UIProvider } from './context/UIContext';
 import ProfileDrawer from './components/ProfileDrawer';
+import KeyboardHelp from './components/KeyboardHelp';
 import './App.css';
 import { Capacitor } from '@capacitor/core';
 import { pruneSpotifyPublicCaches } from './utils/spotifyCache';
@@ -126,6 +127,7 @@ function App() {
     <AuthProvider>
       <UIProvider>
         <AppContent />
+        <KeyboardHelp />
       </UIProvider>
     </AuthProvider>
   );

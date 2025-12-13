@@ -19,11 +19,15 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useOffline } from '../context/OfflineContext';
+import { usePlaylists } from '../context/PlaylistContext';
+import { useLikedSongs } from '../context/LikedSongsContext';
 import { getStorageUsage, clearAllOfflineData } from '../utils/offlineDB';
 
 const Settings = () => {
     const navigate = useNavigate();
     const { user, isAuthenticated, logout } = useAuth();
+    const { playlists } = usePlaylists();
+    const { likedSongs } = useLikedSongs();
     const [storageInfo, setStorageInfo] = useState({ usedMB: '0', songs: 0 });
     const [isClearing, setIsClearing] = useState(false);
 
@@ -55,6 +59,22 @@ const Settings = () => {
         if (window.confirm('Disconnect from Spotify?')) {
             logout();
         }
+    };
+
+    const handleExportPlaylists = () => {
+        const exportData = {
+            exportedAt: new Date().toISOString(),
+            version: '2.1.0',
+            playlists: playlists,
+            likedSongs: likedSongs,
+        };
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `vikify-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     return (
@@ -245,7 +265,13 @@ const Settings = () => {
                     <SettingsItem
                         icon={<Smartphone size={18} />}
                         title="Version"
-                        value="2.0.0"
+                        value="2.1.0"
+                    />
+                    <SettingsItem
+                        icon={<Download size={18} />}
+                        title="Export Playlists"
+                        subtitle="Backup playlists and liked songs to JSON"
+                        onClick={handleExportPlaylists}
                     />
                     <div style={{
                         textAlign: 'center',
