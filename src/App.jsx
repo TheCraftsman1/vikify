@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
@@ -6,20 +6,23 @@ import Player from './components/Player';
 import BottomNav from './components/BottomNav';
 import DownloadProgress from './components/DownloadProgress';
 import SplashScreen from './components/SplashScreen';
-import OnboardingPage from './pages/OnboardingPage';
-import Home from './pages/Home';
-import Search from './pages/Search';
-import Library from './pages/Library';
-import Downloads from './pages/Downloads';
-import PlaylistView from './pages/PlaylistView';
-import LikedSongs from './pages/LikedSongs';
-import Settings from './pages/Settings';
+import PageLoader from './components/PageLoader';
 import { UIProvider } from './context/UIContext';
 import ProfileDrawer from './components/ProfileDrawer';
 import './App.css';
 import { Capacitor } from '@capacitor/core';
 import { pruneSpotifyPublicCaches } from './utils/spotifyCache';
 import { pruneYouTubeCaches } from './utils/youtube';
+
+// Lazy-loaded pages for bundle splitting
+const Home = lazy(() => import('./pages/Home'));
+const Search = lazy(() => import('./pages/Search'));
+const Library = lazy(() => import('./pages/Library'));
+const Downloads = lazy(() => import('./pages/Downloads'));
+const PlaylistView = lazy(() => import('./pages/PlaylistView'));
+const LikedSongs = lazy(() => import('./pages/LikedSongs'));
+const Settings = lazy(() => import('./pages/Settings'));
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
 
 function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
@@ -31,10 +34,10 @@ function AppContent() {
     // Storage hygiene (safe to run on web and native)
     try {
       pruneSpotifyPublicCaches();
-    } catch {}
+    } catch { }
     try {
       pruneYouTubeCaches();
-    } catch {}
+    } catch { }
 
     // Browser-only notification permission prompt.
     // Android native permission is requested immediately in MainActivity.
@@ -70,7 +73,11 @@ function AppContent() {
 
   // Show onboarding for new users
   if (!hasCompletedOnboarding) {
-    return <OnboardingPage />;
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <OnboardingPage />
+      </Suspense>
+    );
   }
 
   // Main app
@@ -84,16 +91,18 @@ function AppContent() {
 
       {/* Main Content */}
       <main className="main-area">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/search" element={<Search />} />
-          <Route path="/library" element={<Library />} />
-          <Route path="/downloads" element={<Downloads />} />
-          <Route path="/liked" element={<LikedSongs />} />
-          <Route path="/playlist/:id" element={<PlaylistView />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/onboarding" element={<OnboardingPage />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/search" element={<Search />} />
+            <Route path="/library" element={<Library />} />
+            <Route path="/downloads" element={<Downloads />} />
+            <Route path="/liked" element={<LikedSongs />} />
+            <Route path="/playlist/:id" element={<PlaylistView />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/onboarding" element={<OnboardingPage />} />
+          </Routes>
+        </Suspense>
       </main>
 
       {/* Player Bar */}

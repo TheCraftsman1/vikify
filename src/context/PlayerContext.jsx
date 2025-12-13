@@ -342,6 +342,18 @@ export const PlayerProvider = ({ children }) => {
         return false;
     }, [currentSong, isOfflinePlayback]);
 
+    /**
+     * Prefetch a song's stream URL (for hover preloading).
+     * Call this on mouseenter to warm the cache before user clicks play.
+     */
+    const prefetchSong = useCallback((song) => {
+        if (!song || !navigator.onLine) return;
+        const query = `${song.title} ${song.artist}`;
+        console.log('[PlayerContext] Prefetching on hover:', song.title);
+        // Fire and forget - populates cache for instant playback
+        searchYouTube(query).catch(() => { });
+    }, []);
+
     // Trigger fetch when song changes
     useEffect(() => {
         if (currentSong) {
@@ -887,7 +899,7 @@ export const PlayerProvider = ({ children }) => {
             startSleepTimer, cancelSleepTimer, toggleFullScreen,
             addToQueue, clearQueue, skipAutoplaySong, seek, handleProgress, handleDuration,
             handleEnded, onPlayerReady,
-            reloadCurrentStream
+            reloadCurrentStream, prefetchSong
         }}>
             {children}
         </PlayerContext.Provider>
