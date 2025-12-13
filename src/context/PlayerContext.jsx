@@ -41,6 +41,7 @@ export const PlayerProvider = ({ children }) => {
     const sleepTimerRef = useRef(null);
     const progressRafRef = useRef(null);
     const pendingProgressRef = useRef(null);
+    const isLoadingRef = useRef(false); // Sync guard against race conditions
 
     // Stream-stall recovery (YouTube direct URLs can intermittently stall/expire)
     const pendingSeekAfterReloadRef = useRef(null); // seconds
@@ -392,11 +393,18 @@ export const PlayerProvider = ({ children }) => {
     const playSong = async (song, playlistQueue = null) => {
         console.log("[PlayerContext] playSong:", song?.title);
 
+        // Guard: prevent race conditions from rapid clicks
+        if (isLoadingRef.current) {
+            console.log("[PlayerContext] Already loading, ignoring click");
+            return;
+        }
+
         if (currentSong?.id === song.id) {
             togglePlay();
             return;
         }
 
+        isLoadingRef.current = true;
         setIsLoading(true);
         setCurrentSong(song);
         setIsPlaying(false);
@@ -436,6 +444,7 @@ export const PlayerProvider = ({ children }) => {
                 blobUrlRef.current = blobUrl;
                 setYoutubeUrl(blobUrl);
                 setIsOfflinePlayback(true);
+                isLoadingRef.current = false;
                 setIsLoading(false);
                 return;
             }
@@ -473,6 +482,7 @@ export const PlayerProvider = ({ children }) => {
             }
         }
 
+        isLoadingRef.current = false;
         setIsLoading(false);
     };
 
