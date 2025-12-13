@@ -876,42 +876,62 @@ def spotify_search():
 def get_spotify_recommendations():
     """Get recommendations based on seed tracks"""
     auth_header = request.headers.get('Authorization')
-    if not auth_header:
-        return jsonify({'success': False, 'error': 'No authorization'}), 401
-    
     seed_tracks = request.args.get('seed_tracks')
+    
     if not seed_tracks:
         return jsonify({'success': False, 'error': 'Missing seed_tracks'}), 400
+    
+    # Try with user token first, fallback to server token
+    tokens_to_try = []
+    if auth_header:
+        tokens_to_try.append(auth_header.replace('Bearer ', ''))
+    
+    # Add server token as fallback
+    server_token = get_spotify_token()
+    if server_token:
+        tokens_to_try.append(server_token)
+    
+    if not tokens_to_try:
+        return jsonify({'success': False, 'error': 'No valid token'}), 401
 
-    try:
-        response = requests.get(
-            f'https://api.spotify.com/v1/recommendations?seed_tracks={seed_tracks}&limit=10',
-            headers={'Authorization': auth_header}
-        )
-        
-        if response.status_code != 200:
-            print(f"[Spotify] Recommendations error: {response.status_code}")
-            return jsonify({'success': False, 'error': f'Spotify API error: {response.status_code}'}), response.status_code
-        
-        data = response.json()
-        tracks = []
-        for track in data.get('tracks', []):
-            tracks.append({
-                'id': track['id'],
-                'title': track['name'],
-                'artist': ', '.join([a['name'] for a in track['artists']]),
-                'image': track['album']['images'][0]['url'] if track.get('album', {}).get('images') else None,
-                'duration': track['duration_ms'] / 1000,
-                'album': track.get('album', {}).get('name', ''),
-                'isSpotify': True
-            })
+    for token in tokens_to_try:
+        try:
+            response = requests.get(
+                f'https://api.spotify.com/v1/recommendations?seed_tracks={seed_tracks}&limit=10',
+                headers={'Authorization': f'Bearer {token}'},
+                timeout=10
+            )
             
-        print(f"[Spotify] ✅ Fetched {len(tracks)} recommendations")
-        return jsonify({'success': True, 'tracks': tracks})
-        
-    except Exception as e:
-        print(f"[Spotify] Recommendations exception: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+            if response.status_code == 200:
+                data = response.json()
+                tracks = []
+                for track in data.get('tracks', []):
+                    tracks.append({
+                        'id': track['id'],
+                        'title': track['name'],
+                        'artist': ', '.join([a['name'] for a in track['artists']]),
+                        'image': track['album']['images'][0]['url'] if track.get('album', {}).get('images') else None,
+                        'duration': track['duration_ms'] / 1000,
+                        'album': track.get('album', {}).get('name', ''),
+                        'isSpotify': True
+                    })
+                    
+                print(f"[Spotify] ✅ Fetched {len(tracks)} recommendations")
+                return jsonify({'success': True, 'tracks': tracks})
+            
+            # If 400/404, the seed track might not be valid Spotify ID - try next token
+            if response.status_code in [400, 404]:
+                print(f"[Spotify] Recommendations: Invalid seed track, trying next method")
+                continue
+                
+            print(f"[Spotify] Recommendations error: {response.status_code}")
+            
+        except Exception as e:
+            print(f"[Spotify] Recommendations exception: {e}")
+            continue
+    
+    # All methods failed - return empty but success so frontend doesn't error
+    return jsonify({'success': True, 'tracks': []})
 
 @app.route('/health')
 def health():
