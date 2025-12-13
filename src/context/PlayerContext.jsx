@@ -464,6 +464,7 @@ export const PlayerProvider = ({ children }) => {
             else {
                 if (!navigator.onLine) {
                     console.error("[PlayerContext] ❌ Offline and song not cached");
+                    isLoadingRef.current = false;
                     setIsLoading(false);
                     return;
                 }
@@ -479,6 +480,8 @@ export const PlayerProvider = ({ children }) => {
                     setYoutubeUrl(song.previewUrl);
                 } else {
                     console.error("[PlayerContext] ❌ No audio source");
+                    isLoadingRef.current = false;
+                    setIsLoading(false);
                 }
             }
         } catch (error) {
