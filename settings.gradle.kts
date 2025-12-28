@@ -18,7 +18,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "OuterTune"
+rootProject.name = "Vikify"
 include(":app")
 include(":innertube")
 include(":kugou")

@@ -1,31 +1,17 @@
-## material-color-utilities
+# Vikify Modules
 
-Commit: c50b4106030b35449baf7ec71b74963deff072dd
+This project uses several modules:
 
-Source: https://github.com/material-foundation/material-color-utilities
+## Core Modules
 
-Path: /material-color-utilities
+- **app** - Main Android application
+- **innertube** - YouTube Music API client (InnerTube)
 
-Notes:
-- https://github.com/material-foundation/material-color-utilities/tree/main/java
+## Supporting Modules
 
-
-## Gramophone Lyrics parser
-
-Commit: 6d71d69fb036a91decc65ed362cde84a3468c2c6
-
-Source: https://github.com/FoedusProgramme/Gramophone
-
-Path: /app/src/main/java/org/akanework/gramophone/logic
-
-Notes: 
-- The lyrics parser has been modified to work with OuterTune (usually) where denoted
-
-
-## TreeDocumentFile
-
-Commit: 1d17c1928669610eb315310418c406d3bc7df981 
-
-Source: https://android.googlesource.com/platform/frameworks/support/
-
-path: \app\src\main\java\androidx\documentfile\provider
+- **kugou** - KuGou lyrics provider
+- **lrclib** - LrcLib lyrics provider
+- **material-color-utilities** - Material Design color utilities
+- **media** - Media3 ExoPlayer extensions
+- **taglib** - Audio metadata extraction
+- **ffMetadataEx** - FFmpeg metadata extraction
