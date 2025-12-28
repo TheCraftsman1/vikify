@@ -14,6 +14,8 @@ room = "2.8.3"
 hilt = "2.57.2"
 ktor = "3.3.1"
 ksp = "2.3.1"
+googleServices = "4.4.2"
+firebaseBom = "33.7.0"
 
 [libraries]
 annotation = { module = "androidx.annotation:annotation", version.ref = "annotation" }
@@ -78,9 +80,14 @@ brotli = { group = "org.brotli", name = "dec", version = "0.1.2" }
 
 desugaring = { group = "com.android.tools", name = "desugar_jdk_libs", version = "2.1.5" }
 
+# firebase
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version = "21.3.0" }
+
 junit = { group = "junit", name = "junit", version = "4.13.2" }
 
-newpipe-extractor = { group = "com.github.TeamNewPipe", name = "NewPipeExtractor", version = "4368f2b9bb7ee5b0340a0bc25375e44fe23ab105" }
+newpipe-extractor = { group = "com.github.TeamNewPipe", name = "NewPipeExtractor", version = "0.24.6" }
 
 [plugins]
 aboutlibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "aboutLibraries" }
@@ -88,3 +95,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
