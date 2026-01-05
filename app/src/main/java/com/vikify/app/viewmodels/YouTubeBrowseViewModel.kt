@@ -15,18 +15,29 @@ import javax.inject.Inject
 class YouTubeBrowseViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
-    private val browseId = savedStateHandle.get<String>("browseId")!!
-    private val params = savedStateHandle.get<String>("params")
+    // Optional browseId from navigation args (if using NavController)
+    private val navBrowseId: String? = savedStateHandle.get<String>("browseId")
+    private val navParams: String? = savedStateHandle.get<String>("params")
 
     val result = MutableStateFlow<BrowseResult?>(null)
+    val isLoading = MutableStateFlow(false)
 
     init {
+        // If provided in nav args, load automatically
+        if (navBrowseId != null) {
+            load(navBrowseId, navParams)
+        }
+    }
+    
+    fun load(browseId: String, params: String? = null) {
         viewModelScope.launch {
+            isLoading.value = true
             YouTube.browse(browseId, params).onSuccess {
                 result.value = it
             }.onFailure {
                 reportException(it)
             }
+            isLoading.value = false
         }
     }
 }

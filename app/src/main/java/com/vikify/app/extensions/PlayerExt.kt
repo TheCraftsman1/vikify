@@ -32,33 +32,44 @@ fun Player.toggleShuffleMode() {
 }
 
 fun Player.getQueueWindows(): List<Timeline.Window> {
-    val timeline = currentTimeline
-    if (timeline.isEmpty) {
+    try {
+        val timeline = currentTimeline
+        if (timeline.isEmpty) {
+            return emptyList()
+        }
+        val queue = ArrayDeque<Timeline.Window>()
+        val queueSize = timeline.windowCount
+
+        val currentMediaItemIndex: Int = currentMediaItemIndex
+        
+        // Bounds check before accessing current window
+        if (currentMediaItemIndex < 0 || currentMediaItemIndex >= queueSize) {
+            return emptyList()
+        }
+        
+        queue.add(timeline.getWindow(currentMediaItemIndex, Timeline.Window()))
+
+        var firstMediaItemIndex = currentMediaItemIndex
+        var lastMediaItemIndex = currentMediaItemIndex
+        while ((firstMediaItemIndex != C.INDEX_UNSET || lastMediaItemIndex != C.INDEX_UNSET) && queue.size < queueSize) {
+            if (lastMediaItemIndex != C.INDEX_UNSET) {
+                lastMediaItemIndex = timeline.getNextWindowIndex(lastMediaItemIndex, REPEAT_MODE_OFF, false)
+                if (lastMediaItemIndex != C.INDEX_UNSET && lastMediaItemIndex >= 0 && lastMediaItemIndex < queueSize) {
+                    queue.add(timeline.getWindow(lastMediaItemIndex, Timeline.Window()))
+                }
+            }
+            if (firstMediaItemIndex != C.INDEX_UNSET && queue.size < queueSize) {
+                firstMediaItemIndex = timeline.getPreviousWindowIndex(firstMediaItemIndex, REPEAT_MODE_OFF, false)
+                if (firstMediaItemIndex != C.INDEX_UNSET && firstMediaItemIndex >= 0 && firstMediaItemIndex < queueSize) {
+                    queue.addFirst(timeline.getWindow(firstMediaItemIndex, Timeline.Window()))
+                }
+            }
+        }
+        return queue.toList()
+    } catch (e: Exception) {
+        // Gracefully handle timeline changes
         return emptyList()
     }
-    val queue = ArrayDeque<Timeline.Window>()
-    val queueSize = timeline.windowCount
-
-    val currentMediaItemIndex: Int = currentMediaItemIndex
-    queue.add(timeline.getWindow(currentMediaItemIndex, Timeline.Window()))
-
-    var firstMediaItemIndex = currentMediaItemIndex
-    var lastMediaItemIndex = currentMediaItemIndex
-    while ((firstMediaItemIndex != C.INDEX_UNSET || lastMediaItemIndex != C.INDEX_UNSET) && queue.size < queueSize) {
-        if (lastMediaItemIndex != C.INDEX_UNSET) {
-            lastMediaItemIndex = timeline.getNextWindowIndex(lastMediaItemIndex, REPEAT_MODE_OFF, false)
-            if (lastMediaItemIndex != C.INDEX_UNSET) {
-                queue.add(timeline.getWindow(lastMediaItemIndex, Timeline.Window()))
-            }
-        }
-        if (firstMediaItemIndex != C.INDEX_UNSET && queue.size < queueSize) {
-            firstMediaItemIndex = timeline.getPreviousWindowIndex(firstMediaItemIndex, REPEAT_MODE_OFF, false)
-            if (firstMediaItemIndex != C.INDEX_UNSET) {
-                queue.addFirst(timeline.getWindow(firstMediaItemIndex, Timeline.Window()))
-            }
-        }
-    }
-    return queue.toList()
 }
 
 fun Player.getCurrentQueueIndex(): Int {

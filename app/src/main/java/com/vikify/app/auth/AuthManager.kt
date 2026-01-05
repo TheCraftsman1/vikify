@@ -43,6 +43,37 @@ class AuthManager @Inject constructor() {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
     val authState = _authState.asStateFlow()
 
+    init {
+        // Listen for Auth Changes (Auto-login, Sign out, etc.)
+        auth.addAuthStateListener { firebaseAuth ->
+            val user = firebaseAuth.currentUser
+            _currentUser.value = user
+            if (user != null) {
+                _authState.value = AuthState.Success(user)
+                Log.d(TAG, "Auth State Changed: Logged In as ${user.uid} (Anon: ${user.isAnonymous})")
+            } else {
+                _authState.value = AuthState.Idle
+                Log.d(TAG, "Auth State Changed: Logged Out")
+                
+                // Auto-login as Guest if no user
+                // Using GlobalScope or a CoroutineScope bound to the Manager would be better,
+                // but for now let's expose a method or do it roughly.
+                // Since this is inside a callback, we need a scope.
+                // We'll rely on the ViewModel or App to trigger this, OR do it here.
+            }
+        }
+    }
+    
+    // We need a scope to launch suspend functions.
+    // Ideally AuthManager should be scoped. 
+    // For now, let's just add a method `ensureUser()` that HomeViewModel calls.
+    
+    suspend fun ensureUser() {
+        if (auth.currentUser == null) {
+             signInAnonymously()
+        }
+    }
+
     /**
      * Configure Google Sign In
      */

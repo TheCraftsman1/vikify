@@ -1,6 +1,7 @@
 package com.vikify.app.vikifyui.theme
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,67 +13,148 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 /**
- * Morning Mist - Ethereal Day Background
- * A subtle, breathing radial gradient (White -> Mist Blue)
+ * Aurora Day - Premium Light Mode Background
+ * Multi-orb warm gradient with floating color accents (Peach, Lavender, Mint)
+ * Designed to compete with dark mode's LivingBackground
  */
 @Composable
 fun EtherealBackground(
     modifier: Modifier = Modifier,
+    animated: Boolean = true, // When false, show plain solid color
     content: @Composable () -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "ethereal_pulse")
+    // If animations disabled, show simple warm cream background
+    if (!animated) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color(0xFFFFFBF5)) // Warm Cream
+        ) {
+            content()
+        }
+        return
+    }
 
-    // Animate the center point slightly for organic movement
-    val centerX by infiniteTransition.animateFloat(
+    val infiniteTransition = rememberInfiniteTransition(label = "aurora_day")
+
+    // ═══════════════════════════════════════════════════════════════
+    // ORB 1: PEACH ROSE (Top Right)
+    // ═══════════════════════════════════════════════════════════════
+    val orb1X by infiniteTransition.animateFloat(
+        initialValue = 0.7f,
+        targetValue = 0.9f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 18000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "orb1X"
+    )
+    val orb1Y by infiniteTransition.animateFloat(
+        initialValue = 0.1f,
+        targetValue = 0.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 14000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "orb1Y"
+    )
+
+    // ═══════════════════════════════════════════════════════════════
+    // ORB 2: LAVENDER MIST (Center)
+    // ═══════════════════════════════════════════════════════════════
+    val orb2X by infiniteTransition.animateFloat(
         initialValue = 0.3f,
-        targetValue = 0.7f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 20000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "orb2X"
+    )
+    val orb2Y by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 16000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "orb2Y"
+    )
+
+    // ═══════════════════════════════════════════════════════════════
+    // ORB 3: SOFT MINT (Bottom Left)
+    // ═══════════════════════════════════════════════════════════════
+    val orb3X by infiniteTransition.animateFloat(
+        initialValue = 0.1f,
+        targetValue = 0.4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 22000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "orb3X"
+    )
+    val orb3Y by infiniteTransition.animateFloat(
+        initialValue = 0.7f,
+        targetValue = 0.9f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 15000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "centerX"
-    )
-    
-    val centerY by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 12000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "centerY"
+        label = "orb3Y"
     )
 
-    // Animate radius for "breathing" effect
-    val radius by infiniteTransition.animateFloat(
-        initialValue = 1200f,
-        targetValue = 1800f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 8000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "radius"
-    )
+    // Aurora Day Color Palette (Warm & Inviting)
+    val baseColor = Color(0xFFFFFBF5)       // Warm Cream Base
+    val peachRose = Color(0xFFFFE5E0)       // Soft Peach/Rose
+    val lavenderMist = Color(0xFFE8E0FF)    // Lavender Mist
+    val softMint = Color(0xFFE0FFF5)        // Soft Mint
+    val warmWhite = Color(0xFFFFF8F3)       // Warm White
 
-    // Ethereal Mist Colors
-    val centerColor = Color(0xFFFFFFFF) // Pure Light
-    val midColor = Color(0xFFF5F7FA)    // Soft Cloud
-    val edgeColor = Color(0xFFF0F4F8)   // Mist Blue
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
+    Box(modifier = modifier.fillMaxSize().background(baseColor)) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            // Draw 3 overlapping gradient orbs
+            
+            // Orb 1: Peach Rose (top right area)
+            drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(centerColor, midColor, edgeColor),
-                    center = Offset(
-                        x = if (centerX.isNaN()) 500f else centerX * 1000f, // Fallback/Scaling
-                        y = if (centerY.isNaN()) 1000f else centerY * 2000f
+                    colors = listOf(
+                        peachRose.copy(alpha = 0.6f),
+                        peachRose.copy(alpha = 0.3f),
+                        Color.Transparent
                     ),
-                    radius = radius
+                    center = Offset(size.width * orb1X, size.height * orb1Y),
+                    radius = size.width * 0.5f
                 )
             )
-    ) {
+            
+            // Orb 2: Lavender Mist (center area)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        lavenderMist.copy(alpha = 0.5f),
+                        lavenderMist.copy(alpha = 0.2f),
+                        Color.Transparent
+                    ),
+                    center = Offset(size.width * orb2X, size.height * orb2Y),
+                    radius = size.width * 0.6f
+                )
+            )
+            
+            // Orb 3: Soft Mint (bottom left area)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        softMint.copy(alpha = 0.5f),
+                        softMint.copy(alpha = 0.2f),
+                        Color.Transparent
+                    ),
+                    center = Offset(size.width * orb3X, size.height * orb3Y),
+                    radius = size.width * 0.5f
+                )
+            )
+        }
+        
         content()
     }
 }
+

@@ -162,21 +162,38 @@ object SpotifyAuthManager {
      * Refresh the access token using the stored refresh token
      * Returns true if refresh was successful
      */
+    private const val CLIENT_ID = "242fffd1ca15426ab8c7396a6931b780"
+    private const val CLIENT_SECRET = "5a479c5370ba48bc860048d89878ee4d"
+    private const val TOKEN_URL = "https://accounts.spotify.com/api/token"
+    
+    /**
+     * Refresh the access token using the stored refresh token
+     * Returns true if refresh was successful
+     */
     suspend fun refreshAccessToken(context: Context): Boolean = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val refreshToken = prefs.getString(KEY_REFRESH_TOKEN, null) 
             ?: return@withContext false
         
         try {
-            Log.d(TAG, "Refreshing Spotify access token...")
+            Log.d(TAG, "Refreshing Spotify access token (Direct)...")
             
             val requestBody = FormBody.Builder()
+                .add("grant_type", "refresh_token")
                 .add("refresh_token", refreshToken)
                 .build()
             
+            val authString = "$CLIENT_ID:$CLIENT_SECRET"
+            val authHeader = "Basic " + android.util.Base64.encodeToString(
+                authString.toByteArray(), 
+                android.util.Base64.NO_WRAP
+            )
+            
             val request = Request.Builder()
-                .url("$BACKEND_URL/auth/spotify/refresh")
+                .url(TOKEN_URL)
                 .post(requestBody)
+                .addHeader("Authorization", authHeader)
+                .addHeader("Content-Type", "application/x-www-form-urlencoded")
                 .build()
             
             val response = client.newCall(request).execute()
@@ -185,30 +202,27 @@ object SpotifyAuthManager {
                 val body = response.body?.string() ?: return@withContext false
                 val json = JSONObject(body)
                 
-                if (json.optBoolean("success", false)) {
-                    val newAccessToken = json.optString("access_token")
-                    val newRefreshToken = json.optString("refresh_token", null)
-                    val expiresIn = json.optLong("expires_in", 3600L)
-                    
-                    if (newAccessToken.isNotEmpty()) {
-                        prefs.edit().apply {
-                            putString(KEY_ACCESS_TOKEN, newAccessToken)
-                            // Only update refresh token if a new one was provided
-                            if (!newRefreshToken.isNullOrEmpty()) {
-                                putString(KEY_REFRESH_TOKEN, newRefreshToken)
-                            }
-                            putLong(KEY_TOKEN_EXPIRY, System.currentTimeMillis() + (expiresIn * 1000))
-                            apply()
+                // Spotify API returns explicit fields, not "success" wrapper
+                val newAccessToken = json.optString("access_token")
+                val newRefreshToken = json.optString("refresh_token", null) // Might not always return a new one
+                val expiresIn = json.optLong("expires_in", 3600L)
+                val scope = json.optString("scope", "")
+                
+                if (newAccessToken.isNotEmpty()) {
+                    prefs.edit().apply {
+                        putString(KEY_ACCESS_TOKEN, newAccessToken)
+                        // Only update refresh token if a new one was provided
+                        if (!newRefreshToken.isNullOrEmpty()) {
+                            putString(KEY_REFRESH_TOKEN, newRefreshToken)
                         }
-                        Log.d(TAG, "Token refreshed successfully, new expiry in ${expiresIn}s")
-                        return@withContext true
+                        putLong(KEY_TOKEN_EXPIRY, System.currentTimeMillis() + (expiresIn * 1000))
+                        apply()
                     }
-                } else {
-                    val error = json.optString("error", "Unknown error")
-                    Log.e(TAG, "Token refresh failed: $error")
+                    Log.d(TAG, "Token refreshed successfully, new expiry in ${expiresIn}s")
+                    return@withContext true
                 }
             } else {
-                Log.e(TAG, "Token refresh HTTP error: ${response.code}")
+                Log.e(TAG, "Token refresh HTTP error: ${response.code} ${response.body?.string()}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Token refresh exception", e)

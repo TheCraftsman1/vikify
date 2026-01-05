@@ -146,45 +146,55 @@ object NeonColors {
 }
 
 // ============================================
-// LIGHT COLORS OBJECT
+// LIGHT COLORS OBJECT - AURORA DAY PALETTE
+// Premium warm tones to compete with dark mode
 // ============================================
 object LightColors {
-    val Background = MistBlue
-    val Surface = Color(0xFFFFFFFF)
-    val SurfaceElevated = SoftCloud
-    val SurfaceVariant = Color(0xFFF0F0FF)
+    // Backgrounds - Warm Cream Base
+    val Background = Color(0xFFFFFBF5)          // Warm Cream (was cold gray)
+    val Surface = Color(0xFFFFFFFF)             // Pure White
+    val SurfaceElevated = Color(0xFFFFF8F3)     // Warm White
+    val SurfaceVariant = Color(0xFFFFF5F0)      // Soft Peach Tint
     
-    val TextPrimary = DeepSlate
-    val TextSecondary = CoolGrey
-    val TextTertiary = Color(0xFFA0AEC0)
+    // Text - Warm Black for readability
+    val TextPrimary = Color(0xFF1A1A1A)         // Warm Black (not blue-black)
+    val TextSecondary = Color(0xFF6B7280)       // Soft Gray
+    val TextTertiary = Color(0xFFA0AEC0)        // Light Gray
     
-    val Accent = Color(0xFF8B5CF6)
-    val AccentMuted = Color(0xFFC4B5FD)
-    val AccentGlow = Color(0xFFDDD6FE)
+    // Accent - Keep vibrant purple
+    val Accent = Color(0xFF8B5CF6)              // Vibrant Purple
+    val AccentMuted = Color(0xFFC4B5FD)         // Soft Lavender
+    val AccentGlow = Color(0xFFDDD6FE)          // Light Lavender
     
-    val Border = Color(0x0D000000)
-    val BorderLight = Color(0x05000000)
-    val Divider = Color(0x0D000000)
+    // Borders - Subtle warm tones
+    val Border = Color(0x0D1A1A1A)              // Very subtle
+    val BorderLight = Color(0x051A1A1A)         // Almost invisible
+    val Divider = Color(0x0D1A1A1A)             // Subtle divider
     
-    val PlayerBackground = Color.White.copy(alpha = 0.8f)
+    // Player
+    val PlayerBackground = Color(0xFFFFFBF5).copy(alpha = 0.95f)
     val PlayerSurface = Color.White
-    val ProgressBackground = Color(0xFFE2E8F0)
+    val ProgressBackground = Color(0xFFE8E0FF)   // Lavender track
     val ProgressFill = Accent
     
-    val NavBackground = Color.White.copy(alpha = 0.9f)
-    val NavIconActive = DeepSlate
-    val NavIconInactive = CoolGrey
+    // Navigation
+    val NavBackground = Color.White.copy(alpha = 0.95f)
+    val NavIconActive = Color(0xFF1A1A1A)
+    val NavIconInactive = Color(0xFF9CA3AF)
     
-    val ShimmerBase = Color(0xFFEDF2F7)
+    // Shimmer
+    val ShimmerBase = Color(0xFFFFF5F0)          // Warm shimmer
     val ShimmerHighlight = Color.White
     
+    // Status
     val Success = Color(0xFF34D399)
     val Error = Color(0xFFF87171)
     val Warning = Color(0xFFFBBF24)
     
-    val GlassBackground = Color.White.copy(alpha = 0.6f)
-    val GlassBackgroundLight = Color.White.copy(alpha = 0.4f)
-    val GlassBorder = Color(0x1FFFFFFF)
+    // Glass/Blur effects (for cards/overlays)
+    val GlassBackground = Color.White.copy(alpha = 0.7f)
+    val GlassBackgroundLight = Color.White.copy(alpha = 0.5f)
+    val GlassBorder = Color(0x1A8B5CF6)          // Purple tinted border
 }
 
 // ============================================

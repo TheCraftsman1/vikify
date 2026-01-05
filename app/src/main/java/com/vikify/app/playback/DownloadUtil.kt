@@ -79,7 +79,7 @@ class DownloadUtil @Inject constructor(
     val TAG = DownloadUtil::class.simpleName.toString()
 
     private val connectivityManager = context.getSystemService<ConnectivityManager>()!!
-    private val audioQuality by enumPreference(context, AudioQualityKey, AudioQuality.HIGH)
+    private val audioQuality by enumPreference(context, AudioQualityKey, AudioQuality.AUTO)
     private val songUrlCache = HashMap<String, Pair<String, Long>>()
     private val dataSourceFactory = ResolvingDataSource.Factory(
         CacheDataSource.Factory()
@@ -164,7 +164,17 @@ class DownloadUtil @Inject constructor(
     }
 
     fun download(song: MediaMetadata) {
-        downloadSong(song.id, song.title)
+        // CRITICAL: Ensure song exists in database BEFORE downloading
+        // Otherwise updateDownloadStatus won't find it and song won't appear in Downloads
+        CoroutineScope(Dispatchers.IO).launch {
+            val existingSong = database.song(song.id).first()
+            if (existingSong == null) {
+                // Insert song into database (upsert-safe insert)
+                database.insert(song)
+                Log.d(TAG, "Inserted song ${song.id} into database before download")
+            }
+            downloadSong(song.id, song.title)
+        }
     }
 
     fun download(song: SongEntity) {
@@ -457,6 +467,15 @@ class DownloadUtil @Inject constructor(
                         if (download.state == Download.STATE_COMPLETED) {
                             val updateTime =
                                 Instant.ofEpochMilli(download.updateTimeMs).atZone(ZoneOffset.UTC).toLocalDateTime()
+                            
+                            // Check if song exists in database first
+                            val existingSong = database.song(download.request.id).first()
+                            if (existingSong == null) {
+                                Log.e(TAG, "DOWNLOAD COMPLETE but song NOT in database: ${download.request.id}")
+                            } else {
+                                Log.d(TAG, "DOWNLOAD COMPLETE - updating status for: ${download.request.id}")
+                            }
+                            
                             database.updateDownloadStatus(download.request.id, updateTime)
                         } else {
                             database.updateDownloadStatus(download.request.id, null)

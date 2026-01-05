@@ -1,0 +1,333 @@
+﻿
+> Configure project :media:test-proguard
+WARNING: BuildType 'debug' is both debuggable and has 'isMinifyEnabled' set to true.
+All code optimizations and obfuscation are disabled for debuggable builds.
+
+> Task :media:lib-exoplayer-workmanager:preBuild UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:preDebugBuild UP-TO-DATE
+> Task :innertube:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :media:lib-exoplayer-workmanager:writeDebugAarMetadata UP-TO-DATE
+> Task :media:lib-common:preBuild UP-TO-DATE
+> Task :media:lib-common:preDebugBuild UP-TO-DATE
+> Task :media:lib-common:writeDebugAarMetadata UP-TO-DATE
+> Task :media:lib-database:preBuild UP-TO-DATE
+> Task :media:lib-database:preDebugBuild UP-TO-DATE
+> Task :media:lib-database:writeDebugAarMetadata UP-TO-DATE
+> Task :media:lib-decoder:preBuild UP-TO-DATE
+> Task :media:lib-decoder:preDebugBuild UP-TO-DATE
+> Task :media:lib-decoder:writeDebugAarMetadata UP-TO-DATE
+> Task :media:lib-datasource:preBuild UP-TO-DATE
+> Task :media:lib-datasource:preDebugBuild UP-TO-DATE
+> Task :media:lib-datasource:writeDebugAarMetadata UP-TO-DATE
+> Task :media:lib-container:preBuild UP-TO-DATE
+> Task :media:lib-container:preDebugBuild UP-TO-DATE
+> Task :media:lib-container:writeDebugAarMetadata UP-TO-DATE
+> Task :media:lib-extractor:preBuild UP-TO-DATE
+> Task :media:lib-extractor:preDebugBuild UP-TO-DATE
+> Task :media:lib-extractor:writeDebugAarMetadata UP-TO-DATE
+> Task :media:lib-session:preBuild UP-TO-DATE
+> Task :media:lib-session:preDebugBuild UP-TO-DATE
+> Task :media:lib-session:writeDebugAarMetadata UP-TO-DATE
+> Task :media:lib-datasource-okhttp:preBuild UP-TO-DATE
+> Task :media:lib-datasource-okhttp:preDebugBuild UP-TO-DATE
+> Task :media:lib-datasource-okhttp:writeDebugAarMetadata UP-TO-DATE
+> Task :media:lib-exoplayer:preBuild UP-TO-DATE
+> Task :media:lib-exoplayer:preDebugBuild UP-TO-DATE
+> Task :media:lib-exoplayer:writeDebugAarMetadata UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:processDebugNavigationResources UP-TO-DATE
+> Task :media:lib-common:processDebugNavigationResources UP-TO-DATE
+> Task :media:lib-database:processDebugNavigationResources UP-TO-DATE
+> Task :media:lib-decoder:processDebugNavigationResources UP-TO-DATE
+> Task :media:lib-datasource:processDebugNavigationResources UP-TO-DATE
+> Task :media:lib-container:processDebugNavigationResources UP-TO-DATE
+> Task :media:lib-extractor:processDebugNavigationResources UP-TO-DATE
+> Task :media:lib-session:processDebugNavigationResources UP-TO-DATE
+> Task :media:lib-datasource-okhttp:processDebugNavigationResources UP-TO-DATE
+> Task :media:lib-exoplayer:processDebugNavigationResources UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:generateDebugResValues UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:generateDebugResources UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:packageDebugResources UP-TO-DATE
+> Task :media:lib-common:generateDebugResValues UP-TO-DATE
+> Task :media:lib-common:generateDebugResources UP-TO-DATE
+> Task :innertube:compileKotlin UP-TO-DATE
+> Task :media:lib-common:packageDebugResources UP-TO-DATE
+> Task :innertube:compileJava NO-SOURCE
+> Task :media:lib-database:generateDebugResValues UP-TO-DATE
+> Task :innertube:processResources NO-SOURCE
+> Task :media:lib-database:generateDebugResources UP-TO-DATE
+> Task :innertube:classes UP-TO-DATE
+> Task :media:lib-database:packageDebugResources UP-TO-DATE
+> Task :media:lib-decoder:generateDebugResValues UP-TO-DATE
+> Task :media:lib-decoder:generateDebugResources UP-TO-DATE
+> Task :innertube:jar UP-TO-DATE
+> Task :media:lib-decoder:packageDebugResources UP-TO-DATE
+> Task :media:lib-datasource:generateDebugResValues UP-TO-DATE
+> Task :kugou:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :media:lib-datasource:generateDebugResources UP-TO-DATE
+> Task :media:lib-datasource:packageDebugResources UP-TO-DATE
+> Task :media:lib-container:generateDebugResValues UP-TO-DATE
+> Task :media:lib-container:generateDebugResources UP-TO-DATE
+> Task :media:lib-container:packageDebugResources UP-TO-DATE
+> Task :media:lib-extractor:generateDebugResValues UP-TO-DATE
+> Task :media:lib-extractor:generateDebugResources UP-TO-DATE
+> Task :media:lib-extractor:packageDebugResources UP-TO-DATE
+> Task :media:lib-session:generateDebugResValues UP-TO-DATE
+> Task :media:lib-session:generateDebugResources UP-TO-DATE
+> Task :kugou:compileKotlin UP-TO-DATE
+> Task :media:lib-session:packageDebugResources UP-TO-DATE
+> Task :kugou:compileJava NO-SOURCE
+> Task :media:lib-datasource-okhttp:generateDebugResValues UP-TO-DATE
+> Task :kugou:processResources NO-SOURCE
+> Task :kugou:classes UP-TO-DATE
+> Task :media:lib-datasource-okhttp:generateDebugResources UP-TO-DATE
+> Task :media:lib-datasource-okhttp:packageDebugResources UP-TO-DATE
+> Task :media:lib-exoplayer:generateDebugResValues UP-TO-DATE
+> Task :media:lib-exoplayer:generateDebugResources UP-TO-DATE
+> Task :kugou:jar UP-TO-DATE
+> Task :lrclib:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :media:lib-exoplayer:packageDebugResources UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:extractDebugSupportedLocales UP-TO-DATE
+> Task :media:lib-common:extractDebugSupportedLocales UP-TO-DATE
+> Task :media:lib-database:extractDebugSupportedLocales UP-TO-DATE
+> Task :media:lib-decoder:extractDebugSupportedLocales UP-TO-DATE
+> Task :media:lib-datasource:extractDebugSupportedLocales UP-TO-DATE
+> Task :media:lib-container:extractDebugSupportedLocales UP-TO-DATE
+> Task :media:lib-extractor:extractDebugSupportedLocales UP-TO-DATE
+> Task :media:lib-session:extractDebugSupportedLocales UP-TO-DATE
+> Task :media:lib-datasource-okhttp:extractDebugSupportedLocales UP-TO-DATE
+> Task :media:lib-exoplayer:extractDebugSupportedLocales UP-TO-DATE
+> Task :lrclib:compileKotlin UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:extractDeepLinksDebug UP-TO-DATE
+> Task :lrclib:compileJava NO-SOURCE
+> Task :lrclib:processResources NO-SOURCE
+> Task :media:lib-common:extractDeepLinksDebug UP-TO-DATE
+> Task :lrclib:classes UP-TO-DATE
+> Task :media:lib-database:extractDeepLinksDebug UP-TO-DATE
+> Task :media:lib-decoder:extractDeepLinksDebug UP-TO-DATE
+> Task :lrclib:jar UP-TO-DATE
+> Task :media:lib-datasource:extractDeepLinksDebug UP-TO-DATE
+> Task :media:lib-container:extractDeepLinksDebug UP-TO-DATE
+> Task :media:lib-extractor:extractDeepLinksDebug UP-TO-DATE
+> Task :media:lib-session:extractDeepLinksDebug UP-TO-DATE
+> Task :media:lib-datasource-okhttp:extractDeepLinksDebug UP-TO-DATE
+> Task :media:lib-exoplayer:extractDeepLinksDebug UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:processDebugManifest UP-TO-DATE
+> Task :media:lib-common:processDebugManifest UP-TO-DATE
+> Task :media:lib-database:processDebugManifest UP-TO-DATE
+> Task :material-color-utilities:compileJava UP-TO-DATE
+> Task :media:lib-decoder:processDebugManifest UP-TO-DATE
+> Task :material-color-utilities:processResources NO-SOURCE
+> Task :material-color-utilities:classes UP-TO-DATE
+> Task :media:lib-datasource:processDebugManifest UP-TO-DATE
+> Task :media:lib-container:processDebugManifest UP-TO-DATE
+> Task :material-color-utilities:jar UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preFullDebugBuild UP-TO-DATE
+> Task :media:lib-extractor:processDebugManifest UP-TO-DATE
+> Task :app:generateFullDebugBuildConfig UP-TO-DATE
+> Task :ffMetadataEx:preBuild UP-TO-DATE
+> Task :media:lib-session:processDebugManifest UP-TO-DATE
+> Task :ffMetadataEx:preDebugBuild UP-TO-DATE
+> Task :ffMetadataEx:writeDebugAarMetadata UP-TO-DATE
+> Task :media:lib-datasource-okhttp:processDebugManifest UP-TO-DATE
+> Task :taglib:preBuild UP-TO-DATE
+> Task :taglib:preDebugBuild UP-TO-DATE
+> Task :media:lib-exoplayer:processDebugManifest UP-TO-DATE
+> Task :taglib:writeDebugAarMetadata UP-TO-DATE
+> Task :ffMetadataEx:processDebugNavigationResources UP-TO-DATE
+> Task :taglib:processDebugNavigationResources UP-TO-DATE
+> Task :app:generateFullDebugResValues UP-TO-DATE
+> Task :app:prepareLibraryDefinitionsFullDebug UP-TO-DATE
+> Task :app:processFullDebugGoogleServices UP-TO-DATE
+> Task :media:lib-common:parseDebugLocalResources UP-TO-DATE
+> Task :ffMetadataEx:generateDebugResValues UP-TO-DATE
+> Task :ffMetadataEx:generateDebugResources UP-TO-DATE
+> Task :ffMetadataEx:packageDebugResources UP-TO-DATE
+> Task :taglib:generateDebugResValues UP-TO-DATE
+> Task :taglib:generateDebugResources UP-TO-DATE
+> Task :media:lib-common:generateDebugRFile UP-TO-DATE
+> Task :taglib:packageDebugResources UP-TO-DATE
+> Task :app:extractFullDebugSupportedLocales UP-TO-DATE
+> Task :media:lib-container:parseDebugLocalResources UP-TO-DATE
+> Task :ffMetadataEx:extractDebugSupportedLocales UP-TO-DATE
+> Task :taglib:extractDebugSupportedLocales UP-TO-DATE
+> Task :app:generateFullDebugResources UP-TO-DATE
+> Task :media:lib-container:generateDebugRFile UP-TO-DATE
+> Task :app:createFullDebugCompatibleScreenManifests UP-TO-DATE
+> Task :media:lib-database:parseDebugLocalResources UP-TO-DATE
+> Task :app:extractDeepLinksFullDebug UP-TO-DATE
+> Task :ffMetadataEx:extractDeepLinksDebug UP-TO-DATE
+> Task :media:lib-database:generateDebugRFile UP-TO-DATE
+> Task :ffMetadataEx:processDebugManifest UP-TO-DATE
+> Task :media:lib-datasource:parseDebugLocalResources UP-TO-DATE
+> Task :taglib:extractDeepLinksDebug UP-TO-DATE
+> Task :taglib:processDebugManifest UP-TO-DATE
+> Task :media:lib-datasource:generateDebugRFile UP-TO-DATE
+> Task :media:lib-decoder:parseDebugLocalResources UP-TO-DATE
+> Task :media:lib-decoder:generateDebugRFile UP-TO-DATE
+> Task :media:lib-exoplayer:parseDebugLocalResources UP-TO-DATE
+> Task :media:lib-extractor:parseDebugLocalResources UP-TO-DATE
+> Task :media:lib-extractor:generateDebugRFile UP-TO-DATE
+> Task :media:lib-exoplayer:generateDebugRFile UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:parseDebugLocalResources UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:generateDebugRFile UP-TO-DATE
+> Task :media:lib-session:parseDebugLocalResources UP-TO-DATE
+> Task :media:lib-session:generateDebugRFile UP-TO-DATE
+> Task :media:lib-datasource-okhttp:parseDebugLocalResources UP-TO-DATE
+> Task :media:lib-datasource-okhttp:generateDebugRFile UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:compileDebugLibraryResources UP-TO-DATE
+> Task :media:lib-common:compileDebugLibraryResources UP-TO-DATE
+> Task :media:lib-database:compileDebugLibraryResources UP-TO-DATE
+> Task :media:lib-decoder:compileDebugLibraryResources UP-TO-DATE
+> Task :media:lib-datasource:compileDebugLibraryResources UP-TO-DATE
+> Task :media:lib-container:compileDebugLibraryResources UP-TO-DATE
+> Task :media:lib-extractor:compileDebugLibraryResources UP-TO-DATE
+> Task :media:lib-session:compileDebugLibraryResources UP-TO-DATE
+> Task :media:lib-datasource-okhttp:compileDebugLibraryResources UP-TO-DATE
+> Task :media:lib-exoplayer:compileDebugLibraryResources UP-TO-DATE
+> Task :media:lib-common:javaPreCompileDebug UP-TO-DATE
+> Task :media:lib-common:compileDebugJavaWithJavac UP-TO-DATE
+> Task :media:lib-common:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :media:lib-database:javaPreCompileDebug UP-TO-DATE
+> Task :media:lib-database:compileDebugJavaWithJavac UP-TO-DATE
+> Task :media:lib-database:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:checkFullDebugAarMetadata UP-TO-DATE
+> Task :media:lib-decoder:javaPreCompileDebug UP-TO-DATE
+> Task :media:lib-decoder:compileDebugJavaWithJavac UP-TO-DATE
+> Task :media:lib-decoder:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :media:lib-datasource:javaPreCompileDebug UP-TO-DATE
+> Task :media:lib-datasource:compileDebugJavaWithJavac UP-TO-DATE
+> Task :media:lib-datasource:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :media:lib-container:javaPreCompileDebug UP-TO-DATE
+> Task :media:lib-container:compileDebugJavaWithJavac UP-TO-DATE
+> Task :media:lib-container:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :media:lib-extractor:javaPreCompileDebug UP-TO-DATE
+> Task :media:lib-extractor:compileDebugJavaWithJavac UP-TO-DATE
+> Task :media:lib-extractor:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :media:lib-exoplayer:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :media:lib-exoplayer:compileDebugKotlin NO-SOURCE
+> Task :media:lib-exoplayer:javaPreCompileDebug UP-TO-DATE
+> Task :media:lib-exoplayer:compileDebugJavaWithJavac UP-TO-DATE
+> Task :media:lib-exoplayer:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:processFullDebugNavigationResources UP-TO-DATE
+> Task :app:compileFullDebugNavigationResources UP-TO-DATE
+> Task :media:lib-session:compileDebugAidl UP-TO-DATE
+> Task :media:lib-session:javaPreCompileDebug UP-TO-DATE
+> Task :media:lib-session:compileDebugJavaWithJavac UP-TO-DATE
+> Task :media:lib-session:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :media:lib-datasource-okhttp:javaPreCompileDebug UP-TO-DATE
+> Task :app:mapFullDebugSourceSetPaths UP-TO-DATE
+> Task :media:lib-datasource-okhttp:compileDebugJavaWithJavac UP-TO-DATE
+> Task :media:lib-datasource-okhttp:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:javaPreCompileDebug UP-TO-DATE
+> Task :app:generateFullDebugLocaleConfig UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:compileDebugJavaWithJavac UP-TO-DATE
+> Task :media:lib-exoplayer-workmanager:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:mergeFullDebugResources UP-TO-DATE
+> Task :app:packageFullDebugResources UP-TO-DATE
+> Task :app:parseFullDebugLocalResources UP-TO-DATE
+> Task :app:processFullDebugMainManifest UP-TO-DATE
+> Task :app:processFullDebugManifest UP-TO-DATE
+> Task :app:processFullDebugManifestForPackage UP-TO-DATE
+> Task :ffMetadataEx:compileDebugLibraryResources UP-TO-DATE
+> Task :ffMetadataEx:parseDebugLocalResources UP-TO-DATE
+> Task :ffMetadataEx:generateDebugRFile UP-TO-DATE
+> Task :taglib:compileDebugLibraryResources UP-TO-DATE
+> Task :taglib:parseDebugLocalResources UP-TO-DATE
+> Task :taglib:generateDebugRFile UP-TO-DATE
+> Task :app:processFullDebugResources UP-TO-DATE
+> Task :ffMetadataEx:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :ffMetadataEx:compileDebugKotlin UP-TO-DATE
+> Task :ffMetadataEx:javaPreCompileDebug UP-TO-DATE
+> Task :ffMetadataEx:compileDebugJavaWithJavac UP-TO-DATE
+> Task :ffMetadataEx:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :taglib:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :taglib:compileDebugKotlin UP-TO-DATE
+> Task :taglib:javaPreCompileDebug UP-TO-DATE
+> Task :taglib:compileDebugJavaWithJavac NO-SOURCE
+> Task :taglib:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:kspFullDebugKotlin UP-TO-DATE
+
+> Task :app:compileFullDebugKotlin FAILED
+./gradlew : e: file:///C:/Users/vishn/Desktop/Vikify_UI/vik
+ify/native/app/src/main/java/com/vikify/app/vikifyui/compon
+ents/PremiumVinyl.kt:75:38 Function invocation 
+'width(...)' expected.
+At line:1 char:1
++ ./gradlew app:compileFullDebugKotlin --console=plain 
+--no-configurati ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (e: file:///C: 
+   /U......)' expected.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+e: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/a
+pp/src/main/java/com/vikify/app/vikifyui/components/Premium
+Vinyl.kt:75:54 Function invocation 'height(...)' expected.
+e: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/a
+pp/src/main/java/com/vikify/app/vikifyui/components/Premium
+Vinyl.kt:76:31 Unresolved reference 'minDimension'.
+e: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/a
+pp/src/main/java/com/vikify/app/vikifyui/components/Premium
+Vinyl.kt:133:38 Function invocation 'width(...)' expected.
+e: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/a
+pp/src/main/java/com/vikify/app/vikifyui/components/Premium
+Vinyl.kt:133:54 Function invocation 'height(...)' expected.
+e: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/a
+pp/src/main/java/com/vikify/app/vikifyui/components/Premium
+Vinyl.kt:134:31 Unresolved reference 'minDimension'.
+e: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/a
+pp/src/main/java/com/vikify/app/vikifyui/components/Premium
+Vinyl.kt:163:34 Function invocation 'width(...)' expected.
+e: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/a
+pp/src/main/java/com/vikify/app/vikifyui/components/Premium
+Vinyl.kt:163:53 Function invocation 'height(...)' expected.
+e: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/a
+pp/src/main/java/com/vikify/app/vikifyui/components/Premium
+Vinyl.kt:164:39 Function invocation 'width(...)' expected.
+e: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/a
+pp/src/main/java/com/vikify/app/vikifyui/components/Premium
+Vinyl.kt:164:59 Function invocation 'height(...)' expected.
+e: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/a
+pp/src/main/java/com/vikify/app/vikifyui/screens/HomeScreen
+.kt:663:43 Unresolved reference 'painterResource'.
+e: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/a
+pp/src/main/java/com/vikify/app/vikifyui/screens/HomeScreen
+.kt:663:64 None of the following candidates is applicable:
+class R : Any
+class R : Any
+class R : Any
+class R : Any
+class R : Any
+e: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/a
+pp/src/main/java/com/vikify/app/vikifyui/screens/HomeScreen
+.kt:663:66 Unresolved reference 'drawable'.
+
+[Incubating] Problems report is available at: file:///C:/Users/vishn/Desktop/Vikify_UI/vikify/native/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileFullDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.c
+ompilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinC
+ompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to generate a Build Scan (Powered by 
+Develocity).
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.1.0/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 37s
+200 actionable tasks: 1 executed, 199 up-to-date

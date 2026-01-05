@@ -11,7 +11,7 @@ import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -43,16 +43,20 @@ import com.vikify.app.vikifyui.screens.HomeScreen
 import com.vikify.app.vikifyui.screens.LibraryScreen
 import com.vikify.app.vikifyui.screens.LikedSongsScreen
 import com.vikify.app.vikifyui.screens.DownloadsScreen
-import com.vikify.app.vikifyui.screens.OnboardingScreen
+import com.vikify.app.vikifyui.screens.CinematicOnboardingScreen
 import com.vikify.app.vikifyui.screens.ProfileScreen
 import com.vikify.app.vikifyui.screens.PlaylistScreen
 import com.vikify.app.vikifyui.screens.SearchScreen
+import com.vikify.app.vikifyui.screens.TimeCapsuleScreen
 import com.vikify.app.vikifyui.theme.*
 import androidx.navigation.compose.rememberNavController
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.vikify.app.viewmodels.HomeViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.vikify.app.vikifyui.screens.BrowseScreen
+import com.vikify.app.vikifyui.screens.MoodAndGenresScreen
+import com.vikify.app.vikifyui.screens.DownloadsScreen
 
 /**
  * VikifyApp
@@ -93,6 +97,7 @@ fun VikifyApp(
     val isDownloading by viewModel.isDownloading.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsState()
+    val visualState by viewModel.visualState.collectAsState()
     
     // ═══════════════════════════════════════════════════════════════
     // AMBIENT MODE - Contextual UI Density
@@ -121,6 +126,13 @@ fun VikifyApp(
     var activePlaylistId by remember { mutableStateOf<String?>(null) }
     var activePlaylistInfo by remember { mutableStateOf<com.vikify.app.spotify.SpotifyPlaylist?>(null) }
     var playlistTracks by remember { mutableStateOf<List<com.vikify.app.vikifyui.data.Track>>(emptyList()) }
+    var initialSearchQuery by remember { mutableStateOf<String?>(null) } // For mood navigation
+    
+    // Browse Screen State (Moods/Genres)
+    var selectedBrowseId by remember { mutableStateOf<String?>(null) }
+    var selectedBrowseParams by remember { mutableStateOf<String?>(null) }
+    var browseTitle by remember { mutableStateOf<String?>(null) }
+    var browseColor by remember { mutableStateOf<Int?>(null) }
     
     // Spotify state - shared across recompositions
     val context = LocalContext.current
@@ -171,7 +183,8 @@ fun VikifyApp(
                             artist = song.artists.firstOrNull()?.name ?: "Unknown",
                             remoteArtworkUrl = song.thumbnail,
                             // Innertube duration is Int (seconds) or null
-                            duration = (song.duration?.toLong() ?: 0L) * 1000L
+                            duration = (song.duration?.toLong() ?: 0L) * 1000L,
+                            originalBackendRef = song
                         )
                     }
                 }.onFailure {
@@ -189,16 +202,24 @@ fun VikifyApp(
                 // Mock handled by PlaylistScreen default logic
                 playlistTracks = emptyList()
             } else {
-                // Spotify fetch with captured ID
-                val tracks = spotifyRepo.getPlaylistTracks(playlistId)
-                playlistTracks = tracks.map { st ->
-                    com.vikify.app.vikifyui.data.Track(
-                        id = st.id,
-                        title = st.title,
-                        artist = st.artist,
-                        remoteArtworkUrl = st.imageUrl,
-                        duration = st.duration
-                    )
+                // Try local first
+                val localTracks = viewModel.loadLocalPlaylist(playlistId)
+                if (localTracks != null) {
+                    playlistTracks = localTracks
+                } else {
+                    // Spotify fetch with batch YouTube ID resolution (Hybrid Sync)
+                    // We use viewModel to access the database and ensure IDs match DB entities
+                    val tracks = viewModel.loadSpotifyPlaylist(playlistId, spotifyRepo)
+                    playlistTracks = tracks.map { st ->
+                        com.vikify.app.vikifyui.data.Track(
+                            id = st.id, // This is now the DB ID (YT_ID or UNRESOLVED_...)
+                            title = st.title,
+                            artist = st.artist,
+                            remoteArtworkUrl = st.imageUrl,
+                            duration = st.duration,
+                            youtubeId = st.youtubeId  // Pre-resolved or null (JIT will handle nulls via UNRESOLVED mechanism)
+                        )
+                    }
                 }
             }
         } ?: run {
@@ -218,6 +239,12 @@ fun VikifyApp(
     var showDownloads by remember { mutableStateOf(false) }
     val downloadedSongs by viewModel.downloadedSongs.collectAsState()
     val downloadedSongsCount by viewModel.downloadedSongsCount.collectAsState()
+
+    // Time Capsule state
+    var showTimeCapsule by remember { mutableStateOf(false) }
+    
+    // Mood & Genres screen state
+    var showMoodAndGenres by remember { mutableStateOf(false) }
 
     // Show onboarding for first-time users
     // Auth State
@@ -246,7 +273,9 @@ fun VikifyApp(
                 account.idToken?.let { idToken ->
                     scope.launch {
                         homeViewModel.authManager.signInWithGoogle(idToken)
-                        // Don't set onboarding_complete here - let user continue to Username step
+                        // Onboarding complete!
+                        prefs.edit().putBoolean("onboarding_complete", true).apply()
+                        hasCompletedOnboarding = true
                     }
                 } ?: run {
                     Toast.makeText(context, "Google Sign In Failed: No ID Token", Toast.LENGTH_SHORT).show()
@@ -259,39 +288,19 @@ fun VikifyApp(
     }
 
     if (!hasCompletedOnboarding) {
-        OnboardingScreen(
+        CinematicOnboardingScreen(
             onGoogleLogin = {
-                // Launch Google Sign In
                 val signInClient = homeViewModel.authManager.getGoogleSignInClient(context)
                 googleSignInLauncher.launch(signInClient.signInIntent)
             },
             onGuestLogin = {
                 scope.launch {
                     homeViewModel.authManager.signInAnonymously()
-                    // Do NOT set onboarding_complete here, wait for SetupStep
-                }
-            },
-            onUsernameSet = { username ->
-                // Save username to SharedPreferences and update state
-                prefs.edit().putString("user_display_name", username).apply()
-                userDisplayName = username
-            },
-            onSetupComplete = { importSpotify ->
-                if (importSpotify) {
-                    context.startActivity(spotifyRepo.startLogin())
-                    prefs.edit().putBoolean("onboarding_complete", true).apply()
-                    hasCompletedOnboarding = true
-                } else {
-                    // Fresh start
+                    // Onboarding complete for guest
                     prefs.edit().putBoolean("onboarding_complete", true).apply()
                     hasCompletedOnboarding = true
                 }
-            },
-            onSkip = {
-                prefs.edit().putBoolean("onboarding_complete", true).apply()
-                hasCompletedOnboarding = true
-            },
-            isAuthenticated = currentUser != null
+            }
         )
         return
     }
@@ -326,6 +335,16 @@ fun VikifyApp(
                 showDownloads = false
             }
             
+            // 5.5 Close Time Capsule
+            showTimeCapsule -> {
+                showTimeCapsule = false
+            }
+            
+            // 5.6 Close Mood & Genres
+            showMoodAndGenres -> {
+                showMoodAndGenres = false
+            }
+            
             // 6. Navigate to Home if on another tab
             currentScreen != NavScreen.Home -> {
                 currentScreen = NavScreen.Home
@@ -352,7 +371,7 @@ fun VikifyApp(
     VikifyTheme(themeMode = if (isDarkTheme) ThemeMode.DARK else ThemeMode.LIGHT) {
     Box(modifier = modifier.fillMaxSize()) {
         // Main content based on selected tab
-        if (!isExpanded && !showLikedSongs && !showDownloads) {
+        if (!isExpanded && !showLikedSongs && !showDownloads && !showMoodAndGenres && selectedBrowseId == null) {
             when (currentScreen) {
                 NavScreen.Home -> {
                     HomeScreen(
@@ -361,7 +380,24 @@ fun VikifyApp(
                             activePlaylistId = id
                             activePlaylistInfo = playlist
                         },
-                        onLikedSongsClick = { showLikedSongs = true }
+                        onLikedSongsClick = { showLikedSongs = true },
+                        onDownloadsClick = { showDownloads = true }, // Wire up Downloads button
+                        onMoodClick = { moodTitle, browseId, color ->
+                            // Use dedicated Browse Screen
+                            if (browseId != null) {
+                                selectedBrowseId = browseId
+                                browseTitle = moodTitle
+                                browseColor = color
+                            } else {
+                                // Fallback to search if no ID (shouldn't happen with new API)
+                                initialSearchQuery = moodTitle
+                                currentScreen = NavScreen.Search
+                            }
+                        },
+                        onAlbumClick = { albumId ->
+                            selectedAlbumId = albumId
+                        },
+                        onMoodAndGenresClick = { showMoodAndGenres = true }
                     )
                 }
                 NavScreen.Search -> {
@@ -382,6 +418,8 @@ fun VikifyApp(
                             activePlaylistInfo = playlist
                         },
                         spotifyRepository = spotifyRepo,
+                        initialQuery = initialSearchQuery, // Pre-fill from mood click
+                        onInitialQueryConsumed = { initialSearchQuery = null },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -397,6 +435,8 @@ fun VikifyApp(
                         onLikedSongsClick = { showLikedSongs = true },
                         onDownloadsClick = { showDownloads = true },
                         playlists = spotifyPlaylists,
+                        downloadedSongs = downloadedSongs,
+                        onDownloadedSongClick = { song -> viewModel.playDownloadedSong(song) },
                         onSettingsClick = { /* Navigate to settings */ },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -420,7 +460,16 @@ fun VikifyApp(
                         modifier = Modifier.fillMaxSize(),
                         onThemeToggle = { isDarkTheme = !isDarkTheme },
                         isDarkTheme = isDarkTheme,
-                        userName = userDisplayName ?: currentUser?.displayName
+                        userName = userDisplayName ?: currentUser?.displayName,
+                        userEmail = currentUser?.email.also { 
+                            android.util.Log.d("VikifyApp", "Profile User: ${currentUser?.uid}, Email: $it, Anon: ${currentUser?.isAnonymous}") 
+                        },
+                        onTimeCapsuleClick = { showTimeCapsule = true },
+                        onSignIn = {
+                            val signInClient = homeViewModel.authManager.getGoogleSignInClient(context)
+                            googleSignInLauncher.launch(signInClient.signInIntent)
+                        },
+                        isGuest = currentUser?.isAnonymous == true
                     )
                 }
                 
@@ -459,6 +508,13 @@ fun VikifyApp(
             )
         }
         
+        // Time Capsule Screen (Full Overlay)
+        if (showTimeCapsule) {
+            TimeCapsuleScreen(
+                onBackClick = { showTimeCapsule = false }
+            )
+        }
+        
         // Artist Profile Screen (Wiki-Style)
         if (selectedArtistName != null && !isExpanded) {
             ArtistScreen(
@@ -483,6 +539,7 @@ fun VikifyApp(
                 uiState = uiState,
                 lyrics = lyrics,
                 isDownloaded = downloadedTrackIds.contains(currentTrackId),
+                accentColor = visualState.accentColor, // Pass dynamic color
                 onPlayPause = viewModel::togglePlayPause,
                 onExpand = viewModel::expandPlayer,
                 onCollapse = viewModel::collapsePlayer,
@@ -495,6 +552,7 @@ fun VikifyApp(
                 onRepeatClick = viewModel::toggleRepeat,
                 onLikeClick = viewModel::toggleLike,
                 onDownloadClick = viewModel::downloadCurrentTrack,
+                onAddToPlaylist = { showPlaylistPicker = true },
                 onArtistClick = { artistName ->
                     selectedArtistName = artistName
                     viewModel.collapsePlayer()
@@ -502,7 +560,51 @@ fun VikifyApp(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            // Bottom fixed container: Glass player + Navigation
+         // 5. BROWSE OVERLAY
+        AnimatedVisibility(
+            visible = selectedBrowseId != null && !isExpanded,
+            enter = slideInHorizontally { it } + fadeIn(),
+            exit = slideOutHorizontally { it } + fadeOut()
+        ) {
+            if (selectedBrowseId != null) {
+                BrowseScreen(
+                    browseId = selectedBrowseId!!,
+                    params = selectedBrowseParams,
+                    initialTitle = browseTitle,
+                    gradientColor = browseColor,
+                    onBackClick = { selectedBrowseId = null },
+                    onTrackClick = { track -> viewModel.playTrack(track) },
+                    onPlaylistClick = { id -> 
+                        activePlaylistId = id 
+                        // We don't have full object, let Library load it or create minimal
+                        activePlaylistInfo = null 
+                    },
+                    onAlbumClick = { id -> selectedAlbumId = id },
+                    onArtistClick = { id -> selectedArtistId = id }
+                )
+            }
+        }
+        
+        // MOOD & GENRES OVERLAY
+        AnimatedVisibility(
+            visible = showMoodAndGenres && !isExpanded,
+            enter = slideInHorizontally { it } + fadeIn(),
+            exit = slideOutHorizontally { it } + fadeOut()
+        ) {
+            MoodAndGenresScreen(
+                onBackClick = { showMoodAndGenres = false },
+                onMoodClick = { browseId, params, title, color ->
+                    // Navigate to BrowseScreen for the selected mood
+                    selectedBrowseId = browseId
+                    selectedBrowseParams = params
+                    browseTitle = title
+                    browseColor = color
+                    showMoodAndGenres = false
+                }
+            )
+        }
+
+        // 6. MINI PLAYER (Bottom Layer)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -517,6 +619,8 @@ fun VikifyApp(
                     onExpand = viewModel::expandPlayer,
                     onSkipNext = viewModel::skipNext,
                     onSkipPrevious = viewModel::skipPrevious,
+                    accentColor = visualState.accentColor,
+                    onColorExtracted = viewModel::updateAccentColor,
                     modifier = Modifier
                         .padding(horizontal = Spacing.MD, vertical = Spacing.SM)
                         .graphicsLayer { alpha = animatedNavOpacity }
@@ -537,6 +641,8 @@ fun VikifyApp(
         // Queue overlay
         if (uiState.showQueue) {
             val queueTracks by viewModel.queueTracks.collectAsState()
+            val userQueueTracks by viewModel.userQueueTracks.collectAsState()
+            val contextTitle by viewModel.contextTitle.collectAsState()
             
             // Find current track index in queue
             val currentTrackIndex = queueTracks.indexOfFirst { it.id == uiState.currentTrack?.id }.coerceAtLeast(0)
@@ -545,6 +651,8 @@ fun VikifyApp(
                 currentTrack = uiState.currentTrack,
                 currentTrackIndex = currentTrackIndex,
                 queueTracks = queueTracks,
+                userQueueTracks = userQueueTracks,  // New: Spotify-style "Next In Queue"
+                contextTitle = contextTitle,         // New: "Playing from: Album/Playlist"
                 onDismiss = viewModel::closeOverlays,
                 onTrackClick = { track ->
                     viewModel.seekToQueueItem(track)
@@ -581,7 +689,12 @@ fun VikifyApp(
                 tracks = playlistTracks,
                 coverUrl = playlist?.imageUrl ?: playlistTracks.firstOrNull()?.remoteArtworkUrl,
                 currentTrack = uiState.currentTrack,
-                onTrackClick = { track -> viewModel.playTrack(track) },
+                onTrackClick = { track -> 
+                    // Use playPlaylistWithIndex to queue the entire playlist
+                    // ensuring continuous playback and queue context
+                    val playlistName = playlist?.name ?: "Playlist"
+                    viewModel.playPlaylistWithIndex(playlistTracks, playlistTracks.indexOf(track), playlistName)
+                },
                 onBackClick = { 
                     activePlaylistId = null
                     activePlaylistInfo = null
@@ -598,34 +711,55 @@ fun VikifyApp(
             )
         }
         
-        // Album Overlay (Reusing PlaylistScreen)
-        if (selectedAlbumId != null && activePlaylistId == null) {
-             val downloadedIds by viewModel.downloadedTrackIds.collectAsState()
-             
-             // For now, use the first track's art or a placeholder
-             val firstTrack = playlistTracks.firstOrNull()
-             
-             PlaylistScreen(
-                 playlistId = selectedAlbumId,
-                 playlistName = "Album", // Ideally fetch title too
-                 tracks = playlistTracks,
-                 coverUrl = firstTrack?.remoteArtworkUrl,
-                 currentTrack = uiState.currentTrack,
-                 onTrackClick = { track -> viewModel.playTrack(track) },
-                 onBackClick = { 
-                     selectedAlbumId = null
-                     playlistTracks = emptyList()
-                 },
-                 onShuffleClick = { viewModel.playAllTracks(playlistTracks, shuffle = true) },
-                 onPlayAllClick = { viewModel.playAllTracks(playlistTracks, shuffle = false) },
-                 onDownloadClick = { viewModel.downloadPlaylist(playlistTracks) },
-                 onAddToQueue = { track -> viewModel.addToQueue(track) },
-                 isDownloading = isDownloading,
-                 downloadProgress = downloadProgress,
-                 downloadedTrackIds = downloadedIds,
-                 isPlaylistDownloaded = playlistTracks.isNotEmpty() && playlistTracks.all { downloadedIds.contains(it.id) },
-                 modifier = Modifier.fillMaxSize()
-             )
+        // Playlist Picker Dialog (Global)
+        var showPlaylistPicker by remember { mutableStateOf(false) }
+        val localPlaylists by viewModel.localPlaylists.collectAsState()
+        
+        if (showPlaylistPicker) {
+            PlaylistPickerDialog(
+                playlists = localPlaylists,
+                onDismissRequest = { showPlaylistPicker = false },
+                onPlaylistSelected = { playlistId ->
+                    viewModel.addToPlaylist(playlistId)
+                    showPlaylistPicker = false
+                },
+                onCreatePlaylist = { name ->
+                    viewModel.createLocalPlaylist(name)
+                    // Don't dismiss, let user see it appear or auto-select?
+                    // Better to just stay open or auto-select the new one?
+                    // Simplest: just creating it effectively adds it to the list, let user click.
+                    // Or I can add and auto-select. For now, just create.
+                }
+            )
+        }
+        
+        // Album Overlay (handled by PlaylistScreen)
+        if (selectedAlbumId != null) {
+            val downloadedIds by viewModel.downloadedTrackIds.collectAsState()
+            
+            PlaylistScreen(
+                playlistId = selectedAlbumId!!, // This will trigger fetchAlbum in ViewModel
+                playlistName = "Album", // Will be updated by ViewModel
+                tracks = playlistTracks, // ViewModel updates this
+                coverUrl = playlistTracks.firstOrNull()?.remoteArtworkUrl,
+                currentTrack = uiState.currentTrack,
+                onTrackClick = { track -> 
+                    // Use playFromPlaylist to queue the entire album
+                    viewModel.playFromPlaylist(playlistTracks, playlistTracks.indexOf(track), "Album") 
+                },
+                onBackClick = { 
+                    selectedAlbumId = null
+                },
+                onShuffleClick = { viewModel.playAllTracks(playlistTracks, shuffle = true) },
+                onPlayAllClick = { viewModel.playAllTracks(playlistTracks, shuffle = false) },
+                onDownloadClick = { viewModel.downloadPlaylist(playlistTracks) },
+                onAddToQueue = { track -> viewModel.addToQueue(track) },
+                isDownloading = isDownloading,
+                downloadProgress = downloadProgress,
+                downloadedTrackIds = downloadedIds,
+                isPlaylistDownloaded = playlistTracks.isNotEmpty() && playlistTracks.all { downloadedIds.contains(it.id) },
+
+            )
         }
     }
     }
@@ -651,6 +785,8 @@ private fun SwipeableMiniPlayer(
     onExpand: () -> Unit,
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
+    accentColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color(0xFFE53935),
+    onColorExtracted: (androidx.compose.ui.graphics.Color) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (track == null) return
@@ -735,7 +871,9 @@ private fun SwipeableMiniPlayer(
             onPlayPause = onPlayPause,
             onExpand = onExpand,
             onSkipNext = onSkipNext,
-            onSkipPrevious = onSkipPrevious
+            onSkipPrevious = onSkipPrevious,
+            accentColor = accentColor,
+            onColorExtracted = onColorExtracted
         )
     }
 }

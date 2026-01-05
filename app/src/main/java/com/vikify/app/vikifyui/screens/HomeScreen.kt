@@ -10,8 +10,11 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.painterResource
+import com.vikify.app.R
 import coil3.compose.AsyncImage
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -78,6 +81,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import com.vikify.app.vikifyui.components.MeshBackground
 import com.vikify.app.vikifyui.components.VikifyGlassCard
+import com.vikify.app.vikifyui.components.PremiumVinyl
 import com.vikify.app.vikifyui.theme.SonicTheme
 
 // ============================================================================
@@ -107,6 +111,7 @@ sealed class FeedSection {
     // Large 160dp square cards for visual variety
     data class LargeSquareRail(
         val title: String,
+        val subtitle: String? = null,
         val items: List<RailItem>
     ) : FeedSection()
     
@@ -177,6 +182,10 @@ fun HomeScreen(
     navController: NavController,
     onPlaylistClick: (String, com.vikify.app.spotify.SpotifyPlaylist?) -> Unit = { _, _ -> },
     onLikedSongsClick: () -> Unit = {},
+    onDownloadsClick: () -> Unit = {},
+    onMoodClick: (String, String?, Int?) -> Unit = { _, _, _ -> },
+    onAlbumClick: (String) -> Unit = {}, // New callback for album navigation
+    onMoodAndGenresClick: () -> Unit = {}, // Navigate to full Mood & Genres screen
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val playerConnection = LocalPlayerConnection.current
@@ -194,6 +203,14 @@ fun HomeScreen(
     // Smart Queue sections
     val jumpBackIn by viewModel.jumpBackIn.collectAsState()
     val dailyMix by viewModel.dailyMix.collectAsState()
+    
+    // YouTube Music Data
+    val explorePage by viewModel.explorePage.collectAsState()
+    
+    // Infinite Scroll State
+    val isLoadingMore by viewModel.isLoadingMore.collectAsState()
+    val hasMoreContent = remember(homePage) { homePage?.continuation != null }
+
     
     // Player State
     val currentMediaMetadata by playerConnection?.mediaMetadata?.collectAsState() ?: mutableStateOf(null)
@@ -250,10 +267,32 @@ fun HomeScreen(
     // ═══════════════════════════════════════════════════════════════
     // GENERATE FEED - The "Server-Driven UI" Engine
     // Creates a dynamic list of FeedSection "Lego blocks"
-    // ═══════════════════════════════════════════════════════════════
-    val feedSections = remember(quickPicks, forgottenFavorites, keepListening, homePage, jumpBackIn, dailyMix) {
+    // ═══════════════════════════════════════════════════════════════    // Sync Progress from SpotifySyncWorker
+    val syncProgress by viewModel.syncProgress.collectAsState()
+    
+    // Build Feed Sections
+    val feedSections = remember(
+        homePage, 
+        quickPicks, 
+        forgottenFavorites, 
+        keepListening, 
+        currentMediaMetadata, 
+        isPlaying,
+        jumpBackIn,
+        dailyMix,
+        // Add dependency on syncProgress
+        syncProgress
+    ) {
         buildList {
-            // 1. QUICK RESUME GRID (2x3) - Playlists, Liked, Downloaded
+            // 0. SYNC STATUS INDICATOR
+            if (syncProgress != null) {
+                // We add a special "Hero" type for sync status or just a custom placeholder
+                // Since FeedSection is strict, we'll render this directly in the LazyColumn item 
+                // outside the FeedSection abstraction if possible, OR we cheat and add a Header
+            }
+            
+            // 1. GOOD MORNING HERO GRID (Quick Resume)
+            // Playlists, Liked, Downloaded
             val quickResumeItems = mutableListOf<QuickResumeItem>()
             
             // Add Liked Songs
@@ -266,12 +305,12 @@ fun HomeScreen(
             ))
             
             // Add Downloaded
-            quickResumeItems.add(QuickResumeItem(
+                quickResumeItems.add(QuickResumeItem(
                 id = "downloaded",
                 title = "Downloads",
                 imageUrl = null,
                 type = QuickResumeType.DOWNLOADED,
-                onClick = { /* Navigate to downloads */ }
+                onClick = onDownloadsClick
             ))
             
             // Add recent songs to fill grid
@@ -293,35 +332,47 @@ fun HomeScreen(
                 add(FeedSection.QuickResumeGrid(quickResumeItems.take(6)))
             }
 
-            // 1.5 GLOBAL CHARTS - Always visible (Premium Discovery)
-            val chartItems = listOf(
-                RailItem(
-                    id = "37i9dQZEVXbMDoHDwVN2tF",
-                    title = "Top 50 - Global",
-                    subtitle = "Daily Update",
-                    imageUrl = "https://charts-images.scdn.co/assets/locale_en/regional/daily/region_global_default.jpg",
-                    onClick = { onPlaylistClick("37i9dQZEVXbMDoHDwVN2tF", null) }
-                ),
-                RailItem(
-                    id = "37i9dQZEVXbLZ52XmnySJg",
-                    title = "Top 50 - India",
-                    subtitle = "Daily Update",
-                    imageUrl = "https://charts-images.scdn.co/assets/locale_en/regional/daily/region_in_default.jpg",
-                    onClick = { onPlaylistClick("37i9dQZEVXbLZ52XmnySJg", null) }
-                ),
-                RailItem(
-                    id = "37i9dQZEVXbLiRSasKsNU9",
-                    title = "Viral 50 - Global",
-                    subtitle = "Trending Now",
-                    imageUrl = "https://charts-images.scdn.co/assets/locale_en/viral/daily/region_global_default.jpg",
-                    onClick = { onPlaylistClick("37i9dQZEVXbLiRSasKsNU9", null) }
-                )
-            )
-            add(FeedSection.HorizontalRail(
-                title = "Global Charts",
-                subtitle = "What the world is listening to",
-                items = chartItems
-            ))
+            // 1.5 NEW RELEASES FROM YOUTUBE MUSIC - Dynamic Data!
+            if (explorePage?.newReleaseAlbums?.isNotEmpty() == true) {
+                val newReleaseItems = explorePage!!.newReleaseAlbums.take(10).map { album ->
+                    RailItem(
+                        id = album.browseId,
+                        title = album.title,
+                        subtitle = album.artists?.joinToString(", ") { it.name } ?: "New Release",
+                        imageUrl = album.thumbnail,
+                        onClick = { 
+                            // Call parent handler instead of navigating directly
+                            onAlbumClick(album.browseId)
+                        }
+                    )
+                }
+                add(FeedSection.LargeSquareRail(
+                    title = "New Releases",
+                    subtitle = "Fresh from YouTube Music",
+                    items = newReleaseItems
+                ))
+            }
+            
+            // MOOD & GENRES - Discover Section
+            if (explorePage?.moodAndGenres?.isNotEmpty() == true) {
+                val moodItems = explorePage!!.moodAndGenres.take(8).mapIndexed { index, mood ->
+                    RailItem(
+                        id = "mood_$index", // Use index-based unique ID to avoid key issues
+                        title = mood.title,
+                        subtitle = "Explore",
+                        imageUrl = null, // Moods use stripeColor for styling
+                        onClick = { 
+                            // Navigate to Browse Screen
+                            onMoodClick(mood.title, mood.endpoint.browseId, mood.stripeColor.toInt())
+                        }
+                    )
+                }
+                add(FeedSection.HorizontalRail(
+                    title = "Mood & Genres",
+                    subtitle = "Explore by vibe",
+                    items = moodItems
+                ))
+            }
 
             // NOW PLAYING HERO (Visible if song loaded)
             if (currentMediaMetadata != null) {
@@ -521,14 +572,25 @@ fun HomeScreen(
 
 
         // Content Layer
-
+        
+        // Premium Loading Transition
+        Crossfade(
+             targetState = isLoading && feedSections.isEmpty(), 
+             label = "LoadingTransition",
+             animationSpec = tween(500)
+        ) { loading ->
+            if (loading) {
+                 com.vikify.app.vikifyui.components.SkeletonHomeFeed(
+                     modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
+            )
+            } else {
         LazyColumn(
-            state = lazyListState,
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.statusBars), // Fix overlapping status bar
-            contentPadding = PaddingValues(bottom = 180.dp) // Fix mini-player overlap
-        ) {
+                    state = lazyListState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.statusBars), // Fix overlapping status bar
+                    contentPadding = PaddingValues(bottom = 180.dp) // Fix mini-player overlap
+                ) {
             
             // ═══════════════════════════════════════════════════════════════
             // 1. COLLAPSING HEADER (Dynamic Large Title)
@@ -544,6 +606,40 @@ fun HomeScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp)
                     ) {
+                        // === SYNC STATUS PILL ===
+                        if (syncProgress != null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 12.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Surface(
+                                    color = DarkColors.Accent.copy(alpha = 0.15f),
+                                    contentColor = DarkColors.Accent,
+                                    shape = RoundedCornerShape(50),
+                                    border = BorderStroke(1.dp, DarkColors.Accent.copy(alpha = 0.3f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(12.dp),
+                                            strokeWidth = 2.dp,
+                                            color = DarkColors.Accent
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = syncProgress!!,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         // Greeting (fades out on scroll)
                         Text(
                             text = greeting,
@@ -556,22 +652,30 @@ fun HomeScreen(
                         
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.graphicsLayer {
+                                alpha = 1f - (headerProgress * 0.3f)
+                            }
                         ) {
-                            // Large Title (scales down on scroll)
-                            // Large Title (scales down on scroll)
+                            Image(
+                                painter = painterResource(id = R.drawable.vikify_logo),
+                                contentDescription = null,
+                                modifier = Modifier.size((38 - (10 * headerProgress)).dp)
+                            )
                             Text(
                                 text = "Home",
                                 style = MaterialTheme.typography.displaySmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = (34 - (10 * headerProgress)).sp,
                                     color = LocalVikifyColors.current.textPrimary
-                                ),
-                                modifier = Modifier.graphicsLayer {
-                                    alpha = 1f - (headerProgress * 0.3f)
-                                }
+                                )
                             )
+                        }
                             
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -624,7 +728,7 @@ fun HomeScreen(
                         item(key = "quick_resume_grid") {
                             Spacer(modifier = Modifier.height(16.dp))
                             Column(
-                                modifier = Modifier
+                        modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -660,9 +764,9 @@ fun HomeScreen(
                                 isPlaying = section.isPlaying,
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
-                        }
-                    }
-                    
+                }
+            }
+
                     // ───────────────────────────────────────────────────────
                     // HORIZONTAL RAIL - Standard compact cards
                     // ───────────────────────────────────────────────────────
@@ -670,7 +774,7 @@ fun HomeScreen(
                         item(key = "rail_${sectionIndex}") {
                             Spacer(modifier = Modifier.height(16.dp))
                             SectionHeader(title = section.title, subtitle = section.subtitle)
-                            LazyRow(
+                    LazyRow(
                                 contentPadding = PaddingValues(horizontal = 20.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
@@ -699,8 +803,8 @@ fun HomeScreen(
                             SectionHeader(title = section.title)
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
                                 items(section.items, key = { it.id }) { item ->
                                     LargeSquareCard(
                                         title = item.title,
@@ -777,8 +881,8 @@ fun HomeScreen(
                                         artist = track.subtitle,
                                         imageUrl = track.imageUrl,
                                         isPlaying = track.isPlaying,
-                                        onClick = {
-                                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                                onClick = {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                                             track.onClick()
                                         }
                                     )
@@ -788,29 +892,41 @@ fun HomeScreen(
                     }
                 }
             }
+            
+            // ═══════════════════════════════════════════════════════════════
+            // INFINITE SCROLL TRIGGER - Load more when reaching bottom
+            // ═══════════════════════════════════════════════════════════════
+            if (hasMoreContent) {
+                item(key = "infinite_scroll_trigger") {
+                    LaunchedEffect(Unit) {
+                        viewModel.loadMore()
+                    }
+                    
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isLoadingMore) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                                color = VikifyTheme.colors.accent
+                            )
+                        }
+                    }
+                }
+            }
+        }
+            }
         }
         
         // ═══════════════════════════════════════════════════════════════
-        // SPINNING VINYL FAB (Shows when music is playing)
-        // ═══════════════════════════════════════════════════════════════
-        AnimatedVisibility(
-            visible = isPlaying,
-            enter = fadeIn() + scaleIn(),
-            exit = fadeOut() + scaleOut(),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 100.dp)
-        ) {
-            SpinningVinylFab(
-                imageUrl = currentMediaMetadata?.thumbnailUrl,
-                onClick = {
-                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                    // Open full player
-                }
-            )
-        }
+        // FAB Removed - Use NowPlayingHero section instead
     }
 }
+
 
 // ============================================================================
 // VINYL HERO CARD - The Centerpiece Component
@@ -835,7 +951,7 @@ fun VinylHeroCard(
         transitionSpec = { spring(dampingRatio = 0.6f, stiffness = 400f) },
         label = "VinylSlide"
     ) { state -> if (state) 50.dp else 0.dp }
-    
+            
     // Cover 3D tilt when vinyl shows
     val coverRotationY by transition.animateFloat(
         transitionSpec = { spring(dampingRatio = 0.5f, stiffness = 300f) },
@@ -856,8 +972,8 @@ fun VinylHeroCard(
     
     Box(
         modifier = Modifier
-            .width(180.dp)
-            .height(240.dp)
+            .width(220.dp) // Slightly wider for majesty
+            .height(280.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -865,69 +981,54 @@ fun VinylHeroCard(
             ),
         contentAlignment = Alignment.TopStart
     ) {
-        // === LAYER 1: THE VINYL (Behind) ===
-        Box(
+        // === LAYER 1: THE ULTRA-PREMIUM VINYL (Behind) ===
+        PremiumVinyl(
+            imageUrl = imageUrl,
+            vinylSize = 170.dp,
+            rotation = if (isPlaying) spinAngle else 0f,
+            glowColor = glowColor,
             modifier = Modifier
-                .padding(top = 15.dp, start = 15.dp)
-                .size(130.dp)
+                .padding(top = 10.dp, start = 12.dp)
                 .graphicsLayer {
                     translationX = with(density) { vinylTranslationX.toPx() }
-                    rotationZ = if (isPlaying) spinAngle else 0f
+                    // Dynamic depth based on sliding progress
+                    val slideProgress = vinylTranslationX.toPx() / 50.dp.toPx()
+                    scaleX = 0.95f + (0.05f * slideProgress)
+                    scaleY = 0.95f + (0.05f * slideProgress)
                 }
-                .shadow(8.dp, CircleShape, spotColor = glowColor.copy(alpha = 0.5f))
-                .clip(CircleShape)
-                .background(Color(0xFF0A0A0A))
-        ) {
-            // Vinyl grooves
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF1A1A1A),
-                                Color(0xFF000000),
-                                Color(0xFF1A1A1A),
-                                Color(0xFF0D0D0D),
-                                Color(0xFF1A1A1A)
-                            )
-                        )
-                    )
-            )
-            // Center label (album art)
-            Box(
-                modifier = Modifier
-                    .size(45.dp)
-                    .align(Alignment.Center)
-                    .clip(CircleShape)
-            ) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
+        )
 
         // === LAYER 2: THE COVER ART (Front) ===
         Column(
-            modifier = Modifier.width(160.dp)
+            modifier = Modifier.width(180.dp)
         ) {
             Box(
-                modifier = Modifier
-                    .size(160.dp)
+                    modifier = Modifier
+                    .size(180.dp)
                     .graphicsLayer {
                         rotationY = coverRotationY
-                        cameraDistance = 12f * density.density
+                        cameraDistance = 15f * density.density
+                        // Counter-tilt for realism
+                        rotationX = if (isPlaying) 2f else 0f
                     }
                     .shadow(
-                        elevation = 16.dp,
-                        shape = RoundedCornerShape(16.dp),
-                        spotColor = if (isPlaying) glowColor.copy(alpha = 0.6f) else CardShadow
+                        elevation = 24.dp,
+                        shape = RoundedCornerShape(24.dp),
+                        spotColor = if (isPlaying) glowColor.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.5f)
                     )
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(24.dp))
                     .background(SoftSurface)
+                    .border(
+                        1.dp,
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.4f),
+                                Color.Transparent,
+                                Color.White.copy(alpha = 0.1f)
+                            )
+                        ),
+                        RoundedCornerShape(24.dp)
+                    )
             ) {
                 AsyncImage(
                     model = imageUrl,
@@ -936,45 +1037,48 @@ fun VinylHeroCard(
                     modifier = Modifier.fillMaxSize()
                 )
                 
-                // Playing indicator overlay
+                // Playing indicator overlay - Glassmorphism V2
                 androidx.compose.animation.AnimatedVisibility(
                     visible = isPlaying,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut(),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(8.dp)
+                        .padding(14.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
-                            .background(Color.Black.copy(alpha = 0.7f), CircleShape),
+                            .size(40.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Rounded.GraphicEq,
                             contentDescription = "Playing",
                             tint = Color.White,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }
             }
             
-            Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
             
             Text(
                 text = title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Black,
                 color = VikifyTheme.colors.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = subtitle,
-                fontSize = 13.sp,
-                color = VikifyTheme.colors.textSecondary,
+                text = subtitle.uppercase(),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = VikifyTheme.colors.textSecondary.copy(alpha = 0.7f),
+                letterSpacing = 1.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1027,72 +1131,7 @@ fun GlassPillButton(
 // COMPACT SONG CARD (For horizontal grids)
 // ============================================================================
 
-@Composable
-fun CompactSongCard(
-    title: String,
-    artist: String,
-    imageUrl: String?,
-    isPlaying: Boolean = false,
-    onClick: () -> Unit
-) {
-    VikifyGlassCard(
-        modifier = Modifier
-            .width(156.dp) // Slightly wider to accommodate padding
-            .clickable(onClick = onClick),
-        contentPadding = 12.dp
-    ) {
-        Column {
-        Box(
-            modifier = Modifier
-                .size(140.dp)
-                .shadow(8.dp, RoundedCornerShape(12.dp), spotColor = CardShadow)
-                .clip(RoundedCornerShape(12.dp))
-                .background(SoftSurface)
-        ) {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            
-            // Play button overlay
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(40.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
-        
-        Spacer(Modifier.height(8.dp))
-        
-        Text(
-            text = title,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = VikifyTheme.colors.textPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = artist,
-            fontSize = 12.sp,
-            color = VikifyTheme.colors.textSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        }
-    }
-}
+// CompactSongCard removed (defined in BrowseScreen.kt)
 
 // ============================================================================
 // COMPACT ALBUM CARD
@@ -1129,7 +1168,7 @@ fun CompactAlbumCard(
         
         Spacer(Modifier.height(8.dp))
         
-        Text(
+                    Text(
             text = title,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
@@ -1232,7 +1271,7 @@ fun SectionHeader(
             )
         }
     }
-}
+        }
 
 // ============================================================================
 // NOW PLAYING GLOW CARD
@@ -1275,8 +1314,8 @@ fun NowPlayingGlowCard(
         }
     }
     
-    Box(
-        modifier = Modifier
+             Box(
+                 modifier = Modifier
             .fillMaxWidth()
             .height(100.dp)
             .shadow(16.dp, RoundedCornerShape(20.dp), spotColor = glowColor.copy(alpha = 0.6f))
@@ -1388,10 +1427,10 @@ fun NowPlayingGlowCard(
                 contentDescription = "Tap to expand",
                 tint = glowColor.copy(alpha = 0.6f),
                 modifier = Modifier.size(28.dp)
-            )
+                 )
+             }
         }
     }
-}
 
 // ============================================================================
 // SHIMMER SKELETON
@@ -1466,8 +1505,8 @@ fun LikedSongsHomeCard(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.linearGradient(
+            .background(
+                Brush.linearGradient(
                             colors = listOf(Color(0xFFEF4444), Color(0xFFEC4899))
                         )
                     ),
@@ -1558,9 +1597,9 @@ fun QuickResumeCard(
                 modifier = Modifier
                     .size(18.dp)
                     .padding(end = 8.dp)
-            )
-        }
+        )
     }
+}
 }
 
 // ============================================================================
@@ -1618,8 +1657,8 @@ fun LargeSquareCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        }
     }
+}
 }
 
 // ============================================================================
@@ -1780,8 +1819,8 @@ fun QuickResumeCardSDUI(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                }
-            }
+    }
+}
             QuickResumeType.RECENT_SONG -> {
                 AsyncImage(
                     model = item.imageUrl,
@@ -1830,7 +1869,7 @@ fun CircleArtistCard(
     ) {
         // Circle profile image
         Box(
-            modifier = Modifier
+        modifier = Modifier
                 .size(100.dp)
                 .shadow(8.dp, CircleShape)
                 .clip(CircleShape)

@@ -81,6 +81,7 @@ class LibrarySongsViewModel @Inject constructor(
     @ApplicationContext context: Context,
     private val database: MusicDatabase,
     private val syncUtils: SyncUtils,
+    val playlistRepository: com.vikify.app.data.PlaylistRepository // Expose for UI
 ) : ViewModel() {
     val allSongs = getSyncedSongs(context, database)
     val isSyncingRemoteLikedSongs = syncUtils.isSyncingRemoteLikedSongs

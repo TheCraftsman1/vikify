@@ -1,32 +1,20 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    
-    <!-- Vikify Soundwave Logo - Notification Icon -->
-    <!-- Bar 1 (left) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:height="108dp" android:viewportHeight="180" android:viewportWidth="180" android:width="108dp">
+      
+    <!-- Silhouette of the 5-bar waveform -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M3,9 L3,15 C3,15.55 3.45,16 4,16 C4.55,16 5,15.55 5,15 L5,9 C5,8.45 4.55,8 4,8 C3.45,8 3,8.45 3,9 Z"/>
-    
-    <!-- Bar 2 -->
+        android:pathData="M40,65 L40,115 C40,119.42 43.58,123 48,123 C52.42,123 56,119.42 56,115 L56,65 C56,60.58 52.42,57 48,57 C43.58,57 40,60.58 40,65 Z"/>
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M7,6 L7,18 C7,18.55 7.45,19 8,19 C8.55,19 9,18.55 9,18 L9,6 C9,5.45 8.55,5 8,5 C7.45,5 7,5.45 7,6 Z"/>
-    
-    <!-- Bar 3 (center tall) -->
+        android:pathData="M64,30 L64,150 C64,154.42 67.58,158 72,158 C76.42,158 80,154.42 80,150 L80,30 C80,25.58 76.42,22 72,22 C67.58,22 64,25.58 64,30 Z"/>
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M11,4 L11,20 C11,20.55 11.45,21 12,21 C12.55,21 13,20.55 13,20 L13,4 C13,3.45 12.55,3 12,3 C11.45,3 11,3.45 11,4 Z"/>
-    
-    <!-- Bar 4 -->
+        android:pathData="M88,50 L88,130 C88,134.42 91.58,138 96,138 C100.42,138 104,134.42 104,130 L104,50 C104,45.58 100.42,42 96,42 C91.58,42 88,45.58 88,50 Z"/>
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M15,7 L15,17 C15,17.55 15.45,18 16,18 C16.55,18 17,17.55 17,17 L17,7 C17,6.45 16.55,6 16,6 C15.45,6 15,6.45 15,7 Z"/>
-    
-    <!-- Bar 5 (right) -->
+        android:pathData="M112,35 L112,145 C112,149.42 115.58,153 120,153 C124.42,153 128,149.42 128,145 L128,35 C128,30.58 124.42,27 120,27 C115.58,27 112,30.58 112,35 Z"/>
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M19,10 L19,14 C19,14.55 19.45,15 20,15 C20.55,15 21,14.55 21,14 L21,10 C21,9.45 20.55,9 20,9 C19.45,9 19,9.45 19,10 Z"/>
+        android:pathData="M136,75 L136,105 C136,109.42 139.58,113 144,113 C148.42,113 152,109.42 152,105 L152,75 C152,70.58 148.42,67 144,67 C139.58,67 136,70.58 136,75 Z"/>
+    
 </vector>

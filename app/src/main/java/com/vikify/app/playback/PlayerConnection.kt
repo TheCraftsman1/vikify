@@ -84,6 +84,37 @@ class PlayerConnection(
     val canSkipNext = MutableStateFlow(true)
 
     val error = MutableStateFlow<PlaybackException?>(null)
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // USER QUEUE (Spotify-style) - Exposed to UI
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    /** User Queue - songs explicitly added via "Add to Queue" */
+    val userQueue: StateFlow<List<com.vikify.app.models.MediaMetadata>> = 
+        service.queueBoard.userQueueManager.userQueue
+    
+    /** Current context (playlist/album) title for UI display */
+    val contextTitle: StateFlow<String> = MutableStateFlow(
+        service.queueBoard.getCurrentQueue()?.title ?: ""
+    )
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // AUTOPLAY (Spotify-style Infinite Radio) - Exposed to UI
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    /** Autoplay enabled/disabled toggle */
+    val isAutoplayEnabled: StateFlow<Boolean> = service.autoplayManager.isAutoplayEnabled
+    
+    /** Autoplay queue songs */
+    val autoplayQueue: StateFlow<List<AutoplayManager.AutoplayTrack>> = service.autoplayManager.autoplayQueue
+    
+    /** Seed artist for "Similar to [Artist]" subtitle */
+    val autoplaySeedArtist: StateFlow<String?> = service.autoplayManager.seedArtist
+    
+    /** Set autoplay enabled/disabled */
+    fun setAutoplayEnabled(enabled: Boolean) {
+        service.autoplayManager.setAutoplayEnabled(enabled)
+    }
 
     init {
         player.addListener(this)
@@ -119,6 +150,19 @@ class PlayerConnection(
     }
 
     /**
+     * Play a single track and enable Autoplay/Radio mode
+     */
+    fun playSingleTrack(metadata: com.vikify.app.models.MediaMetadata) {
+        service.playQueue(
+            com.vikify.app.playback.queues.ListQueue(
+                title = metadata.title,
+                items = listOf(metadata),
+                startIndex = 0
+            )
+        )
+    }
+
+    /**
      * Add item to queue, right after current playing item
      */
     fun enqueueNext(item: MediaItem) = enqueueNext(listOf(item))
@@ -148,6 +192,33 @@ class PlayerConnection(
 
     fun toggleLibrary() {
         service.toggleLibrary()
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // USER QUEUE METHODS (Spotify-style)
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    /**
+     * Add a song to User Queue (Spotify's "Add to Queue")
+     * Plays before context queue advances
+     */
+    fun addToUserQueue(item: MediaItem) {
+        service.addToUserQueue(item)
+    }
+    
+    /**
+     * Add a song to play next (front of user queue)
+     * Spotify's "Play Next" behavior
+     */
+    fun playNext(item: MediaItem) {
+        service.playNext(item)
+    }
+    
+    /**
+     * Clear the entire User Queue
+     */
+    fun clearUserQueue() {
+        service.clearUserQueue()
     }
 
     override fun onPlaybackStateChanged(state: Int) {
@@ -200,14 +271,28 @@ class PlayerConnection(
     }
 
     private fun updateCanSkipPreviousAndNext() {
-        if (!player.currentTimeline.isEmpty) {
-            val window = player.currentTimeline.getWindow(player.currentMediaItemIndex, Timeline.Window())
-            canSkipPrevious.value = player.isCommandAvailable(COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
-                    || !window.isLive()
-                    || player.isCommandAvailable(COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-            canSkipNext.value = window.isLive() && window.isDynamic
-                    || player.isCommandAvailable(COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-        } else {
+        try {
+            if (!player.currentTimeline.isEmpty) {
+                val index = player.currentMediaItemIndex
+                val timeline = player.currentTimeline
+                // Bounds check before accessing
+                if (index >= 0 && index < timeline.windowCount) {
+                    val window = timeline.getWindow(index, Timeline.Window())
+                    canSkipPrevious.value = player.isCommandAvailable(COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+                            || !window.isLive()
+                            || player.isCommandAvailable(COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    canSkipNext.value = window.isLive() && window.isDynamic
+                            || player.isCommandAvailable(COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                } else {
+                    canSkipPrevious.value = false
+                    canSkipNext.value = false
+                }
+            } else {
+                canSkipPrevious.value = false
+                canSkipNext.value = false
+            }
+        } catch (e: Exception) {
+            // Gracefully handle timeline changes during update
             canSkipPrevious.value = false
             canSkipNext.value = false
         }

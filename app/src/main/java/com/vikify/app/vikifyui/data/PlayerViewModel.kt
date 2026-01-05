@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -92,7 +93,8 @@ class PlayerViewModel @Inject constructor(
     application: Application,
     private val lyricsHelper: com.vikify.app.lyrics.LyricsHelper,
     private val downloadUtil: DownloadUtil,
-    private val database: MusicDatabase
+    private val database: MusicDatabase,
+    private val playlistRepository: com.vikify.app.data.PlaylistRepository
 ) : AndroidViewModel(application) {
     
     // We will initialize this from the MainActivity/VikifyApp level if needed,
@@ -129,6 +131,17 @@ class PlayerViewModel @Inject constructor(
     // Queue state - tracks currently in player queue
     private val _queueTracks = MutableStateFlow<List<Track>>(emptyList())
     val queueTracks: StateFlow<List<Track>> = _queueTracks.asStateFlow()
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // USER QUEUE (Spotify-style "Add to Queue")
+    // Songs explicitly added that play BEFORE context queue advances
+    // ═══════════════════════════════════════════════════════════════════════
+    private val _userQueueTracks = MutableStateFlow<List<Track>>(emptyList())
+    val userQueueTracks: StateFlow<List<Track>> = _userQueueTracks.asStateFlow()
+    
+    // Context title (e.g., "Starboy" or "Chill Vibes" playlist)
+    private val _contextTitle = MutableStateFlow("")
+    val contextTitle: StateFlow<String> = _contextTitle.asStateFlow()
     
     // Liked songs from database
     private val _likedSongs = MutableStateFlow<List<com.vikify.app.db.entities.Song>>(emptyList())
@@ -176,7 +189,7 @@ class PlayerViewModel @Inject constructor(
     
     val greeting: String
         get() = MockData.getGreeting(Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
-    
+
     init {
         // Load liked songs from database (on IO thread for safety)
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -198,6 +211,11 @@ class PlayerViewModel @Inject constructor(
         startAmbientModeMonitoring()
     }
     
+    // Update visual state (colors)
+    fun updateAccentColor(color: Color) {
+        _visualState.update { it.copy(accentColor = color) }
+    }
+
     /**
      * Ambient Mode Monitoring
      * Checks every 30 seconds if conditions for ambient mode are met
@@ -287,8 +305,8 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             pc.isPlaying.collect { playing ->
                 stateMutex.withLock {
-                    _uiState.update { it.copy(isPlaying = playing) }
-                }
+                _uiState.update { it.copy(isPlaying = playing) }
+            }
                 
                 // Track listening start time for ambient mode
                 if (playing && listeningStartTime == 0L) {
@@ -309,9 +327,9 @@ class PlayerViewModel @Inject constructor(
                      val total = player.duration
                      if (total > 0) {
                          stateMutex.withLock {
-                             _uiState.update { it.copy(progress = current.toFloat() / total.toFloat()) }
-                         }
+                         _uiState.update { it.copy(progress = current.toFloat() / total.toFloat()) }
                      }
+                }
                 }
                 kotlinx.coroutines.delay(250) // UI animates between values - less jitter
             }
@@ -321,17 +339,17 @@ class PlayerViewModel @Inject constructor(
             pc.mediaMetadata.collect { metadata ->
                 if (metadata != null) {
                     stateMutex.withLock {
-                        _uiState.update { 
-                            it.copy(
-                                currentTrack = Track(
-                                    id = metadata.id ?: "",
-                                    title = metadata.title ?: "Unknown",
-                                    artist = metadata.artists.firstOrNull()?.name ?: "Unknown Artist",
-                                    remoteArtworkUrl = metadata.thumbnailUrl,
-                                    duration = metadata.duration.toLong() * 1000L
-                                )
+                    _uiState.update { 
+                        it.copy(
+                            currentTrack = Track(
+                                id = metadata.id ?: "",
+                                title = metadata.title ?: "Unknown",
+                                artist = metadata.artists.firstOrNull()?.name ?: "Unknown Artist",
+                                remoteArtworkUrl = metadata.thumbnailUrl,
+                                duration = metadata.duration.toLong() * 1000L
                             )
-                        }
+                        )
+                    }
                     }
                     // Fetch lyrics
                     fetchLyrics(metadata)
@@ -434,6 +452,65 @@ class PlayerViewModel @Inject constructor(
     }
     
     fun playTrack(track: Track) {
+        // === SILENT MIGRATION: Handle unresolved Spotify tracks ===
+        // Tracks from Spotify skeleton import have UNRESOLVED_ prefix
+        if (track.id.startsWith("UNRESOLVED_")) {
+            // Extract spotify ID and resolve on-demand
+            val spotifyId = track.id.removePrefix("UNRESOLVED_")
+            android.util.Log.d("PlayerViewModel", "On-demand resolution for: ${track.title} (Spotify: $spotifyId)")
+            
+            _uiState.update { it.copy(isResolvingTrack = true) }
+            
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val searchQuery = "${track.spotifyTitle ?: track.title} ${track.spotifyArtist ?: track.artist}"
+                    val searchResult = com.zionhuang.innertube.YouTube.search(
+                        searchQuery, 
+                        com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG
+                    ).getOrNull()
+                    
+                    val songs = searchResult?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>() ?: emptyList()
+                    
+                    // Filter by duration for better matching (if available)
+                    val durationSec = if (track.duration > 0) (track.duration / 1000).toInt() else 0
+                    val matchedSong = if (durationSec > 0) {
+                        songs.filter { kotlin.math.abs((it.duration ?: 0) - durationSec) <= 5 }.firstOrNull()
+                            ?: songs.firstOrNull()
+                    } else {
+                        songs.firstOrNull()
+                    }
+                    
+                    if (matchedSong != null) {
+                        // Update database with resolved ID
+                        try {
+                            database.updateYouTubeIdBySpotifyId(spotifyId, matchedSong.id)
+                            android.util.Log.d("PlayerViewModel", "Resolved: ${track.title} -> ${matchedSong.id}")
+                        } catch (e: Exception) {
+                            android.util.Log.e("PlayerViewModel", "Failed to update DB: ${e.message}")
+                        }
+                        
+                        // Play the resolved track
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            playMediaMetadata(matchedSong.toMediaMetadata())
+                            _uiState.update { it.copy(isResolvingTrack = false) }
+                        }
+                    } else {
+                        android.util.Log.e("PlayerViewModel", "Could not find YouTube match for: ${track.title}")
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            _uiState.update { it.copy(isResolvingTrack = false) }
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("PlayerViewModel", "On-demand resolution failed: ${e.message}")
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        _uiState.update { it.copy(isResolvingTrack = false) }
+                    }
+                }
+            }
+            return
+        }
+        
+        // === NORMAL PLAYBACK: Regular YouTube/local tracks ===
         val ref = track.originalBackendRef
         
         when (ref) {
@@ -441,72 +518,151 @@ class PlayerViewModel @Inject constructor(
                 playMediaMetadata(ref.toMediaMetadata())
             }
             is com.zionhuang.innertube.models.SongItem -> {
-                playMediaMetadata(ref.toMediaMetadata())
+                try {
+                    playMediaMetadata(ref.toMediaMetadata())
+                } catch (e: Exception) {
+                    android.util.Log.e("PlayerViewModel", "Error converting SongItem to Metadata: ${e.message}")
+                    e.printStackTrace()
+                    // If conversion fails, fallback to search (continue to else block logic if ref was null, but here we return)
+                    // Better to launch the search fallback here explicitly
+                    searchAndPlay(track) 
+                }
             }
             else -> {
-                // For tracks without backend ref (e.g., Spotify), search YouTube and play
-                viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                    try {
-                        // Search YouTube for this track
-                        val searchQuery = "${track.title} ${track.artist}"
-                        val searchResult = com.zionhuang.innertube.YouTube.search(searchQuery, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
+                searchAndPlay(track)
+            }
+        }
+    }
+
+    private fun searchAndPlay(track: Track) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                // Search YouTube for this track
+                val searchQuery = "${track.title} ${track.artist}"
+                val searchResult = com.zionhuang.innertube.YouTube.search(searchQuery, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
+                
+                // Find best matching song - not just the first one
+                val songs = searchResult?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>() ?: emptyList()
+                val matchedSong = findBestMatchingSong(songs, track.title, track.artist)
+                
+                if (matchedSong != null) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        playMediaMetadata(matchedSong.toMediaMetadata())
+                    }
+                } else if (songs.isNotEmpty()) {
+                    // Fallback to first song if no good match found
+                    android.util.Log.w("PlayerViewModel", "No exact match found for '${track.title}', using first result")
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        playMediaMetadata(songs.first().toMediaMetadata())
+                    }
+                } else {
+                    // No results with full query - try simplified searches
+                    android.util.Log.w("PlayerViewModel", "No results for '${track.title} ${track.artist}', trying title only...")
+                    
+                    // Try 1: Title only search
+                    val titleOnlyResult = com.zionhuang.innertube.YouTube.search(track.title, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
+                    val titleOnlySongs = titleOnlyResult?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>() ?: emptyList()
+                    
+                    if (titleOnlySongs.isNotEmpty()) {
+                        val matchedSong = findBestMatchingSong(titleOnlySongs, track.title, track.artist)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            playMediaMetadata((matchedSong ?: titleOnlySongs.first()).toMediaMetadata())
+                        }
+                    } else {
+                        // Try 2: Strip common suffixes and parentheticals from title
+                        val cleanTitle = track.title
+                            .replace(Regex("\\s*\\(.*?\\)"), "")  // Remove (feat. X), (Remix), etc
+                            .replace(Regex("\\s*\\[.*?\\]"), "")  // Remove [Official Video], etc
+                            .replace(Regex("\\s*-.*"), "")        // Remove " - Something" suffixes
+                            .trim()
                         
-                        // Find best matching song - not just the first one
-                        val songs = searchResult?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>() ?: emptyList()
-                        val matchedSong = findBestMatchingSong(songs, track.title, track.artist)
-                        
-                        if (matchedSong != null) {
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                playMediaMetadata(matchedSong.toMediaMetadata())
-                            }
-                        } else if (songs.isNotEmpty()) {
-                            // Fallback to first song if no good match found
-                            android.util.Log.w("PlayerViewModel", "No exact match found for '${track.title}', using first result")
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                playMediaMetadata(songs.first().toMediaMetadata())
+                        if (cleanTitle != track.title && cleanTitle.length > 2) {
+                            val cleanResult = com.zionhuang.innertube.YouTube.search("$cleanTitle ${track.artist}", com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
+                            val cleanSongs = cleanResult?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>() ?: emptyList()
+                            
+                            if (cleanSongs.isNotEmpty()) {
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    playMediaMetadata(cleanSongs.first().toMediaMetadata())
+                                }
+                            } else {
+                                android.util.Log.e("PlayerViewModel", "Could not find YouTube match for '${track.title}' by '${track.artist}'")
+                                _toastMessage.emit("Could not find matching song")
                             }
                         } else {
-                            // No results at all - try with constructed metadata
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                playerConnection?.playQueue(
-                                    queue = ListQueue(
-                                        title = track.title,
-                                        items = listOf(com.vikify.app.models.MediaMetadata(
-                                            id = track.id,
-                                            title = track.title,
-                                            artists = listOf(com.vikify.app.models.MediaMetadata.Artist(name = track.artist, id = null)),
-                                            duration = (track.duration / 1000).toInt(),
-                                            thumbnailUrl = track.remoteArtworkUrl,
-                                            genre = null
-                                        ))
-                                    )
-                                )
-                            }
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        // Fallback on error
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            playerConnection?.playQueue(
-                                queue = ListQueue(
-                                    title = track.title,
-                                    items = listOf(com.vikify.app.models.MediaMetadata(
-                                        id = track.id,
-                                        title = track.title,
-                                        artists = listOf(com.vikify.app.models.MediaMetadata.Artist(name = track.artist, id = null)),
-                                        duration = (track.duration / 1000).toInt(),
-                                        thumbnailUrl = track.remoteArtworkUrl,
-                                        genre = null
-                                    ))
-                                )
-                            )
+                            android.util.Log.e("PlayerViewModel", "Could not find YouTube match for '${track.title}' by '${track.artist}'")
+                            _toastMessage.emit("Could not find matching song")
                         }
                     }
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("PlayerViewModel", "Error searching for track: ${e.message}")
+                e.printStackTrace()
+                _toastMessage.emit("Playback failed: ${e.message}")
             }
         }
     }
     
+    /**
+     * QUEUE ENTIRE PLAYLIST and start at specific index.
+     * This fixes the issue where only one song plays from Spotify/other lists.
+     */
+    fun playFromPlaylist(playlist: List<Track>, index: Int, title: String = "Playlist") {
+        playPlaylistWithIndex(playlist, index, title)
+    }
+    
+    fun playPlaylistWithIndex(tracks: List<Track>, startIndex: Int, title: String = "Playlist") {
+        if (tracks.isEmpty()) return
+        
+        // Update context title for UI display
+        _contextTitle.value = title
+        
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            val queueItems = tracks.map { track ->
+                // Check if we have a direct backend ref (e.g. SongEntity or Innertube SongItem)
+                // If not (e.g. Spotify), construct basic metadata to be resolved later
+                val ref = track.originalBackendRef
+                
+                try {
+                    when (ref) {
+                        is com.vikify.app.db.entities.Song -> ref.toMediaMetadata()
+                        is com.zionhuang.innertube.models.SongItem -> ref.toMediaMetadata()
+                        else -> com.vikify.app.models.MediaMetadata(
+                                id = track.id,
+                                title = track.title,
+                                artists = listOf(com.vikify.app.models.MediaMetadata.Artist(name = track.artist, id = null)),
+                                duration = (track.duration / 1000).toInt(),
+                                thumbnailUrl = track.remoteArtworkUrl,
+                                genre = null
+                        )
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("PlayerViewModel", "Error converting track to metadata: ${e.message}")
+                    // Fallback to basic metadata from Track object
+                    com.vikify.app.models.MediaMetadata(
+                        id = track.id,
+                        title = track.title,
+                        artists = listOf(com.vikify.app.models.MediaMetadata.Artist(name = track.artist, id = null)),
+                        duration = (track.duration / 1000).toInt(),
+                        thumbnailUrl = track.remoteArtworkUrl,
+                        genre = null
+                    )
+                }
+            }
+            
+            val validIndex = startIndex.coerceIn(0, queueItems.size - 1)
+            
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                playerConnection?.playQueue(
+                    ListQueue(
+                        title = title,
+                        items = queueItems,
+                        startIndex = validIndex
+                    )
+                )
+            }
+        }
+    }
+
     /**
      * Find the best matching song from search results.
      * This prevents playing wrong songs (covers, remixes, wrong language versions).
@@ -532,8 +688,8 @@ class PlayerViewModel @Inject constructor(
             // Combined score: title is more important than artist
             val totalScore = (titleScore * 0.7) + (artistScore * 0.3)
             
-            // Require at least 60% match
-            if (totalScore >= 0.6) {
+            // Require at least 40% match (lowered from 60% for better fuzzy matching)
+            if (totalScore >= 0.4) {
                 song to totalScore
             } else {
                 null
@@ -589,12 +745,8 @@ class PlayerViewModel @Inject constructor(
     }
     
     fun playMediaMetadata(metadata: com.vikify.app.models.MediaMetadata) {
-        playerConnection?.playQueue(
-            queue = ListQueue(
-                title = metadata.title ?: "Playing",
-                items = listOf(metadata)
-            )
-        )
+        // Use playSingleTrack to enable Autoplay/Radio mode automatically
+        playerConnection?.playSingleTrack(metadata)
     }
 
     fun updateProgress(progress: Float) {
@@ -644,23 +796,139 @@ class PlayerViewModel @Inject constructor(
         val player = playerConnection?.player ?: return
         // Cycle: 0 (off) -> 1 (all) -> 2 (one) -> 0
         val newMode = (player.repeatMode + 1) % 3
-        player.repeatMode = newMode
         _uiState.update { it.copy(repeatMode = newMode) }
     }
-    
-    fun toggleLike() {
-        val track = _uiState.value.currentTrack ?: return
-        val newValue = !_uiState.value.isLiked
-        _uiState.update { it.copy(isLiked = newValue) }
+
+    /**
+     * Add current track to a local playlist
+     */
+    fun addToPlaylist(playlistId: String) {
+        val uiTrack = _uiState.value.currentTrack ?: return
         
-        // Persist to database
         viewModelScope.launch {
-            val song = database.song(track.id).firstOrNull()?.song
-            if (song != null) {
-                database.update(song.toggleLike())
+            try {
+                // 1. Ensure song exists in DB
+                // Convert UI Track -> MediaMetadata -> SongEntity
+                val metadata = com.vikify.app.models.MediaMetadata(
+                    id = uiTrack.id,
+                    title = uiTrack.title,
+                    artists = listOf(com.vikify.app.models.MediaMetadata.Artist(name = uiTrack.artist, id = null)),
+                    duration = (uiTrack.duration / 1000).toInt(),
+                    thumbnailUrl = uiTrack.remoteArtworkUrl,
+                    genre = null
+                )
+                
+                // Insert/Update song in DB
+                withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    database.insert(metadata)
+                }
+
+                // 2. Add relation
+                playlistRepository.addSongToPlaylist(playlistId, uiTrack.id)
+                
+                // 3. Feedback
+                _toastMessage.emit("Added to playlist")
+            } catch (e: Exception) {
+                _toastMessage.emit("Failed to add to playlist")
+                e.printStackTrace()
             }
         }
     }
+    
+    /**
+     * Get local playlists for picker
+     */
+    val localPlaylists = playlistRepository.getLocalPlaylists()
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Lazily, emptyList())
+
+    fun createLocalPlaylist(name: String) {
+        viewModelScope.launch {
+            playlistRepository.createLocalPlaylist(name)
+        }
+    }
+
+    /**
+     * Load local playlist tracks
+     */
+    suspend fun loadLocalPlaylist(playlistId: String): List<Track>? {
+        // Check if playlist exists
+        val playlist = playlistRepository.getPlaylist(playlistId).firstOrNull() ?: return null
+        
+        // Get songs
+        val songs = playlistRepository.getPlaylistSongs(playlistId).firstOrNull() ?: emptyList()
+        
+        // Convert to UI Track
+        return songs.map { song ->
+            Track(
+                id = song.song.id, // DB ID
+                title = song.song.title,
+                artist = song.song.artists.joinToString(", ") { it.name },
+                remoteArtworkUrl = song.song.thumbnailUrl,
+                duration = song.song.duration * 1000L,
+                originalBackendRef = song.song
+            )
+        }
+    }
+
+    /**
+     * Toggle like status for the current track.
+     * Uses OPTIMISTIC UI UPDATE with rollback on database error.
+     * 
+     * Flow:
+     * 1. Update UI immediately (snappy feedback)
+     * 2. Persist to database in background
+     * 3. Rollback UI if database write fails
+     */
+    fun toggleLike() {
+        val track = _uiState.value.currentTrack ?: return
+        
+        // 1. OPTIMISTIC UPDATE (Instant Feedback for snappy UX)
+        val originalState = _uiState.value.isLiked
+        val newState = !originalState
+        _uiState.update { it.copy(isLiked = newState) }
+        
+        // 2. PERSIST TO DATABASE (Background)
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val existingSong = database.song(track.id).firstOrNull()?.song
+                
+                if (existingSong != null) {
+                    // Song exists - use localToggleLike() for safe local toggle
+                    val updatedSong = existingSong.copy(
+                        liked = newState,
+                        likedDate = if (newState) java.time.LocalDateTime.now() else null
+                    )
+                    database.update(updatedSong)
+                    android.util.Log.d("PlayerViewModel", "Like toggled for ${track.id}: $newState")
+                } else if (newState) {
+                    // Song not in database - only insert if we're liking it
+                    // Note: Artist info stored via SongArtistMap junction table, not in SongEntity
+                    val newSong = com.vikify.app.db.entities.SongEntity(
+                        id = track.id,
+                        title = track.title,
+                        thumbnailUrl = track.remoteArtworkUrl,
+                        duration = if (track.duration > 0) (track.duration / 1000).toInt() else 0,
+                        localPath = null,
+                        liked = true,
+                        likedDate = java.time.LocalDateTime.now(),
+                        inLibrary = java.time.LocalDateTime.now()
+                    )
+                    database.insert(newSong)
+                    android.util.Log.d("PlayerViewModel", "New song liked: ${track.id}")
+                }
+                // Note: If unliking a song that doesn't exist, we just don't do anything
+                
+            } catch (e: Exception) {
+                // 3. ROLLBACK ON ERROR - Revert UI to original state
+                android.util.Log.e("PlayerViewModel", "Failed to toggle like: ${e.message}", e)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    _uiState.update { it.copy(isLiked = originalState) }
+                    _toastMessage.emit("Failed to save like status")
+                }
+            }
+        }
+    }
+
     
     /**
      * Remove a track from the queue at the specified index.
@@ -697,7 +965,7 @@ class PlayerViewModel @Inject constructor(
         
         // Check if already downloaded
         if (_downloadedTrackIds.value.contains(track.id)) {
-            viewModelScope.launch {
+        viewModelScope.launch {
                 _toastMessage.emit("\"${track.title}\" is already downloaded")
             }
             return
@@ -742,77 +1010,50 @@ class PlayerViewModel @Inject constructor(
     }
     
     /**
-     * Seek to a specific track in the current queue without clearing the queue
+     * Seek to a specific track in the current queue by its ID.
+     * FIX: Find the song in ExoPlayer's actual queue, not the filtered UI list.
      */
     fun seekToQueueItem(track: Track) {
         val player = playerConnection?.player ?: return
-        val queueItems = _queueTracks.value
-        val index = queueItems.indexOfFirst { it.id == track.id }
-        if (index >= 0) {
-            // Add 1 because current track is not in queueTracks (it's filtered out)
-            val currentIndex = player.currentMediaItemIndex
-            val targetIndex = if (index >= currentIndex) index + 1 else index
-            player.seekTo(index, 0)
+        
+        // Find the track's position in ExoPlayer's actual queue by media ID
+        val playerIndex = (0 until player.mediaItemCount).firstOrNull { i ->
+            player.getMediaItemAt(i).mediaId == track.id
+        }
+        
+        if (playerIndex != null && playerIndex >= 0) {
+            player.seekTo(playerIndex, 0)
             player.play()
+            android.util.Log.d("PlayerViewModel", "Seeking to queue item: ${track.title} at ExoPlayer index $playerIndex")
+        } else {
+            android.util.Log.w("PlayerViewModel", "Track ${track.id} not found in ExoPlayer queue")
         }
     }
     
     /**
      * Add a track to the queue (from swipe gesture)
-     * Searches YouTube for the track and adds it to the current queue
+     * Uses cached YouTube search to avoid rate limiting
      */
     fun addToQueue(track: Track) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                val searchQuery = "${track.title} ${track.artist}"
-                val searchResult = com.zionhuang.innertube.YouTube.search(searchQuery, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
-                val songs = searchResult?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>() ?: emptyList()
+                val mediaItem = getYouTubeMediaItem(track)
                 
-                // Use smart matching instead of blind first result
-                val song = findBestMatchingSong(songs, track.title, track.artist) ?: songs.firstOrNull()
-                
-                if (song != null) {
-                    val metadata = song.toMediaMetadata()
-                    val mediaItem = metadata.toMediaItem()
-                    
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        playerConnection?.player?.addMediaItem(mediaItem)
-                        _toastMessage.emit("Added \"${track.title}\" to queue")
-                    }
-                } else {
-                    _toastMessage.emit("Could not find track on YouTube")
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                _toastMessage.emit("Failed to add to queue")
-            }
-        }
-    }
-    
-    /**
-     * Add a track to play next (after current song)
-     * Different from addToQueue which adds to the end
-     */
-    fun playNext(track: Track) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val searchQuery = "${track.title} ${track.artist}"
-                val searchResult = com.zionhuang.innertube.YouTube.search(searchQuery, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
-                val songs = searchResult?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>() ?: emptyList()
-                
-                val song = findBestMatchingSong(songs, track.title, track.artist) ?: songs.firstOrNull()
-                
-                if (song != null) {
-                    val metadata = song.toMediaMetadata()
-                    val mediaItem = metadata.toMediaItem()
-                    
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        val player = playerConnection?.player
-                        if (player != null) {
-                            // Insert at current position + 1 (after current song)
-                            val insertIndex = player.currentMediaItemIndex + 1
-                            player.addMediaItem(insertIndex, mediaItem)
-                            _toastMessage.emit("Playing \"${track.title}\" next")
+                if (mediaItem != null) {
+                    // CRITICAL: NonCancellable ensures queue add survives ViewModel destruction
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.NonCancellable) {
+                        val player = playerConnection?.player ?: return@withContext
+                        
+                        // DUPLICATE CHECK: Prevent queue spam
+                        val isDuplicate = (0 until player.mediaItemCount).any { i ->
+                            player.getMediaItemAt(i).mediaId == mediaItem.mediaId
+                        }
+                        
+                        if (!isDuplicate) {
+                            player.addMediaItem(mediaItem)
+                            _toastMessage.emit("Added \"${track.title}\" to queue")
+                        } else {
+                            _toastMessage.emit("\"${track.title}\" is already in queue")
                         }
                     }
                 } else {
@@ -820,7 +1061,118 @@ class PlayerViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                _toastMessage.emit("Failed to add track")
+                _toastMessage.emit("Failed to add to queue - try again")
+            }
+        }
+    }
+    
+    // Rate limiting: track last API call time to prevent YouTube throttling
+    private var lastYouTubeApiCall = 0L
+    private val apiCallDelayMs = 500L // Minimum 500ms between YouTube API calls
+    
+    // Spotify → YouTube MediaItem cache (avoids repeated searches for same song)
+    // Key: "title|artist", Value: MediaItem
+    private val spotifyToYouTubeCache = java.util.concurrent.ConcurrentHashMap<String, androidx.media3.common.MediaItem>()
+    
+    /**
+     * Get or search for a YouTube MediaItem for a Spotify track
+     * Priority:
+     * 1. Pre-resolved youtubeId in Track (fastest, no API call)
+     * 2. originalBackendRef if it's a SongItem (no API call)
+     * 3. Cache lookup (no API call)
+     * 4. YouTube search (API call, rate-limited)
+     */
+    private suspend fun getYouTubeMediaItem(track: Track): androidx.media3.common.MediaItem? {
+        // 1. Check for pre-resolved YouTube ID (fastest path)
+        track.youtubeId?.let { ytId ->
+            android.util.Log.d("PlayerViewModel", "Using pre-resolved YouTube ID for ${track.title}")
+            val metadata = com.vikify.app.models.MediaMetadata(
+                id = ytId,
+                title = track.title,
+                artists = listOf(com.vikify.app.models.MediaMetadata.Artist(id = null, name = track.artist)),
+                duration = track.duration.toInt().coerceAtLeast(0),
+                thumbnailUrl = track.remoteArtworkUrl,
+                genre = null
+            )
+            return metadata.toMediaItem()
+        }
+        
+        // 2. Check originalBackendRef
+        when (val ref = track.originalBackendRef) {
+            is com.zionhuang.innertube.models.SongItem -> {
+                android.util.Log.d("PlayerViewModel", "Using originalBackendRef for ${track.title}")
+                return ref.toMediaMetadata().toMediaItem()
+            }
+            is com.vikify.app.db.entities.Song -> {
+                return ref.toMediaMetadata().toMediaItem()
+            }
+        }
+        
+        val cacheKey = "${track.title}|${track.artist}".lowercase()
+        
+        // 3. Check cache
+        spotifyToYouTubeCache[cacheKey]?.let { 
+            android.util.Log.d("PlayerViewModel", "Cache HIT for ${track.title}")
+            return it 
+        }
+        
+        // 4. Rate-limited YouTube search (last resort)
+        val now = System.currentTimeMillis()
+        val timeSinceLastCall = now - lastYouTubeApiCall
+        if (timeSinceLastCall < apiCallDelayMs) {
+            kotlinx.coroutines.delay(apiCallDelayMs - timeSinceLastCall)
+        }
+        lastYouTubeApiCall = System.currentTimeMillis()
+        
+        android.util.Log.d("PlayerViewModel", "Cache MISS, searching YouTube for ${track.title}")
+        val searchQuery = "${track.title} ${track.artist}"
+        val searchResult = com.zionhuang.innertube.YouTube.search(searchQuery, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
+        val songs = searchResult?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>() ?: emptyList()
+        val song = findBestMatchingSong(songs, track.title, track.artist) ?: songs.firstOrNull()
+        
+        return song?.let {
+            val metadata = it.toMediaMetadata()
+            val mediaItem = metadata.toMediaItem()
+            spotifyToYouTubeCache[cacheKey] = mediaItem
+            android.util.Log.d("PlayerViewModel", "Cached ${track.title} -> ${mediaItem.mediaId}")
+            mediaItem
+        }
+    }
+    
+    /**
+     * Add a track to play next (after current song)
+     * Uses cached YouTube search to avoid rate limiting
+     */
+    fun playNext(track: Track) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val mediaItem = getYouTubeMediaItem(track)
+                
+                if (mediaItem != null) {
+                    // CRITICAL: NonCancellable ensures queue add survives ViewModel destruction
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.NonCancellable) {
+                        val player = playerConnection?.player ?: return@withContext
+                        
+                        // DUPLICATE CHECK: Prevent queue spam
+                        val isDuplicate = (0 until player.mediaItemCount).any { i ->
+                            player.getMediaItemAt(i).mediaId == mediaItem.mediaId
+                        }
+                        
+                        if (!isDuplicate) {
+                            // Insert at current position + 1 (after current song)
+                            val insertIndex = player.currentMediaItemIndex + 1
+                            player.addMediaItem(insertIndex, mediaItem)
+                            _toastMessage.emit("Playing \"${track.title}\" next")
+                        } else {
+                            _toastMessage.emit("\"${track.title}\" is already in queue")
+                        }
+                    }
+                } else {
+                    _toastMessage.emit("Could not find track on YouTube")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _toastMessage.emit("Failed to add track - try again")
             }
         }
     }
@@ -888,7 +1240,7 @@ class PlayerViewModel @Inject constructor(
                 ),
                 isPlaying = true
             )
-        }
+    }
     }
     
     /**
@@ -938,7 +1290,7 @@ class PlayerViewModel @Inject constructor(
                 ),
                 isPlaying = true
             )
-        }
+    }
     }
     
     /**
@@ -976,58 +1328,75 @@ class PlayerViewModel @Inject constructor(
      */
     fun playAllTracks(tracks: List<Track>, shuffle: Boolean = false) {
         if (tracks.isEmpty()) return
-        
+
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val tracksToPlay = if (shuffle) tracks.shuffled() else tracks
-            
-            // Start playing the first track immediately
+            val mediaItems = tracksToPlay.map { it.toMediaMetadata() }.toMutableList()
+
+            // 1. Resolve the FIRST track immediately (Sync)
+            // This ensures playback starts successfully (Fixes Error 3000)
             val firstTrack = tracksToPlay.first()
             try {
                 val searchQuery = "${firstTrack.title} ${firstTrack.artist}"
                 val searchResult = com.zionhuang.innertube.YouTube.search(searchQuery, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
                 val songs = searchResult?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>() ?: emptyList()
-                
-                // Use smart matching for first track
                 val firstSong = findBestMatchingSong(songs, firstTrack.title, firstTrack.artist) ?: songs.firstOrNull()
-                
+
                 if (firstSong != null) {
-                    val firstMetadata = firstSong.toMediaMetadata()
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        playerConnection?.playQueue(
-                            queue = ListQueue(title = "Playlist", items = listOf(firstMetadata))
-                        )
-                        if (shuffle) {
-                            playerConnection?.player?.shuffleModeEnabled = true
-                            _uiState.update { it.copy(shuffleEnabled = true) }
-                        }
-                    }
-                    
-                    // Load remaining tracks in background and add to queue
-                    val remainingTracks = tracksToPlay.drop(1).take(29) // Limit to 30 total
-                    for (track in remainingTracks) {
-                        try {
-                            val query = "${track.title} ${track.artist}"
-                            val result = com.zionhuang.innertube.YouTube.search(query, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
-                            val trackSongs = result?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>() ?: emptyList()
-                            
-                            // Use smart matching for each track
-                            val song = findBestMatchingSong(trackSongs, track.title, track.artist) ?: trackSongs.firstOrNull()
-                            
-                            if (song != null) {
-                                val metadata = song.toMediaMetadata()
-                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                    playerConnection?.player?.addMediaItem(metadata.toMediaItem())
-                                }
-                            }
-                            kotlinx.coroutines.delay(80) // Slightly faster
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
+                    mediaItems[0] = firstSong.toMediaMetadata()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                _toastMessage.emit("Could not find tracks on YouTube")
+            }
+
+            // 2. Load the ENTIRE queue (mix of 1 resolved + N unresolved)
+            // This ensures Queue Size = 34 (Fixes 15-song Autoplay bug)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                playerConnection?.playQueue(
+                    queue = ListQueue(
+                        title = "Playlist",
+                        items = mediaItems,
+                        startIndex = 0,
+                        startShuffled = shuffle
+                    )
+                )
+                if (shuffle) {
+                    playerConnection?.player?.shuffleModeEnabled = true
+                    _uiState.update { it.copy(shuffleEnabled = true) }
+                }
+            }
+
+            // 3. Resolve the REST in background and update Player
+            // This fixes Error 3000 for specific tracks as we reach them
+            val remainingTracks = tracksToPlay.drop(1)
+            remainingTracks.forEachIndexed { index, track ->
+                try {
+                    // Optimization: Delay slightly to let UI settle, but process fast enough for skipping
+                    if (index == 0) kotlinx.coroutines.delay(100) 
+                    
+                    val query = "${track.title} ${track.artist}"
+                    val result = com.zionhuang.innertube.YouTube.search(query, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
+                    val trackSongs = result?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>() ?: emptyList()
+                    val song = findBestMatchingSong(trackSongs, track.title, track.artist) ?: trackSongs.firstOrNull()
+
+                    if (song != null) {
+                        val resolvedMetadata = song.toMediaMetadata()
+                        val playerIndex = index + 1
+                        
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            // Update the item in the live player!
+                            // This seamlessly "activates" the track before the user reaches it
+                            // Use remove+add for compatibility if replaceMediaItem is missing
+                            val player = playerConnection?.player
+                            if (player != null && playerIndex < player.mediaItemCount) {
+                                player.removeMediaItem(playerIndex)
+                                player.addMediaItem(playerIndex, resolvedMetadata.toMediaItem())
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
     }
@@ -1044,14 +1413,16 @@ class PlayerViewModel @Inject constructor(
         
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             var successCount = 0
-            val totalTracks = tracks.size.coerceAtMost(100) // Limit for safety
+            val totalTracks = tracks.size // No limit
             
-            for ((index, track) in tracks.take(totalTracks).withIndex()) {
+            for ((index, track) in tracks.withIndex()) {
+                if (!_isDownloading.value) break // Allow cancellation
+                
                 try {
                     // Search YouTube for this track
                     val searchQuery = "${track.title} ${track.artist}"
-                    val searchResult = com.zionhuang.innertube.YouTube.search(searchQuery, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
-                    val firstSong = searchResult?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>()?.firstOrNull()
+                    val result = com.zionhuang.innertube.YouTube.search(searchQuery, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
+                    val firstSong = result?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>()?.firstOrNull()
                     
                     if (firstSong != null) {
                         // Convert to MediaMetadata and queue for download
@@ -1063,22 +1434,31 @@ class PlayerViewModel @Inject constructor(
                         // Track this as downloaded by ORIGINAL track ID (for UI indicator)
                         _downloadedTrackIds.update { it + track.id }
                         successCount++
+                    } else {
+                        // Log failure
+                        println("Could not find track: $searchQuery")
                     }
                     
                     _downloadProgress.value = (index + 1).toFloat() / totalTracks
                     
-                    // Small delay to avoid rate limiting
-                    kotlinx.coroutines.delay(300)
-                    
+                    // Adaptive delay: shorter for success (already searched), longer for fail?
+                    // Keep 200ms to be safe
+                    kotlinx.coroutines.delay(200)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
             }
             
             _isDownloading.value = false
-            _toastMessage.emit("Queued $successCount of $totalTracks tracks for download")
+            _downloadProgress.value = 0f
+            if (successCount > 0) {
+                _toastMessage.emit("Queued $successCount songs for download")
+            } else {
+                _toastMessage.emit("Failed to find songs on YouTube")
+            }
         }
     }
+
     
     // --- SLEEP TIMER ---
     
@@ -1117,7 +1497,7 @@ class PlayerViewModel @Inject constructor(
                         // Monitor playback and pause when track changes
                         var initialMediaId = playerConnection?.player?.currentMediaItem?.mediaId
                         while (coroutineContext.isActive) {
-                            kotlinx.coroutines.delay(1000)
+            kotlinx.coroutines.delay(1000)
                             val currentId = playerConnection?.player?.currentMediaItem?.mediaId
                             if (currentId != null && currentId != initialMediaId) {
                                 // Track changed, pause playback
@@ -1162,7 +1542,11 @@ class PlayerViewModel @Inject constructor(
         _sleepTimerState.value = com.vikify.app.vikifyui.components.SleepTimerState()
         viewModelScope.launch {
             _toastMessage.emit("Sleep timer cancelled")
-        }
+    }
+}
+    // === Spotify Helper ===
+    suspend fun loadSpotifyPlaylist(playlistId: String, spotifyRepository: com.vikify.app.spotify.SpotifyRepository): List<com.vikify.app.spotify.SpotifyTrack> {
+        return spotifyRepository.loadPlaylistAndSync(playlistId, database)
     }
 }
 

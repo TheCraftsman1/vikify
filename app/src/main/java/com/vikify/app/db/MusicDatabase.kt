@@ -24,6 +24,7 @@ import com.vikify.app.db.entities.FormatEntity
 import com.vikify.app.db.entities.GenreEntity
 import com.vikify.app.db.entities.LyricsEntity
 import com.vikify.app.db.entities.PlayCountEntity
+import com.vikify.app.db.entities.PlayEvent
 import com.vikify.app.db.entities.PlaylistEntity
 import com.vikify.app.db.entities.PlaylistEntity.Companion.generatePlaylistId
 import com.vikify.app.db.entities.PlaylistSongMap
@@ -68,7 +69,7 @@ class MusicDatabase(
     fun close() = delegate.close()
 
     companion object {
-        const val MUSIC_DATABASE_VERSION = 20
+        const val MUSIC_DATABASE_VERSION = 23
     }
 }
 
@@ -92,7 +93,8 @@ class MusicDatabase(
         PlayCountEntity::class,
         Event::class,
         RelatedSongMap::class,
-        RecentActivityEntity::class
+        RecentActivityEntity::class,
+        PlayEvent::class
     ],
     views = [
         SortedSongArtistMap::class,
@@ -117,6 +119,8 @@ class MusicDatabase(
         AutoMigration(from = 17, to = 18, spec = Migration17To18::class), // Fix Room nonsense
         AutoMigration(from = 18, to = 19), // Recent activity
         AutoMigration(from = 19, to = 20, spec = Migration19To20::class), // Db optimization, remove totalplaytime, local media fields
+        AutoMigration(from = 20, to = 21, spec = Migration20To21::class), // Spotify Columns
+        AutoMigration(from = 21, to = 22), // Hybrid-Offline
     ]
 )
 @TypeConverters(Converters::class)
@@ -134,6 +138,8 @@ abstract class InternalDatabase : RoomDatabase() {
                     .addMigrations(MIGRATION_14_15)
                     .addMigrations(MIGRATION_15_16)
                     .addMigrations(MIGRATION_16_17)
+                    .addMigrations(MIGRATION_20_21)
+                    .addMigrations(MIGRATION_22_23)
                     .build()
             )
 
@@ -684,3 +690,43 @@ class Migration17To18 : AutoMigrationSpec
     DeleteColumn(tableName = "song", columnName = "totalPlayTime"),
 )
 class Migration19To20 : AutoMigrationSpec
+
+class Migration20To21 : AutoMigrationSpec
+
+/**
+ * Spotify Migration Bridge
+ * Adds fields for mapping Spotify songs to YouTube IDs
+ */
+val MIGRATION_20_21 = object : Migration(20, 21) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Add columns with default NULL
+        db.execSQL("ALTER TABLE `song` ADD COLUMN `spotifyId` TEXT DEFAULT NULL")
+        db.execSQL("ALTER TABLE `song` ADD COLUMN `spotifyTitle` TEXT DEFAULT NULL")
+        db.execSQL("ALTER TABLE `song` ADD COLUMN `spotifyArtist` TEXT DEFAULT NULL")
+        db.execSQL("ALTER TABLE `song` ADD COLUMN `spotifyArtworkUrl` TEXT DEFAULT NULL")
+        
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_song_spotifyId` ON `song` (`spotifyId`)")
+    }
+}
+
+class Migration22To23 : AutoMigrationSpec
+
+/**
+ * Time Capsule Migration
+ * Adds table for PlayEvent history
+ */
+val MIGRATION_22_23 = object : Migration(22, 23) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS `play_history` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+                `songId` TEXT NOT NULL, 
+                `title` TEXT NOT NULL, 
+                `artist` TEXT NOT NULL, 
+                `genre` TEXT, 
+                `durationPlayed` INTEGER NOT NULL, 
+                `timestamp` INTEGER NOT NULL
+            )
+        """.trimIndent())
+    }
+}

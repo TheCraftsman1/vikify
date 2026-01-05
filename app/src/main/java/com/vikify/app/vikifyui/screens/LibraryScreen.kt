@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,7 +51,11 @@ fun LibraryScreen(
     onLikedSongsClick: () -> Unit = {},
     onDownloadsClick: () -> Unit = {},
     playlists: List<com.vikify.app.spotify.SpotifyPlaylist> = emptyList(),
+    downloadedSongs: List<com.vikify.app.db.entities.Song> = emptyList(),
+    onDownloadedSongClick: (com.vikify.app.db.entities.Song) -> Unit = {},
     onSettingsClick: () -> Unit,
+    onSearchClick: () -> Unit = {},
+    onAddClick: () -> Unit = {},
     onLongPressItem: ((String, String) -> Unit)? = null, // title, subtitle for context menu
     modifier: Modifier = Modifier
 ) {
@@ -67,12 +72,168 @@ fun LibraryScreen(
 
     var selectedTab by remember { mutableStateOf(LibraryTab.Playlists) }
     
+    // Downloaded Tab State (Move outside LazyColumn)
+    var downloadedFilter by remember { mutableStateOf(0) } // 0 = Songs, 1 = Albums
+    val downloadedAlbums = remember(downloadedSongs) {
+        downloadedSongs.groupBy { it.album }.mapNotNull { (albumEntity, songs) ->
+            if (albumEntity != null) {
+                Triple(albumEntity, songs.size, songs.first().song.thumbnailUrl)
+            } else null
+        }
+    }
+    
     // Theme-aware colors
     val isDark = VikifyTheme.isDark
     val backgroundColor = if (isDark) Color.Transparent else LightColors.Background
     val surfaceColor = if (isDark) DarkColors.Surface else LightColors.Surface
     val textPrimary = if (isDark) DarkColors.TextPrimary else LightColors.TextPrimary
     val textSecondary = if (isDark) DarkColors.TextSecondary else LightColors.TextSecondary
+
+    // =========================================================================
+    // CREATE PLAYLIST DIALOG
+    // =========================================================================
+    var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    var newPlaylistName by remember { mutableStateOf("") }
+    val coroutineScope = rememberCoroutineScope()
+    val playlistRepository = hiltViewModel<LibrarySongsViewModel>().playlistRepository
+    val localPlaylists by playlistRepository.getLocalPlaylists().collectAsState(initial = emptyList())
+    
+    // Rename/Delete State
+    var playlistToRename by remember { mutableStateOf<com.vikify.app.db.entities.Playlist?>(null) }
+    var playlistToDelete by remember { mutableStateOf<com.vikify.app.db.entities.Playlist?>(null) }
+    var renameInput by remember { mutableStateOf("") }
+    
+    // Context Menu State
+    var showPlaylistMenuId by remember { mutableStateOf<String?>(null) }
+
+    if (showCreatePlaylistDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                showCreatePlaylistDialog = false 
+                newPlaylistName = ""
+            },
+            title = { 
+                Text(
+                    "Create Playlist", 
+                    fontWeight = FontWeight.Bold,
+                    color = LocalVikifyColors.current.textPrimary
+                ) 
+            },
+            text = {
+                Column {
+                    Text(
+                        "Playlist Name", 
+                        style = MaterialTheme.typography.labelMedium, 
+                        color = LocalVikifyColors.current.textSecondary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newPlaylistName,
+                        onValueChange = { newPlaylistName = it },
+                        singleLine = true,
+                        placeholder = { Text("My Playlist") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = LocalVikifyColors.current.accent,
+                            unfocusedBorderColor = LocalVikifyColors.current.border,
+                            focusedTextColor = LocalVikifyColors.current.textPrimary,
+                            unfocusedTextColor = LocalVikifyColors.current.textPrimary
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (newPlaylistName.isNotBlank()) {
+                            coroutineScope.launch {
+                                playlistRepository.createLocalPlaylist(newPlaylistName)
+                            }
+                            showCreatePlaylistDialog = false
+                            newPlaylistName = ""
+                        }
+                    },
+                    enabled = newPlaylistName.isNotBlank()
+                ) {
+                    Text("Create", color = LocalVikifyColors.current.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showCreatePlaylistDialog = false 
+                    newPlaylistName = ""
+                }) {
+                    Text("Cancel", color = LocalVikifyColors.current.textSecondary)
+                }
+            },
+            containerColor = LocalVikifyColors.current.surfaceCard,
+            textContentColor = LocalVikifyColors.current.textSecondary
+        )
+    }
+    
+    // Rename Dialog
+    if (playlistToRename != null) {
+        AlertDialog(
+            onDismissRequest = { playlistToRename = null },
+            title = { Text("Rename Playlist", color = LocalVikifyColors.current.textPrimary) },
+            text = {
+                OutlinedTextField(
+                    value = renameInput,
+                    onValueChange = { renameInput = it },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = LocalVikifyColors.current.accent,
+                            unfocusedBorderColor = LocalVikifyColors.current.border,
+                            focusedTextColor = LocalVikifyColors.current.textPrimary,
+                            unfocusedTextColor = LocalVikifyColors.current.textPrimary
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    playlistToRename?.let { pl ->
+                        if (renameInput.isNotBlank()) {
+                            coroutineScope.launch {
+                                playlistRepository.renamePlaylist(pl.id, renameInput)
+                            }
+                        }
+                    }
+                    playlistToRename = null
+                }) { Text("Rename", color = LocalVikifyColors.current.accent) }
+            },
+            dismissButton = {
+                TextButton(onClick = { playlistToRename = null }) { 
+                    Text("Cancel", color = LocalVikifyColors.current.textSecondary) 
+                }
+            },
+            containerColor = LocalVikifyColors.current.surfaceCard
+        )
+    }
+    
+    // Delete Dialog
+    if (playlistToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { playlistToDelete = null },
+            title = { Text("Delete Playlist?", color = LocalVikifyColors.current.textPrimary) },
+            text = { Text("Are you sure you want to delete '${playlistToDelete?.name}'?", color = LocalVikifyColors.current.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    playlistToDelete?.let { pl ->
+                        coroutineScope.launch {
+                            playlistRepository.deletePlaylist(pl.id)
+                        }
+                    }
+                    playlistToDelete = null
+                }) { Text("Delete", color = Color.Red) }
+            },
+            dismissButton = {
+                TextButton(onClick = { playlistToDelete = null }) { 
+                    Text("Cancel", color = LocalVikifyColors.current.textSecondary) 
+                }
+            },
+             containerColor = LocalVikifyColors.current.surfaceCard
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Background
@@ -102,17 +263,30 @@ fun LibraryScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Library",
-                        fontSize = 34.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textPrimary
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(id = com.vikify.app.R.drawable.vikify_logo),
+                            contentDescription = null,
+                            modifier = Modifier.size(38.dp)
+                        )
+                        Text(
+                            text = "Library",
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textPrimary
+                        )
+                    }
                     
                     // Header Icons (including Settings)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         IconButton(
-                            onClick = { },
+                            onClick = { 
+                                // Haptic feedback?
+                                onSearchClick() 
+                            },
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
@@ -127,7 +301,10 @@ fun LibraryScreen(
                         }
                         
                         IconButton(
-                            onClick = { },
+                            onClick = {
+                                // Show Create Playlist dialog
+                                showCreatePlaylistDialog = true
+                            },
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
@@ -248,25 +425,66 @@ fun LibraryScreen(
         }
 
         // Show playlists when Playlists tab is selected
-        items(playlists.takeIf { selectedTab == LibraryTab.Playlists } ?: emptyList()) { playlist ->
-            LibraryListItem(
-                title = playlist.name,
-                subtitle = "${playlist.trackCount} songs",
-                imageUrl = playlist.imageUrl,
-                onClick = { onPlaylistClick(playlist.id, playlist) },
-                onLongClick = { onLongPressItem?.invoke(playlist.name, "${playlist.trackCount} songs") }
-            )
+        if (selectedTab == LibraryTab.Playlists) {
+            // Local Playlists First
+            items(localPlaylists) { playlist ->
+                 Box {
+                    LibraryListItem(
+                        title = playlist.name,
+                        subtitle = "${playlist.songCount} songs • Local",
+                        imageUrl = null, // TODO: generate collage?
+                        onClick = { onPlaylistClick(playlist.id, null) }, // null spotify playlist triggers local load
+                        onLongClick = { showPlaylistMenuId = playlist.id },
+                        onMenuClick = { showPlaylistMenuId = playlist.id }
+                    )
+                    
+                    DropdownMenu(
+                        expanded = showPlaylistMenuId == playlist.id,
+                        onDismissRequest = { showPlaylistMenuId = null },
+                        containerColor = LocalVikifyColors.current.surfaceCard
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Rename", color = LocalVikifyColors.current.textPrimary) },
+                            onClick = {
+                                renameInput = playlist.name
+                                playlistToRename = playlist
+                                showPlaylistMenuId = null
+                            },
+                             leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = LocalVikifyColors.current.textSecondary) }
+                        )
+                         DropdownMenuItem(
+                            text = { Text("Delete", color = Color.Red) },
+                            onClick = {
+                                playlistToDelete = playlist
+                                showPlaylistMenuId = null
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = Color.Red) }
+                        )
+                    }
+                }
+            }
+            
+            // Spotify Playlists
+            items(playlists) { playlist ->
+                LibraryListItem(
+                    title = playlist.name,
+                    subtitle = "${playlist.trackCount} songs • Spotify",
+                    imageUrl = playlist.imageUrl,
+                    onClick = { onPlaylistClick(playlist.id, playlist) },
+                    onLongClick = { onLongPressItem?.invoke(playlist.name, "${playlist.trackCount} songs") }
+                )
+            }
         }
 
         // Empty state for Playlists tab
-        if (selectedTab == LibraryTab.Playlists && playlists.isEmpty()) {
+        if (selectedTab == LibraryTab.Playlists && playlists.isEmpty() && localPlaylists.isEmpty()) {
             item {
                 EmptyTabState(
                     icon = Icons.Rounded.LibraryMusic,
                     title = "No playlists yet",
                     subtitle = "Create or import playlists to see them here",
                     actionText = "Create Playlist",
-                    onAction = { /* Navigate to create */ }
+                    onAction = { showCreatePlaylistDialog = true }
                 )
             }
         }
@@ -299,15 +517,73 @@ fun LibraryScreen(
         
         // Downloaded tab - shows actual downloaded songs or empty state
         if (selectedTab == LibraryTab.Downloaded) {
-            // TODO: Replace with actual downloaded songs from ViewModel
-            item {
-                EmptyTabState(
-                    icon = Icons.Rounded.CloudOff,
-                    title = "No downloads yet",
-                    subtitle = "Download songs to listen offline",
-                    actionText = "Explore Music",
-                    onAction = { /* Navigate to home */ }
-                )
+            if (downloadedSongs.isEmpty()) {
+                item {
+                    EmptyTabState(
+                        icon = Icons.Rounded.CloudOff,
+                        title = "No downloads yet",
+                        subtitle = "Download songs to listen offline",
+                        actionText = "Explore Music",
+                        onAction = { /* Navigate to home */ }
+                    )
+                }
+            } else {
+                // Sub-tabs for Songs / Albums
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        FilterChip(
+                            selected = downloadedFilter == 0,
+                            onClick = { downloadedFilter = 0 },
+                            label = { Text("Songs") },
+                            leadingIcon = { Icon(Icons.Rounded.MusicNote, null, modifier = Modifier.size(16.dp)) }
+                        )
+                        FilterChip(
+                            selected = downloadedFilter == 1,
+                            onClick = { downloadedFilter = 1 },
+                            label = { Text("Albums") },
+                            leadingIcon = { Icon(Icons.Rounded.Album, null, modifier = Modifier.size(16.dp)) }
+                        )
+                    }
+                }
+                
+                if (downloadedFilter == 0) {
+                    // SONGS LIST
+                    items(downloadedSongs) { song ->
+                        LibraryListItem(
+                            title = song.song.title,
+                            subtitle = song.artists.joinToString(", ") { it.name },
+                            imageUrl = song.song.thumbnailUrl,
+                            onClick = { onDownloadedSongClick(song) },
+                            onLongClick = { onLongPressItem?.invoke(song.song.title, song.artists.joinToString(", ") { it.name }) }
+                        )
+                    }
+                } else {
+                    // ALBUMS GRID/LIST
+                    if (downloadedAlbums.isEmpty()) {
+                         item {
+                             Box(modifier = Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+                                 Text("No albums found in downloads", color = VikifyTheme.colors.textSecondary)
+                             }
+                         }
+                    }
+                    
+                    items(downloadedAlbums) { (album, count, art) ->
+                        LibraryListItem(
+                            title = album.title,
+                            subtitle = "$count songs • ${album.year ?: ""}",
+                            imageUrl = art,
+                            onClick = { 
+                                // Expand album? For now just Toast or no-op as we need AlbumDetail logic offline
+                            },
+                             onLongClick = null
+                        )
+                    }
+                }
             }
         }
     }
@@ -427,7 +703,8 @@ fun LibraryListItem(
     subtitle: String,
     imageUrl: String?,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    onMenuClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -477,12 +754,23 @@ fun LibraryListItem(
         }
         
         // Context Menu Icon
-        Icon(
-            Icons.Rounded.MoreHoriz,
-            contentDescription = "Options",
-            tint = VikifyTheme.colors.textSecondary,
-            modifier = Modifier.size(24.dp)
-        )
+        if (onMenuClick != null) {
+            IconButton(onClick = onMenuClick) {
+                Icon(
+                    Icons.Rounded.MoreHoriz,
+                    contentDescription = "Options",
+                    tint = VikifyTheme.colors.textSecondary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        } else {
+             Icon(
+                Icons.Rounded.MoreHoriz,
+                contentDescription = "Options",
+                tint = VikifyTheme.colors.textSecondary,
+                modifier = Modifier.size(24.dp)
+            )
+        }
     }
 }
 

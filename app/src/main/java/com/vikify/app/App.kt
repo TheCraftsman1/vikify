@@ -63,19 +63,36 @@ import java.net.Proxy
 import java.util.Locale
 
 @HiltAndroidApp
-class App : Application(), SingletonImageLoader.Factory {
+class App : Application(), SingletonImageLoader.Factory, androidx.work.Configuration.Provider {
     private val TAG = App::class.simpleName.toString()
+
+    @javax.inject.Inject
+    lateinit var workerFactory: androidx.hilt.work.HiltWorkerFactory
+
+    override val workManagerConfiguration: androidx.work.Configuration
+        get() = androidx.work.Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
+            
+    // ...
 
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate() {
         super.onCreate()
+        
+        // Disable default initializer to use on-demand initialization with Hilt
+        // androidx.work.WorkManager.initialize(this, workManagerConfiguration) 
+        // Note: Using Configuration.Provider in Manifest is better, usually disabling default init is done in Manifest 
+        // by removing DefaultWorkerFactoryInitializer.
+        // For now, implementing the interface handles on-demand init effectively if the default initializer is disabled or if we call initialize explicitly. 
+        // But the robust way is implementing the interface.
 
         if (BuildConfig.DEBUG) {
             System.setProperty("kotlinx.coroutines.debug", "on")
         }
 
         instance = this;
-
+        
         val locale = Locale.getDefault()
         val languageTag = locale.toLanguageTag().replace("-Hant", "") // replace zh-Hant-* to zh-*
         YouTube.locale = YouTubeLocale(

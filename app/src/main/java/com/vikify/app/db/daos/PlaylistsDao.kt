@@ -218,4 +218,51 @@ interface PlaylistsDao {
     @Delete
     fun delete(playlistSongMap: PlaylistSongMap)
     // endregion
+
+    // =========================================================================
+    // LOCAL PLAYLIST MANAGEMENT HELPERS
+    // =========================================================================
+
+    /**
+     * Get count of songs in a playlist (for positioning)
+     */
+    @Query("SELECT COUNT(*) FROM playlist_song_map WHERE playlistId = :playlistId")
+    fun playlistSongCount(playlistId: String): Int
+
+    /**
+     * Update playlist name
+     */
+    @Query("UPDATE playlist SET name = :newName WHERE id = :playlistId")
+    fun updatePlaylistName(playlistId: String, newName: String)
+
+    /**
+     * Delete playlist and its song mappings by ID
+     */
+    @Transaction
+    fun deletePlaylist(playlistId: String) {
+        clearPlaylist(playlistId) // Delete song mappings first
+        deletePlaylistById(playlistId) // Then delete playlist
+    }
+
+    /**
+     * Delete playlist by ID (internal)
+     */
+    @Query("DELETE FROM playlist WHERE id = :playlistId")
+    fun deletePlaylistById(playlistId: String)
+
+    /**
+     * Get all local playlists for picker dialog
+     */
+    @Query("""
+        SELECT 
+            p.*, 
+            COUNT(psm.playlistId) AS songCount,
+            0 AS downloadCount
+        FROM playlist p
+            LEFT JOIN playlist_song_map psm ON p.id = psm.playlistId
+        WHERE p.isLocal = 1
+        GROUP BY p.id
+        ORDER BY p.name COLLATE NOCASE ASC
+    """)
+    fun localPlaylists(): Flow<List<Playlist>>
 }

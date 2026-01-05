@@ -54,6 +54,12 @@ class QueueBoard(
 
     private var masterIndex = masterQueues.size - 1 // current queue index
     var detachedHead = false
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // USER QUEUE (Priority Stack) - Spotify-style "Add to Queue"
+    // Songs added here play BEFORE the context queue advances
+    // ═══════════════════════════════════════════════════════════════════
+    val userQueueManager = UserQueueManager()
 
     init {
         masterQueues.clear()
@@ -160,7 +166,16 @@ class QueueBoard(
             return null
         }
 
-        val match = masterQueues.firstOrNull { it.title == title } // look for matching queue. Title is uid
+        var match = masterQueues.firstOrNull { it.title == title } // look for matching queue. Title is uid
+
+        // FIX: If we want to REPLACE, we should probably just kill the old queue to ensure no ghost songs
+        // This solves the issue where old "ghost" songs (like radio tracks) persist when switching back to a playlist
+        if (match != null && replace) {
+            if (QUEUE_DEBUG) Log.d(TAG, "addQueue: 'replace' is true. Deleting old queue to ensure fresh start.")
+            masterQueues.remove(match)
+            match = null // Treat as if it doesn't exist, so it falls to the "make new queue" block
+        }
+
         if (match != null) { // found an existing queue
             // Titles ending in "+​" (u200B) signify a extension queue
             val anyExts = masterQueues.firstOrNull { it.title == match.title + " +\u200B" }
@@ -429,13 +444,18 @@ class QueueBoard(
         item.queuePos = newQueuePos
 
         // CRITICAL: Sync with ExoPlayer - remove from actual player queue
+        // CRITICAL: Sync with ExoPlayer - remove from actual player queue
         try {
-            if (index >= 0 && index < player.player.mediaItemCount) {
+            val count = player.player.mediaItemCount
+            if (index >= 0 && index < count) {
                 player.player.removeMediaItem(index)
                 Log.d(TAG, "Removed media item at index $index from ExoPlayer")
+            } else {
+                Log.w(TAG, "Skipping removeMediaItem: index $index out of bounds (count: $count)")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to remove media item from ExoPlayer: ${e.message}")
+            e.printStackTrace()
         }
 
         saveQueueSongs(item)
@@ -667,14 +687,19 @@ class QueueBoard(
         queue.getCurrentQueueShuffled().fastForEachIndexed { index, s -> s.shuffleIndex = index }
 
         // CRITICAL: Sync with ExoPlayer - move item in actual player queue
+        // CRITICAL: Sync with ExoPlayer - move item in actual player queue
         try {
-            if (fromIndex >= 0 && fromIndex < player.player.mediaItemCount &&
-                toIndex >= 0 && toIndex < player.player.mediaItemCount) {
+            val count = player.player.mediaItemCount
+            if (fromIndex >= 0 && fromIndex < count &&
+                toIndex >= 0 && toIndex < count) {
                 player.player.moveMediaItem(fromIndex, toIndex)
                 Log.d(TAG, "Moved media item from $fromIndex to $toIndex in ExoPlayer")
+            } else {
+                 Log.w(TAG, "Skipping moveMediaItem: indices out of bounds (from:$fromIndex, to:$toIndex, count:$count)")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to move media item in ExoPlayer: ${e.message}")
+            e.printStackTrace()
         }
 
         saveQueueSongs(queue)
@@ -767,10 +792,10 @@ class QueueBoard(
      * false to start from the beginning.
      * @return New current position tracker
      */
-    fun setCurrQueue(item: MultiQueueObject?, shouldResume: Boolean = true): Int? {
+    fun setCurrQueue(item: MultiQueueObject?, shouldResume: Boolean = true, forceClean: Boolean = false): Int? {
         Log.d(
             TAG,
-            "Loading queue ${item?.title ?: "null"} into player. Shuffle state = ${item?.shuffled}"
+            "Loading queue ${item?.title ?: "null"} into player. Shuffle state = ${item?.shuffled}. ForceClean = $forceClean"
         )
 
         if (item == null || item.queue.isEmpty()) {
@@ -779,18 +804,72 @@ class QueueBoard(
         }
 
         // I have no idea why this value gets reset to 0 by the end... but ig this works
-        val queuePos = item.getQueuePosShuffled()
+        var queuePos = item.getQueuePosShuffled()
         val lastSongPos = if (shouldResume) item.lastSongPos else C.TIME_UNSET
         val realQueuePos = item.queuePos
         masterIndex = masterQueues.indexOf(item)
 
         val mediaItems: MutableList<MediaMetadata> = item.getCurrentQueueShuffled()
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // BOUNDS CHECK: Ensure queuePos is within valid range to prevent crash
+        // ═══════════════════════════════════════════════════════════════════════
+        if (mediaItems.isEmpty()) {
+            Log.w(TAG, "setCurrQueue: mediaItems is empty, aborting")
+            return null
+        }
+        queuePos = queuePos.coerceIn(0, mediaItems.size - 1)
 
         Log.d(
             TAG, "Setting current queue. in bounds: ${queuePos >= 0 && queuePos < mediaItems.size}, " +
-                    "queuePos: $queuePos, real queuePos: ${realQueuePos}, lastSongPos: $lastSongPos" +
-                    "ids: ${player.player.currentMetadata?.id}, ${mediaItems[queuePos].id}"
+                    "queuePos: $queuePos, real queuePos: ${realQueuePos}, lastSongPos: $lastSongPos, " +
+                    "ids: ${player.player.currentMetadata?.id}, ${mediaItems.getOrNull(queuePos)?.id}"
         )
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // FORCE CLEAN: When switching to a completely different playlist,
+        // bypass seamless logic and do a full replacement
+        // ═══════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
+        // FORCE CLEAN: When switching to a completely different playlist,
+        // bypass seamless logic and do a full replacement
+        // ═══════════════════════════════════════════════════════════════════════
+        if (forceClean) {
+            try {
+                Log.d(TAG, "Force clean: Replacing all player items with new queue")
+                // CRITICAL FIX: Clear media items explicitly before setting new ones
+                player.player.stop()
+                player.player.clearMediaItems()
+                
+                // Safety check for empty list
+                if (mediaItems.isNotEmpty()) {
+                    val safePos = queuePos.coerceIn(0, mediaItems.size - 1)
+                    player.player.setMediaItems(mediaItems.map { it.toMediaItem() }, safePos, lastSongPos)
+                    player.player.prepare()
+                    
+                    if (player.player.shuffleModeEnabled != item.shuffled) {
+                        player.player.shuffleModeEnabled = item.shuffled
+                    }
+                    bubbleUp(item)
+                    return safePos
+                } else {
+                    Log.w(TAG, "Force clean: mediaItems was empty, skipping setMediaItems")
+                    return 0
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "FATAL ERROR in setCurrQueue forceClean: ${e.message}")
+                e.printStackTrace()
+                // Recovery: Try to just set items without position/prepare
+                try {
+                     player.player.setMediaItems(mediaItems.map { it.toMediaItem() })
+                     player.player.prepare()
+                } catch (e2: Exception) {
+                    Log.e(TAG, "Recovery failed: ${e2.message}")
+                }
+                return 0
+            }
+        }
+        
         /**
          * current playing == jump target, do seamlessly
          */
@@ -823,9 +902,23 @@ class QueueBoard(
             }
         } else {
             Log.d(TAG, "Seamless is not supported. Loading songs in directly")
-            player.player.setMediaItems(mediaItems.map { it.toMediaItem() }, queuePos, lastSongPos)
-            // Ensure the player is prepared for playback after replacing items
-            player.player.prepare()
+            try {
+                if (mediaItems.isNotEmpty()) {
+                    val safePos = queuePos.coerceIn(0, mediaItems.size - 1)
+                    player.player.setMediaItems(mediaItems.map { it.toMediaItem() }, safePos, lastSongPos)
+                    player.player.prepare()
+                } else {
+                    Log.w(TAG, "Seamless fallback: mediaItems empty")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "FATAL ERROR in setCurrQueue direct load: ${e.message}")
+                e.printStackTrace()
+                // Recovery
+                try {
+                     player.player.setMediaItems(mediaItems.map { it.toMediaItem() })
+                     player.player.prepare()
+                } catch (e2: Exception) { e2.printStackTrace() }
+            }
         }
 
         bubbleUp(item)

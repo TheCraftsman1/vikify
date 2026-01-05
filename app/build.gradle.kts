@@ -30,7 +30,7 @@ android {
         applicationId = "com.vikify.app"  // Vikify app
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
+        versionCode = 2
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -69,7 +69,7 @@ android {
             isShrinkResources = true
             isCrunchPngs = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("ot_release")
+            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             // applicationIdSuffix = ".debug"
@@ -255,6 +255,8 @@ dependencies {
 
     implementation(libs.hilt)
     ksp(libs.hilt.compiler)
+    implementation(libs.hilt.work)
+    implementation(libs.work.runtime.ktx)
 
     coreLibraryDesugaring(libs.desugaring)
 
@@ -278,6 +280,7 @@ dependencies {
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
     implementation(libs.play.services.auth)
 }
 

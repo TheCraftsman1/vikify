@@ -24,7 +24,11 @@ class SpotifyViewModel @Inject constructor(
     val uiState: StateFlow<SpotifyUiState> = _uiState.asStateFlow()
     
     init {
+        // Check if user still has a valid connection (token or refresh token)
         if (repository.isLoggedIn) {
+            // Immediately update UI state to show connected
+            _uiState.value = _uiState.value.copy(isLoggedIn = true)
+            // Load full user data in background
             loadUserData()
         }
     }

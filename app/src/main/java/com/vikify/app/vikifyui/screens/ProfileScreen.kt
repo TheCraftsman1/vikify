@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vikify.app.vikifyui.theme.*
 import com.vikify.app.vikifyui.components.VikifyGlassCard
+import androidx.hilt.navigation.compose.hiltViewModel
+
 
 /**
  * Profile Screen
@@ -58,9 +60,76 @@ fun ProfileScreen(
     onThemeToggle: () -> Unit = {},
     isDarkTheme: Boolean = true,
     userName: String? = null,
-    modifier: Modifier = Modifier
+    userEmail: String? = null,
+    onTimeCapsuleClick: () -> Unit = {},
+    onSignIn: () -> Unit = {},
+    isGuest: Boolean = false,
+    onNameChange: (String) -> Unit = {},
+    modifier: Modifier = Modifier,
+    viewModel: com.vikify.app.viewmodels.ProfileViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 ) {
     val isDark = VikifyTheme.isDark
+    
+    // Edit Profile Dialog State
+    var showEditDialog by remember { mutableStateOf(false) }
+    var editedName by remember(userName) { mutableStateOf(userName ?: "") }
+    
+    // Collect Real State
+    val gapless by viewModel.gaplessEnabled.collectAsState()
+    val normalize by viewModel.normalizeEnabled.collectAsState()
+    val audioQuality by viewModel.audioQuality.collectAsState()
+    val stats by viewModel.stats.collectAsState()
+    val cacheSize by viewModel.cacheSize.collectAsState()
+    val animatedBackground by viewModel.animatedBackground.collectAsState()
+    val topArtists by viewModel.topArtists.collectAsState()
+    
+    // Refresh stats on load
+    LaunchedEffect(Unit) {
+        viewModel.refreshStats()
+        viewModel.calculateCacheSize()
+    }
+    
+    // Edit Profile Dialog
+    if (showEditDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text("Edit Profile", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Display Name", style = MaterialTheme.typography.labelMedium, color = LocalVikifyColors.current.textSecondary)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editedName,
+                        onValueChange = { editedName = it },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = LocalVikifyColors.current.accent,
+                            unfocusedBorderColor = LocalVikifyColors.current.border
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onNameChange(editedName)
+                        showEditDialog = false
+                    }
+                ) {
+                    Text("Save", color = LocalVikifyColors.current.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) {
+                    Text("Cancel", color = LocalVikifyColors.current.textSecondary)
+                }
+            },
+            containerColor = LocalVikifyColors.current.surface,
+            titleContentColor = LocalVikifyColors.current.textPrimary,
+            textContentColor = LocalVikifyColors.current.textPrimary
+        )
+    }
     
     Box(modifier = modifier.fillMaxSize()) {
         if (isDark) {
@@ -75,22 +144,41 @@ fun ProfileScreen(
         ) {
             // 1. HERO IDENTITY (Google/Guest User)
             item {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(id = com.vikify.app.R.drawable.vikify_logo),
+                        contentDescription = null,
+                        modifier = Modifier.size(50.dp)
+                    )
+                }
                 ProfileHeader(
                     name = userName ?: "Vikify User",
-                    joinedText = "Member since 2025"
+                    email = userEmail,
+                    joinedText = "Member since 2025",
+                    isGuest = isGuest,
+                    onEditClick = if (isGuest) onSignIn else { { showEditDialog = true } }
                 )
             }
             
             // 2. STATS GRID (Wrapped Style)
             item {
                 Spacer(modifier = Modifier.height(Spacing.LG))
-                StatsGrid(likedSongsCount = likedSongsCount)
+                StatsGrid(stats = stats)
+            }
+            
+            // 2.5 TIME CAPSULE PORTAL
+            item {
+                Spacer(modifier = Modifier.height(Spacing.MD))
+                SonicDnaPortal(onClick = onTimeCapsuleClick)
             }
             
             // 3. TOP ARTISTS RAIL
             item {
                 Spacer(modifier = Modifier.height(Spacing.XL))
-                TopArtistsRail()
+                TopArtistsRail(artists = topArtists)
             }
             
             // 4. CONNECTED SERVICES (Spotify)
@@ -110,7 +198,17 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(Spacing.XL))
                 AccountSettingsSection(
                     onThemeToggle = onThemeToggle,
-                    currentTheme = isDarkTheme
+                    currentTheme = isDarkTheme,
+                    animatedBackground = animatedBackground,
+                    onAnimatedBackgroundChange = viewModel::setAnimatedBackground,
+                    gapless = gapless,
+                    normalize = normalize,
+                    audioQuality = audioQuality,
+                    cacheSize = cacheSize,
+                    onGaplessChange = viewModel::setGapless,
+                    onNormalizeChange = viewModel::setNormalize,
+                    onQualityChange = viewModel::setAudioQuality,
+                    onClearCache = viewModel::clearCache
                 )
             }
         }
@@ -121,7 +219,13 @@ fun ProfileScreen(
 // 1. PROFILE HERO
 // ----------------------------------------------------------------------------
 @Composable
-private fun ProfileHeader(name: String, joinedText: String) {
+private fun ProfileHeader(
+    name: String, 
+    email: String?,
+    joinedText: String,
+    isGuest: Boolean,
+    onEditClick: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -168,20 +272,29 @@ private fun ProfileHeader(name: String, joinedText: String) {
                 Text(
                     text = name.take(2).uppercase(),
                     fontSize = 36.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Bold, 
                     color = LocalVikifyColors.current.accent
                 )
             }
         }
-        
+                        
         Spacer(Modifier.height(16.dp))
-        
+                        
         Text(
             text = name,
             style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.Bold, 
             color = LocalVikifyColors.current.textPrimary
         )
+
+        if (email != null) {
+            Text(
+                text = email,
+                style = MaterialTheme.typography.bodyLarge,
+                color = LocalVikifyColors.current.accent
+            )
+            Spacer(Modifier.height(4.dp))
+        }
         
         Text(
             text = joinedText,
@@ -192,12 +305,15 @@ private fun ProfileHeader(name: String, joinedText: String) {
         Spacer(Modifier.height(12.dp))
         
         OutlinedButton(
-            onClick = { /* Edit Profile */ },
+            onClick = onEditClick,
             shape = CircleShape,
             border = androidx.compose.foundation.BorderStroke(1.dp, LocalVikifyColors.current.border),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
         ) {
-            Text("Edit Profile", color = LocalVikifyColors.current.textPrimary)
+            Text(
+                text = if (isGuest) "Sign In & Sync" else "Edit Profile",
+                color = LocalVikifyColors.current.textPrimary
+            )
         }
     }
 }
@@ -206,7 +322,7 @@ private fun ProfileHeader(name: String, joinedText: String) {
 // 2. STATS GRID (The Wrapped Feel)
 // ----------------------------------------------------------------------------
 @Composable
-private fun StatsGrid(likedSongsCount: Int) {
+private fun StatsGrid(stats: com.vikify.app.viewmodels.ProfileStats) {
     Column(modifier = Modifier.padding(horizontal = Spacing.MD)) {
         Text(
             text = "Your 2025",
@@ -220,11 +336,11 @@ private fun StatsGrid(likedSongsCount: Int) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(Spacing.SM)
-        ) {
+                        ) {
             // Minutes Listened
             StatCard(
                 icon = Icons.Rounded.Schedule,
-                value = "1,240m",
+                value = "${stats.minutesListened}m",
                 label = "Listened",
                 color = GlowBlue,
                 modifier = Modifier.weight(1f)
@@ -233,7 +349,7 @@ private fun StatsGrid(likedSongsCount: Int) {
             // Like Count
             StatCard(
                 icon = Icons.Rounded.Favorite,
-                value = "$likedSongsCount",
+                value = "${stats.likedSongsCount}",
                 label = "Likes",
                 color = VikifyPurple,
                 modifier = Modifier.weight(1f)
@@ -249,7 +365,7 @@ private fun StatsGrid(likedSongsCount: Int) {
             // Top Genre
             StatCard(
                 icon = Icons.Rounded.GraphicEq,
-                value = "Pop",
+                value = stats.topGenre,
                 label = "Top Genre",
                 color = Color(0xFF10B981), // Green
                 modifier = Modifier.weight(1f)
@@ -276,10 +392,10 @@ private fun StatCard(
     modifier: Modifier
 ) {
     VikifyGlassCard(
-        modifier = modifier.height(100.dp)
+        modifier = modifier.height(110.dp)
     ) {
         Column(
-            modifier = Modifier
+                        modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
             horizontalAlignment = Alignment.Start
@@ -309,31 +425,42 @@ private fun StatCard(
 // ----------------------------------------------------------------------------
 // 3. TOP ARTISTS RAIL
 // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// 3. TOP ARTISTS RAIL
+// ----------------------------------------------------------------------------
 @Composable
-private fun TopArtistsRail() {
+private fun TopArtistsRail(artists: List<String>) {
     Column {
-        PaddingValues(horizontal = Spacing.MD).let { padding ->
-            Text(
-                text = "Top Artists",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = LocalVikifyColors.current.textPrimary,
-                modifier = Modifier.padding(padding)
-            )
-        }
+        Text(
+            text = "Top Artists",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = LocalVikifyColors.current.textPrimary,
+            modifier = Modifier.padding(horizontal = Spacing.MD)
+        )
         
         Spacer(Modifier.height(Spacing.MD))
         
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = Spacing.MD),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(5) { index ->
-                ArtistCircle(name = "Artist ${index + 1}")
+        if (artists.isEmpty()) {
+            Text(
+                text = "Keep listening to discover your favorites",
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalVikifyColors.current.textSecondary,
+                modifier = Modifier.padding(horizontal = Spacing.MD)
+            )
+        } else {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = Spacing.MD),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(artists) { artistName ->
+                    ArtistCircle(name = artistName)
+                }
             }
         }
     }
 }
+
 
 @Composable
 private fun ArtistCircle(name: String) {
@@ -344,7 +471,7 @@ private fun ArtistCircle(name: String) {
                 .clip(CircleShape)
                 .background(LocalVikifyColors.current.divider),
             contentAlignment = Alignment.Center
-        ) {
+                    ) {
             Icon(
                 imageVector = Icons.Outlined.Person,
                 contentDescription = null,
@@ -357,8 +484,8 @@ private fun ArtistCircle(name: String) {
             style = MaterialTheme.typography.bodyMedium,
             color = LocalVikifyColors.current.textPrimary
         )
-    }
-}
+                    }
+                }
 
 // ----------------------------------------------------------------------------
 // 4. CONNECTED SERVICES
@@ -381,9 +508,9 @@ private fun ConnectedServicesSection(
         Spacer(Modifier.height(Spacing.MD))
         
         VikifyGlassCard(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -436,14 +563,69 @@ private fun ConnectedServicesSection(
 
 
 @Composable
+
 private fun AccountSettingsSection(
     onThemeToggle: () -> Unit,
-    currentTheme: Boolean // true = dark
+    currentTheme: Boolean,
+    animatedBackground: Boolean,
+    onAnimatedBackgroundChange: (Boolean) -> Unit,
+    gapless: Boolean,
+    normalize: Boolean,
+    audioQuality: String,
+    cacheSize: String,
+    onGaplessChange: (Boolean) -> Unit,
+    onNormalizeChange: (Boolean) -> Unit,
+    onQualityChange: (String) -> Unit,
+    onClearCache: () -> Unit
 ) {
-    // Local state for mock settings (would be in ViewModel/Prefs later)
-    var gaplessEnabled by remember { mutableStateOf(true) }
-    var normalizeEnabled by remember { mutableStateOf(true) }
+    // Quality Selection Dialog
+    var showQualityDialog by remember { mutableStateOf(false) }
     
+    if (showQualityDialog) {
+        AlertDialog(
+            onDismissRequest = { showQualityDialog = false },
+            title = { Text("Audio Quality", color = LocalVikifyColors.current.textPrimary) },
+            text = {
+                Column {
+                    listOf("Low", "High", "Super").forEach { quality ->
+                         Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { 
+                                     onQualityChange(quality)
+                                     showQualityDialog = false 
+                        }
+                                 .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                             RadioButton(
+                                 selected = audioQuality == quality,
+                                 onClick = null, // Handled by row
+                                 colors = RadioButtonDefaults.colors(
+                                     selectedColor = LocalVikifyColors.current.accent,
+                                     unselectedColor = LocalVikifyColors.current.textSecondary
+                                 )
+                             )
+                             Spacer(modifier = Modifier.width(8.dp))
+                             Text(
+                                 text = quality,
+                                 style = MaterialTheme.typography.bodyLarge,
+                                 color = LocalVikifyColors.current.textPrimary
+                             )
+                         }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showQualityDialog = false }) {
+                    Text("Cancel", color = LocalVikifyColors.current.accent)
+                }
+            },
+            containerColor = LocalVikifyColors.current.surfaceElevated,
+            textContentColor = LocalVikifyColors.current.textSecondary
+        )
+    }
+
     Column(modifier = Modifier.padding(horizontal = Spacing.MD)) {
         Text(
             text = "Settings",
@@ -470,37 +652,58 @@ private fun AccountSettingsSection(
             }
         )
         
-        Spacer(modifier = Modifier.height(Spacing.LG))
-        
-        // Playback
-        SettingsSectionHeader("PLAYBACK")
-        
         SettingsRow(
-            icon = Icons.Outlined.Speed,
-            title = "Gapless Playback",
-            subtitle = "Seamless track transitions",
-            onClick = { gaplessEnabled = !gaplessEnabled },
+            icon = Icons.Outlined.Animation,
+            title = "Animated Background",
+            subtitle = "Floating color orbs",
+            onClick = { onAnimatedBackgroundChange(!animatedBackground) },
             trailingContent = {
                 Switch(
-                    checked = gaplessEnabled,
-                    onCheckedChange = { gaplessEnabled = it },
+                    checked = animatedBackground,
+                    onCheckedChange = onAnimatedBackgroundChange,
                     colors = switchColors()
                 )
             }
         )
         
+        Spacer(modifier = Modifier.height(Spacing.LG))
+        
+        // Playback
+        SettingsSectionHeader("PLAYBACK")
+                
+        SettingsRow(
+            icon = Icons.Outlined.Speed,
+            title = "Gapless Playback",
+            subtitle = "Seamless track transitions",
+            onClick = { onGaplessChange(!gapless) },
+            trailingContent = {
+                Switch(
+                    checked = gapless,
+                    onCheckedChange = { onGaplessChange(it) },
+                    colors = switchColors()
+                )
+            }
+                )
+                
         SettingsRow(
             icon = Icons.Outlined.GraphicEq,
             title = "Normalize Volume",
             subtitle = "Consistent loudness",
-            onClick = { normalizeEnabled = !normalizeEnabled },
+            onClick = { onNormalizeChange(!normalize) },
             trailingContent = {
                 Switch(
-                    checked = normalizeEnabled,
-                    onCheckedChange = { normalizeEnabled = it },
+                    checked = normalize,
+                    onCheckedChange = { onNormalizeChange(it) },
                     colors = switchColors()
                 )
             }
+                )
+        
+        SettingsRow(
+            icon = Icons.Outlined.HighQuality,
+            title = "Audio Quality",
+            subtitle = audioQuality,
+            onClick = { showQualityDialog = true }
         )
         
         Spacer(modifier = Modifier.height(Spacing.LG))
@@ -511,8 +714,8 @@ private fun AccountSettingsSection(
         SettingsRow(
             icon = Icons.Outlined.Storage,
             title = "Clear Cache",
-            subtitle = "458 MB", // Mock data
-            onClick = { /* TODO: Implement clear cache */ }
+            subtitle = cacheSize, 
+            onClick = onClearCache
         )
         
         // About
@@ -593,10 +796,63 @@ private fun SettingsRow(
                 tint = LocalVikifyColors.current.divider,
                 modifier = Modifier.size(20.dp)
             )
-        }
     }
+}
     
     Spacer(modifier = Modifier.height(8.dp))
+}
+
+@Composable
+private fun SonicDnaPortal(onClick: () -> Unit) {
+    VikifyGlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp)
+            .padding(horizontal = Spacing.MD)
+            .clickable(onClick = onClick)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Background Gradient
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color.Black, Color(0xFF1E1E2E))
+                        )
+                    )
+            )
+            
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "Sonic DNA",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Enter the Time Capsule",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                }
+                
+                Icon(
+                    imageVector = Icons.Rounded.AutoAwesome, // Or a better galaxy icon
+                    contentDescription = null,
+                    tint = Color(0xFFFFA500),
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+        }
+    }
 }
 
 

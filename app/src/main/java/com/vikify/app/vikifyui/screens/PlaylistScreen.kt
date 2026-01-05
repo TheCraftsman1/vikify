@@ -41,13 +41,14 @@ import com.vikify.app.vikifyui.theme.*
 import com.vikify.app.vikifyui.components.VikifyImage
 import kotlin.math.roundToInt
 
-import com.vikify.app.vikifyui.theme.VikifyRed
-import com.vikify.app.vikifyui.theme.VikifyPink
-import com.vikify.app.vikifyui.theme.VikifyPurple
-import com.vikify.app.vikifyui.theme.VikifyDark
-import com.vikify.app.vikifyui.theme.VikifyCard
-import com.vikify.app.vikifyui.theme.VikifyCardHover
-import com.vikify.app.vikifyui.theme.VikifyBorder
+// Premium color palette for Vikify
+private val VikifyRed = Color(0xFFED5564)
+private val VikifyPink = Color(0xFFFF6B9D)
+private val VikifyPurple = Color(0xFF8B5CF6)
+private val VikifyDark = Color(0xFF0A0A0F)
+private val VikifyCard = Color(0xFF12121A)
+private val VikifyCardHover = Color(0xFF1A1A25)
+private val VikifyBorder = Color(0xFF2A2A35)
 
 /**
  * Playlist Details Screen - Premium Vikify Design
@@ -72,24 +73,20 @@ fun PlaylistScreen(
     isPlaylistDownloaded: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val colors = LocalVikifyColors.current
     val displayTracks = if (tracks.isNotEmpty()) tracks else MockData.sampleTracks
     val displaySongCount = if (tracks.isNotEmpty()) tracks.size else 34
     
-    // Calculate actual playlist duration - wrapped in remember for performance
-    val (totalDurationMs, displayDuration) = remember(displayTracks) {
-        val totalMs = displayTracks.sumOf { it.duration.coerceAtLeast(0L) }
-        val totalMinutes = (totalMs / 1000 / 60).toInt()
-        val duration = if (totalMs > 0) {
-            if (totalMinutes >= 60) {
-                "${totalMinutes / 60}h ${totalMinutes % 60}m"
-            } else {
-                "${totalMinutes}m"
-            }
+    // Calculate actual playlist duration
+    val totalDurationMs = displayTracks.sumOf { it.duration.coerceAtLeast(0L) }
+    val totalMinutes = (totalDurationMs / 1000 / 60).toInt()
+    val displayDuration = if (totalDurationMs > 0) {
+        if (totalMinutes >= 60) {
+            "${totalMinutes / 60}h ${totalMinutes % 60}m"
         } else {
-            "--"
+            "${totalMinutes}m"
         }
-        Pair(totalMs, duration)
+    } else {
+        "--"
     }
     
     Box(
@@ -98,9 +95,9 @@ fun PlaylistScreen(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        colors.accent.copy(alpha = 0.15f),
-                        colors.background,
-                        colors.background
+                        VikifyPurple.copy(alpha = 0.15f),
+                        VikifyDark,
+                        VikifyDark
                     ),
                     startY = 0f,
                     endY = 800f
@@ -158,12 +155,12 @@ fun PlaylistScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
                         ),
-                        color = colors.textPrimary
+                        color = Color.White
                     )
                     Text(
                         text = "$displaySongCount songs",
                         style = MaterialTheme.typography.bodySmall,
-                        color = colors.textSecondary
+                        color = Color.White.copy(alpha = 0.5f)
                     )
                 }
             }
@@ -188,8 +185,6 @@ private fun PlaylistHeader(
     title: String,
     onBackClick: () -> Unit
 ) {
-    val colors = LocalVikifyColors.current
-    
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -203,15 +198,15 @@ private fun PlaylistHeader(
             modifier = Modifier
                 .size(42.dp)
                 .clip(CircleShape)
-                .background(colors.glassBackground)
-                .border(1.dp, colors.glassBorder, CircleShape)
+                .background(Color.White.copy(alpha = 0.1f))
+                .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
                 .clickable(onClick = onBackClick),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Filled.ArrowBackIosNew,
                 contentDescription = "Back",
-                tint = colors.onSurface,
+                tint = Color.White,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -223,15 +218,15 @@ private fun PlaylistHeader(
             modifier = Modifier
                 .size(42.dp)
                 .clip(CircleShape)
-                .background(colors.glassBackground)
-                .border(1.dp, colors.glassBorder, CircleShape)
+                .background(Color.White.copy(alpha = 0.1f))
+                .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
                 .clickable { },
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Filled.MoreHoriz,
                 contentDescription = "More",
-                tint = colors.onSurface,
+                tint = Color.White,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -246,8 +241,6 @@ private fun PlaylistCover(
     duration: String,
     coverUrl: String? = null
 ) {
-    val colors = LocalVikifyColors.current
-    
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -317,7 +310,7 @@ private fun PlaylistCover(
                 fontWeight = FontWeight.Bold,
                 fontSize = 28.sp
             ),
-            color = colors.textPrimary
+            color = Color.White
         )
         
         Spacer(modifier = Modifier.height(12.dp))
@@ -348,7 +341,7 @@ private fun PlaylistCover(
                     Text(
                         text = author,
                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                        color = colors.onSurfaceVariant
+                        color = Color.White.copy(alpha = 0.9f)
                     )
                 }
             }
@@ -374,7 +367,7 @@ private fun PlaylistCover(
                     Text(
                         text = "$songCount tracks",
                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                        color = colors.onSurfaceVariant
+                        color = Color.White.copy(alpha = 0.9f)
                     )
                 }
             }
@@ -400,7 +393,7 @@ private fun PlaylistCover(
                     Text(
                         text = duration,
                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                        color = colors.onSurfaceVariant
+                        color = Color.White.copy(alpha = 0.9f)
                     )
                 }
             }
@@ -418,8 +411,6 @@ private fun PlaylistActions(
     trackCount: Int = 0,
     isPlaylistDownloaded: Boolean = false
 ) {
-    val colors = LocalVikifyColors.current
-    
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -436,8 +427,8 @@ private fun PlaylistActions(
                     .weight(1f)
                     .height(52.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(colors.glassBackground)
-                    .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
                     .clickable(onClick = onShuffleClick),
                 contentAlignment = Alignment.Center
             ) {
@@ -448,14 +439,14 @@ private fun PlaylistActions(
                     Icon(
                         imageVector = Icons.Filled.Shuffle,
                         contentDescription = "Shuffle",
-                        tint = colors.onSurface,
+                        tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Shuffle",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = colors.onSurface
+                        color = Color.White
                     )
                 }
             }
@@ -481,14 +472,14 @@ private fun PlaylistActions(
                     Icon(
                         imageVector = Icons.Filled.PlayArrow,
                         contentDescription = "Play All",
-                        tint = colors.onAccent,
+                        tint = Color.White,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Play All",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = colors.onAccent
+                        color = Color.White
                     )
                 }
             }
@@ -504,9 +495,9 @@ private fun PlaylistActions(
                 .clip(RoundedCornerShape(14.dp))
                 .background(
                     if (isDownloading) 
-                        colors.accent.copy(alpha = 0.2f) 
+                        VikifyPurple.copy(alpha = 0.2f) 
                     else 
-                        colors.glassBackground
+                        Color.White.copy(alpha = 0.05f)
                 )
                 .border(
                     width = 1.dp,
@@ -582,14 +573,14 @@ private fun PlaylistActions(
                     Icon(
                         imageVector = Icons.Outlined.Download,
                         contentDescription = "Download",
-                        tint = colors.onSurfaceVariant,
+                        tint = Color.White.copy(alpha = 0.7f),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Download All • $trackCount tracks",
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                        color = colors.onSurfaceVariant
+                        color = Color.White.copy(alpha = 0.7f)
                     )
                 }
             }
@@ -606,8 +597,6 @@ private fun TrackRow(
     onAddToQueue: () -> Unit = {},
     onClick: () -> Unit
 ) {
-    val colors = LocalVikifyColors.current
-    
     // Swipe state for add to queue
     var offsetX by remember { mutableFloatStateOf(0f) }
     var showQueueHint by remember { mutableStateOf(false) }
@@ -637,13 +626,13 @@ private fun TrackRow(
                 Icon(
                     imageVector = Icons.Filled.QueueMusic,
                     contentDescription = "Add to Queue",
-                    tint = colors.onAccent,
+                    tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
                     text = "Queue",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = colors.onAccent
+                    color = Color.White
                 )
             }
         }
@@ -655,11 +644,11 @@ private fun TrackRow(
                 .offset { IntOffset(offsetX.roundToInt(), 0) }
                 .clip(RoundedCornerShape(12.dp))
                 .background(
-                    if (isPlaying) colors.accent.copy(alpha = 0.15f) else colors.surface
+                    if (isPlaying) VikifyRed.copy(alpha = 0.15f) else VikifyCard
                 )
                 .border(
                     width = if (isPlaying) 1.dp else 0.dp,
-                    color = if (isPlaying) colors.accent.copy(alpha = 0.3f) else Color.Transparent,
+                    color = if (isPlaying) VikifyRed.copy(alpha = 0.3f) else Color.Transparent,
                     shape = RoundedCornerShape(12.dp)
                 )
                 .draggable(
@@ -717,7 +706,7 @@ private fun TrackRow(
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp
                     ),
-                    color = colors.textTertiary
+                    color = Color.White.copy(alpha = 0.4f)
                 )
             }
         }
@@ -759,7 +748,7 @@ private fun TrackRow(
                     fontWeight = if (isPlaying) FontWeight.SemiBold else FontWeight.Medium,
                     fontSize = 15.sp
                 ),
-                color = if (isPlaying) colors.accent else colors.textPrimary,
+                color = if (isPlaying) VikifyRed else Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -767,7 +756,7 @@ private fun TrackRow(
             Text(
                 text = track.artist,
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                color = if (isPlaying) colors.accent.copy(alpha = 0.7f) else colors.textSecondary,
+                color = if (isPlaying) VikifyRed.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.5f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -800,16 +789,18 @@ private fun TrackRow(
                 fontWeight = FontWeight.Medium,
                 fontSize = 12.sp
             ),
-            color = colors.textTertiary
+            color = Color.White.copy(alpha = 0.4f)
         )
         
         // More options
         Icon(
             imageVector = Icons.Filled.MoreVert,
             contentDescription = "More",
-            tint = colors.textTertiary,
+            tint = Color.White.copy(alpha = 0.3f),
             modifier = Modifier.size(18.dp)
         )
         }
     }
 }
+
+

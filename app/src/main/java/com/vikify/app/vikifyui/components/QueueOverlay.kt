@@ -1,4 +1,4 @@
-package com.vikify.app.vikifyui.components
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            package com.vikify.app.vikifyui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -10,12 +10,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material.icons.outlined.PlaylistAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,11 +44,12 @@ fun QueueOverlay(
     currentTrack: Track?,
     currentTrackIndex: Int = 0,
     queueTracks: List<Track> = emptyList(),
+    userQueueTracks: List<Track> = emptyList(),  // Spotify-style "Next In Queue"
+    contextTitle: String = "",                    // "Playing from: Album/Playlist"
     onDismiss: () -> Unit,
     onTrackClick: (Track) -> Unit,
-    onTrackIndexClick: (Int) -> Unit = {},
-    onRemoveTrack: (Int) -> Unit = {},  // Remove track at index
-    onMoveTrack: (Int, Int) -> Unit = { _, _ -> },  // Move from index to index
+    onRemoveTrack: (Int) -> Unit = {},
+    onMoveTrack: (Int, Int) -> Unit = { _, _ -> },
     onSkipNext: () -> Unit = {},
     onSkipPrevious: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -156,7 +154,7 @@ fun QueueOverlay(
                     ) {
                         VikifyImage(
                             url = track.remoteArtworkUrl,
-                            placeholder = track.artwork,
+                            placeholder = track.artwork as? Int ?: com.vikify.app.R.drawable.artwork_placeholder,
                             contentDescription = track.title,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -194,8 +192,55 @@ fun QueueOverlay(
                 Spacer(modifier = Modifier.height(16.dp))
             }
             
-            // Queue list
-            if (queueTracks.isEmpty()) {
+            // ═══════════════════════════════════════════════════════════════
+            // USER QUEUE SECTION ("Next In Queue")
+            // Songs explicitly added via "Add to Queue" - plays before context
+            // ═══════════════════════════════════════════════════════════════
+            if (userQueueTracks.isNotEmpty()) {
+                Text(
+                    text = "NEXT IN QUEUE",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        letterSpacing = 1.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = VikifyPurple,
+                    modifier = Modifier.padding(bottom = 8.dp, top = 8.dp)
+                )
+                
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 200.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    itemsIndexed(
+                        userQueueTracks,
+                        key = { index, track -> "user_${track.id}_$index" }
+                    ) { index, track ->
+                        QueueTrackRow(
+                            index = index + 1,
+                            track = track,
+                            onClick = { onTrackClick(track) },
+                            isUserQueue = true
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+            
+            // ═══════════════════════════════════════════════════════════════
+            // CONTEXT QUEUE SECTION ("Next From: [Album/Playlist]")
+            // ═══════════════════════════════════════════════════════════════
+            val contextSectionTitle = if (contextTitle.isNotBlank()) {
+                "NEXT FROM: ${contextTitle.uppercase()}"
+            } else {
+                "UP NEXT"
+            }
+            
+            if (queueTracks.isEmpty() && userQueueTracks.isEmpty()) {
                 // Empty state
                 Box(
                     modifier = Modifier
@@ -216,22 +261,30 @@ fun QueueOverlay(
                         )
                     }
                 }
-            } else {
+            } else if (queueTracks.isNotEmpty()) {
+                Text(
+                    text = contextSectionTitle,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        letterSpacing = 1.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     itemsIndexed(
                         queueTracks.filter { it.id != currentTrack?.id },
-                        key = { index, track -> "${track.id}_$index" }
+                        key = { index, track -> "context_${track.id}_$index" }
                     ) { index, track ->
-                        // Calculate real index in original queue
-                        val realIndex = queueTracks.indexOfFirst { it.id == track.id }
                         QueueTrackRow(
                             index = index + 1,
                             track = track,
                             onClick = { onTrackClick(track) },
-                            onRemove = { if (realIndex >= 0) onRemoveTrack(realIndex) }
+                            isUserQueue = false
                         )
                     }
                     
@@ -249,79 +302,70 @@ private fun QueueTrackRow(
     index: Int,
     track: Track,
     onClick: () -> Unit,
-    onRemove: () -> Unit = {}
+    isUserQueue: Boolean = false
 ) {
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 8.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = index.toString().padStart(2, '0'),
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = Color.White.copy(alpha = 0.4f),
-                modifier = Modifier.width(24.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .then(
+                if (isUserQueue) {
+                    Modifier.background(VikifyPurple.copy(alpha = 0.1f))
+                } else {
+                    Modifier
+                }
             )
-            
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(VikifyCard)
-            ) {
-                VikifyImage(
-                    url = track.remoteArtworkUrl,
-                    placeholder = track.artwork,
-                    contentDescription = track.title,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = track.title,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = track.artist,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.5f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            
-            // Remove button
-            IconButton(
-                onClick = onRemove,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Remove from queue",
-                    tint = Color.White.copy(alpha = 0.4f),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            
-            // Drag handle for reorder
-            Icon(
-                imageVector = Icons.Outlined.DragHandle,
-                contentDescription = "Reorder",
-                tint = Color.White.copy(alpha = 0.3f),
-                modifier = Modifier.size(20.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Index number - purple for user queue
+        Text(
+            text = index.toString().padStart(2, '0'),
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+            color = if (isUserQueue) VikifyPurple else Color.White.copy(alpha = 0.4f),
+            modifier = Modifier.width(24.dp)
+        )
+        
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(VikifyCard)
+        ) {
+            VikifyImage(
+                url = track.remoteArtworkUrl,
+                placeholder = track.artwork as? Int ?: com.vikify.app.R.drawable.artwork_placeholder,
+                contentDescription = track.title,
+                modifier = Modifier.fillMaxSize()
             )
         }
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = track.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.5f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        
+        // Show different icon for user queue vs context queue
+        Icon(
+            imageVector = if (isUserQueue) Icons.Outlined.PlaylistAdd else Icons.Outlined.DragHandle,
+            contentDescription = if (isUserQueue) "Queued" else "Reorder",
+            tint = if (isUserQueue) VikifyPurple.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.3f),
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 

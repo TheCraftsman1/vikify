@@ -75,28 +75,41 @@ data class MultiQueueObject(
     }
 
     fun setCurrentQueuePos(index: Int) {
-        if (getQueuePosShuffled() != index) {
+        // Bounds check - clamp to valid range
+        val safeIndex = index.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
+        
+        if (getQueuePosShuffled() != safeIndex) {
 
             /**
              * queuePos will always track the index of the song in the unsorted queue, *even* if queue is shuffled.
              * To get the real queuePos of the song, look at the shuffleIndex value that equals the index provided
              */
             val newQueuePos = if (shuffled) {
-                queue.indexOf(queue.find { it.shuffleIndex == index })
+                val foundSong = queue.find { it.shuffleIndex == safeIndex }
+                if (foundSong != null) {
+                    queue.indexOf(foundSong)
+                } else {
+                    // Fallback: if can't find by shuffleIndex, use safeIndex directly
+                    safeIndex.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
+                }
             } else {
-                index
+                safeIndex
             }
 
-            queuePos = newQueuePos
+            queuePos = newQueuePos.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
         }
     }
 
     fun validateQueuePos() {
+        if (queue.isEmpty()) {
+            queuePos = 0
+            return
+        }
         if (queuePos < 0 || queuePos >= queue.size) { // I don't even...
             // possible issues with migrating some queues, notably from 0.7.4 to newer versions. Reset shuffle parts
             queue.fastForEachIndexed { index, s -> s.shuffleIndex = index }
             shuffled = false
-            queuePos = 0
+            queuePos = queuePos.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
         }
     }
 

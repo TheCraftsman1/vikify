@@ -15,6 +15,7 @@ import com.vikify.app.db.daos.ArtistsDao
 import com.vikify.app.db.daos.PlaylistsDao
 import com.vikify.app.db.daos.QueueDao
 import com.vikify.app.db.daos.SongsDao
+import com.vikify.app.db.daos.HistoryDao
 import com.vikify.app.db.entities.AlbumArtistMap
 import com.vikify.app.db.entities.AlbumEntity
 import com.vikify.app.db.entities.ArtistEntity
@@ -47,7 +48,7 @@ import com.zionhuang.innertube.pages.AlbumPage
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao {
+interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao, HistoryDao {
 
     @Transaction
     @Query("""
@@ -148,6 +149,8 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
     """
     )
     fun safeDeleteGenre(genreId: String)
+
+    // Note: insert(SongEntity) is inherited from SongsDao and returns Long
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     fun insert(genre: GenreEntity)
@@ -478,4 +481,38 @@ AND NOT EXISTS (
     fun checkpoint() {
         raw("PRAGMA wal_checkpoint(FULL)".toSQLiteQuery())
     }
+    
+    // === SPOTIFY SILENT MIGRATION ===
+    
+    /**
+     * Get unresolved Spotify songs (those with spotifyId but unresolved YouTube ID)
+     * Songs start with UNRESOLVED_ prefix when imported from Spotify without YouTube match
+     */
+    @Query("SELECT * FROM song WHERE spotifyId IS NOT NULL AND id LIKE 'UNRESOLVED_%' LIMIT :limit")
+    fun unresolvedSpotifySongs(limit: Int = 50): Flow<List<SongEntity>>
+    
+    /**
+     * Update a song's YouTube ID after resolution
+     */
+    @Query("UPDATE song SET id = :youtubeId WHERE spotifyId = :spotifyId")
+    suspend fun updateYouTubeIdBySpotifyId(spotifyId: String, youtubeId: String)
+    
+    /**
+     * Check if a Spotify track is already in the database
+     */
+    @Query("SELECT * FROM song WHERE spotifyId = :spotifyId LIMIT 1")
+    fun songBySpotifyId(spotifyId: String): Flow<SongEntity?>
+    
+    // Removed duplicate allSpotifyIds since it's inherited from SongsDao
+    /**
+     * Count unresolved Spotify songs (for progress display)
+     */
+    @Query("SELECT COUNT(*) FROM song WHERE spotifyId IS NOT NULL AND id LIKE 'UNRESOLVED_%'")
+    fun countUnresolvedSpotifySongs(): Flow<Int>
+    
+    /**
+     * Count total Spotify songs (for progress display)
+     */
+    @Query("SELECT COUNT(*) FROM song WHERE spotifyId IS NOT NULL")
+    fun countSpotifySongs(): Flow<Int>
 }

@@ -20,8 +20,31 @@ class PoTokenGenerator {
     private var webPoTokenStreamingPot: String? = null
     private var webPoTokenGenerator: PoTokenWebView? = null
 
-    fun getWebClientPoToken(videoId: String, sessionId: String): PoTokenResult? {
-        if (!webViewSupported || webViewBadImpl) {
+    suspend fun getWebClientPoTokenSuspend(videoId: String, sessionId: String?): PoTokenResult? {
+        if (!webViewSupported || webViewBadImpl || sessionId == null) {
+            Log.w(TAG, "WebView not supported, bad impl, or null sessionId")
+            return null
+        }
+
+        return try {
+            getWebClientPoToken(videoId, sessionId, forceRecreate = false)
+        } catch (e: Exception) {
+            when (e) {
+                is BadWebViewException -> {
+                    Log.e(TAG, "Could not obtain poToken because WebView is broken", e)
+                    webViewBadImpl = true
+                    null
+                }
+                else -> {
+                    Log.e(TAG, "Failed to get PoToken for $videoId: ${e.message}")
+                    null
+                }
+            }
+        }
+    }
+
+    fun getWebClientPoToken(videoId: String, sessionId: String?): PoTokenResult? {
+        if (!webViewSupported || webViewBadImpl || sessionId == null) {
             return null
         }
 
@@ -34,7 +57,10 @@ class PoTokenGenerator {
                     webViewBadImpl = true
                     null
                 }
-                else -> throw e // includes PoTokenException
+                else -> {
+                    Log.e(TAG, "Failed to get PoToken (sync) for $videoId: ${e.message}")
+                    null
+                }
             }
         }
     }

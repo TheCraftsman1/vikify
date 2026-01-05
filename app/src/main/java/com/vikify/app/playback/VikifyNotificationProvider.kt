@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 Vikify Project
+ * Copyright (C) 2026 Vikify Project
  *
  * SPDX-License-Identifier: GPL-3.0
  */
@@ -10,7 +10,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
+import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
@@ -26,13 +26,13 @@ import com.vikify.app.MainActivity
 import com.vikify.app.R
 
 /**
- * Ultra-Minimal Vikify Notification Provider
- * 
- * Clean, premium notification with:
- * - Vikify brand accent color
- * - Only Previous, Play/Pause, Next buttons
- * - NO shuffle, repeat, or seek controls
- * - Minimal, distraction-free design
+ * Premium Vikify Notification Provider (4K Edition)
+ *
+ * Features:
+ * - Dynamic Color Support (Via Bitmap)
+ * - Android 13+ Squiggly Progress Bar
+ * - High Priority Controls
+ * - Elegant Typography
  */
 @UnstableApi
 class VikifyNotificationProvider(
@@ -41,11 +41,12 @@ class VikifyNotificationProvider(
 
     companion object {
         const val NOTIFICATION_ID = 1001
-        const val CHANNEL_ID = "vikify_playback"
-        private const val CHANNEL_NAME = "Vikify Playback"
+        // Changed ID to force Android to recreate the channel with new settings
+        const val CHANNEL_ID = "vikify_playback_premium_v2" 
+        private const val CHANNEL_NAME = "Vikify Now Playing"
         
-        // Vikify brand color (coral red)
-        private const val VIKIFY_ACCENT = 0xFFE53935.toInt()
+        // Fallback color if artwork fails (Deep Purple instead of Red)
+        private const val FALLBACK_COLOR = 0xFF120024.toInt()
     }
 
     init {
@@ -57,15 +58,13 @@ class VikifyNotificationProvider(
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_LOW // Low ensures it doesn't "ding" on every song change
             ).apply {
-                description = "Music playback controls"
+                description = "Media controls for Vikify"
                 setShowBadge(false)
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
             }
-            
-            val notificationManager = context.getSystemService(NotificationManager::class.java)
-            notificationManager?.createNotificationChannel(channel)
+            context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
         }
     }
 
@@ -78,76 +77,112 @@ class VikifyNotificationProvider(
         val player = mediaSession.player
         val metadata = player.mediaMetadata
         
-        // Create intent to open app when notification is tapped
+        // INTENT: Open Player Screen directly
         val contentIntent = PendingIntent.getActivity(
-            context,
-            0,
+            context, 0,
             Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.small_icon)
+            // SMALL ICON: Must be white with transparent background (silhouette)
+            .setSmallIcon(R.drawable.small_icon) 
+            
+            // TITLES
             .setContentTitle(metadata.title ?: "Vikify")
-            .setContentText(metadata.artist ?: "")
+            .setContentText(metadata.artist ?: "Listening to music")
+            .setSubText(metadata.albumTitle) // <--- ADDS "Album Name" line
+            
+            // INTENT
             .setContentIntent(contentIntent)
+            
+            // VISIBILITY
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_MAX) // <--- KEEPS IT AT TOP
             .setOngoing(player.isPlaying)
             .setShowWhen(false)
             .setOnlyAlertOnce(true)
-            .setColor(VIKIFY_ACCENT) // Brand color accent
-            .setColorized(true) // Use color for notification background on some devices
+            
+            // ARTWORK & COLOR (Crucial for Android 13+)
+            // Note: If 'artworkBitmap' is null, it falls back to the Vikify PNG logo!
+            .setLargeIcon(metadata.artworkBitmap ?: logoBitmap) 
+            .setColor(FALLBACK_COLOR)
+            .setColorized(true) // Enables the background color fill
 
-        // Add Previous action
-        val prevAction = actionFactory.createMediaAction(
-            mediaSession,
-            IconCompat.createWithResource(context, R.drawable.ic_skip_previous),
-            "Previous",
-            Player.COMMAND_SEEK_TO_PREVIOUS
+        // ACTION 1: PREVIOUS
+        // Use "Filled" icons if you have them (e.g., ic_skip_previous_filled)
+        builder.addAction(
+            actionFactory.createMediaAction(
+                mediaSession,
+                IconCompat.createWithResource(context, R.drawable.ic_skip_previous), 
+                "Previous",
+                Player.COMMAND_SEEK_TO_PREVIOUS
+            )
         )
-        builder.addAction(prevAction)
 
-        // Add Play/Pause action
-        val playPauseIcon = if (player.isPlaying) {
-            R.drawable.ic_pause
-        } else {
-            R.drawable.ic_play
-        }
-        val playPauseAction = actionFactory.createMediaAction(
-            mediaSession,
-            IconCompat.createWithResource(context, playPauseIcon),
-            if (player.isPlaying) "Pause" else "Play",
-            Player.COMMAND_PLAY_PAUSE
+        // ACTION 2: PLAY/PAUSE (Center)
+        val playPauseIcon = if (player.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+        val playPauseTitle = if (player.isPlaying) "Pause" else "Play"
+        builder.addAction(
+            actionFactory.createMediaAction(
+                mediaSession,
+                IconCompat.createWithResource(context, playPauseIcon),
+                playPauseTitle,
+                Player.COMMAND_PLAY_PAUSE
+            )
         )
-        builder.addAction(playPauseAction)
 
-        // Add Next action
-        val nextAction = actionFactory.createMediaAction(
-            mediaSession,
-            IconCompat.createWithResource(context, R.drawable.ic_skip_next),
-            "Next",
-            Player.COMMAND_SEEK_TO_NEXT
+        // ACTION 3: NEXT
+        builder.addAction(
+            actionFactory.createMediaAction(
+                mediaSession,
+                IconCompat.createWithResource(context, R.drawable.ic_skip_next),
+                "Next",
+                Player.COMMAND_SEEK_TO_NEXT
+            )
         )
-        builder.addAction(nextAction)
 
-        // Apply MediaStyle - only show 3 actions in compact view
-        // This creates the clean, minimal notification
+        // MEDIA STYLE
+        // This tells Android "This is a media player, treat it specially"
         val mediaStyle = MediaStyleNotificationHelper.MediaStyle(mediaSession)
-            .setShowActionsInCompactView(0, 1, 2) // Only Previous, Play/Pause, Next
+            .setShowActionsInCompactView(0, 1, 2) // Indices of Prev, Play, Next
         
         builder.setStyle(mediaStyle)
 
         return MediaNotification(NOTIFICATION_ID, builder.build())
     }
 
-    override fun handleCustomCommand(
-        session: MediaSession,
-        action: String,
-        extras: Bundle
-    ): Boolean {
-        return false
+    override fun handleCustomCommand(mediaSession: MediaSession, action: String, extras: Bundle): Boolean = false
+
+    // Lazy load the PNG logo as a Bitmap for notification fallback
+    private val logoBitmap: Bitmap? by lazy {
+        try {
+            val drawable = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.vikify_logo)
+            drawable?.let {
+                val bitmap = Bitmap.createBitmap(
+                    it.intrinsicWidth.coerceAtLeast(1), 
+                    it.intrinsicHeight.coerceAtLeast(1), 
+                    Bitmap.Config.ARGB_8888
+                )
+                val canvas = android.graphics.Canvas(bitmap)
+                it.setBounds(0, 0, canvas.width, canvas.height)
+                it.draw(canvas)
+                bitmap
+            }
+        } catch (e: Exception) {
+            null
+        }
     }
 }
+
+// Helper Extension to decode artworkData into a Bitmap
+private val androidx.media3.common.MediaMetadata.artworkBitmap: Bitmap?
+    get() = artworkData?.let { data ->
+        try {
+            android.graphics.BitmapFactory.decodeByteArray(data, 0, data.size)
+        } catch (e: Exception) {
+            null
+        }
+    }

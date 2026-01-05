@@ -1,6 +1,12 @@
 package com.vikify.app.vikifyui.screens
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
 import android.view.HapticFeedbackConstants
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -27,6 +33,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -51,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.palette.graphics.Palette
 import coil3.compose.AsyncImage
@@ -81,13 +89,28 @@ fun SearchScreen(
     onTrackClick: (Track) -> Unit,
     onPlaylistClick: (String, com.vikify.app.spotify.SpotifyPlaylist?) -> Unit = { _, _ -> },
     spotifyRepository: com.vikify.app.spotify.SpotifyRepository? = null,
+    initialQuery: String? = null, // Pre-filled search query (e.g., from mood click)
+    onInitialQueryConsumed: () -> Unit = {}, // Clear initial query after consuming
     modifier: Modifier = Modifier,
     searchViewModel: SearchViewModel = hiltViewModel()
 ) {
     val view = LocalView.current
+    val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    
+    // Voice Search Launcher
+    val voiceLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            matches?.firstOrNull()?.let { spokenText ->
+                searchViewModel.updateQuery(spokenText)
+            }
+        }
+    }
     
     // Theme-aware colors
     val isDark = VikifyTheme.isDark
@@ -112,6 +135,15 @@ fun SearchScreen(
     var localQuery by remember { mutableStateOf(searchQuery) }
     var isSearchFocused by remember { mutableStateOf(false) }
     
+    // Handle initial query from external navigation (e.g., mood click)
+    LaunchedEffect(initialQuery) {
+        if (!initialQuery.isNullOrEmpty() && localQuery != initialQuery) {
+            localQuery = initialQuery
+            searchViewModel.updateQuery(initialQuery)
+            onInitialQueryConsumed()
+        }
+    }
+    
     // FIX: Prevent infinite loop with distinct check
     // Only update VM when local actually changes to something different
     LaunchedEffect(localQuery) {
@@ -128,11 +160,11 @@ fun SearchScreen(
         }
     }
     
-    // Dim overlay animation
-    val dimAlpha by animateFloatAsState(
-        targetValue = if (isSearchFocused && localQuery.isEmpty()) 0.4f else 0f,
+    // Blur micro-interaction: mosaic blurs when search focused (context preserved)
+    val blurRadius by animateDpAsState(
+        targetValue = if (isSearchFocused && localQuery.isEmpty()) 12.dp else 0.dp,
         animationSpec = tween(300),
-        label = "dimOverlay"
+        label = "blurEffect"
     )
 
     // Theme-aware Logic
@@ -164,6 +196,17 @@ fun SearchScreen(
                     try { keyboardController?.hide() } catch (e: Exception) { /* Safe ignore */ }
                     focusManager.clearFocus()
                 },
+                onVoiceClick = {
+                    try {
+                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Sing or say lyrics to find your song...")
+                        }
+                        voiceLauncher.launch(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Voice search not available", Toast.LENGTH_SHORT).show()
+                    }
+                },
                 isFocused = isSearchFocused,
                 onFocusChange = { isSearchFocused = it },
                 focusRequester = focusRequester,
@@ -188,14 +231,15 @@ fun SearchScreen(
                 animationSpec = tween(200)
             ) { isEmptyQuery ->
                 if (isEmptyQuery) {
-                    // BROWSE STATE: Staggered Mosaic Grid
+                    // BROWSE STATE: Staggered Mosaic Grid with blur effect
                     MosaicBrowseGrid(
                         onCategoryClick = { category ->
                             view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                             searchViewModel.searchByCategory(category.name)
                         },
                         isDark = isDark,
-                        textPrimary = textPrimary
+                        textPrimary = textPrimary,
+                        blurRadius = blurRadius
                     )
                 } else {
                     // SEARCH RESULTS STATE with Filter Chips
@@ -271,12 +315,11 @@ fun SearchScreen(
             }
         }
         
-        // Dim overlay when search focused without query
-        if (dimAlpha > 0f) {
+        // Clickable overlay to clear focus when blur is active
+        if (blurRadius > 0.dp) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = dimAlpha))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -298,6 +341,7 @@ private fun LiquidSearchHeader(
     query: String,
     onQueryChange: (String) -> Unit,
     onClear: () -> Unit,
+    onVoiceClick: () -> Unit,
     isFocused: Boolean,
     onFocusChange: (Boolean) -> Unit,
     focusRequester: FocusRequester,
@@ -327,13 +371,23 @@ private fun LiquidSearchHeader(
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {
-            Text(
-                text = "Search",
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Bold,
-                color = textPrimary,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.padding(bottom = 16.dp, top = 12.dp)
-            )
+            ) {
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(id = com.vikify.app.R.drawable.vikify_logo),
+                    contentDescription = null,
+                    modifier = Modifier.size(38.dp)
+                )
+                Text(
+                    text = "Search",
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
+                )
+            }
         }
 
         // Glass Pill Search Bar
@@ -392,7 +446,7 @@ private fun LiquidSearchHeader(
                         decorationBox = { innerTextField ->
                             if (query.isEmpty()) {
                                 Text(
-                                    "What do you want to listen to?",
+                                    "What's the vibe today?",
                                     color = textSecondary,
                                     fontSize = 17.sp
                                 )
@@ -414,12 +468,13 @@ private fun LiquidSearchHeader(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Icon(
                                 Icons.Rounded.Mic,
-                                contentDescription = "Voice",
+                                contentDescription = "Voice Search",
                                 tint = textSecondary,
                                 modifier = Modifier
                                     .size(22.dp)
                                     .clickable {
                                         view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                                        onVoiceClick()
                                     }
                             )
                         }
@@ -482,85 +537,107 @@ private fun LiquidSearchHeader(
 }
 
 // ============================================================================
-// MOSAIC BROWSE GRID (Regular Grid - More Stable)
+// DISCOVERY PORTAL: STAGGERED GENRE MOSAIC
+// Pinterest-style layout with "louder" cards for priority genres
 // ============================================================================
 
 @Composable
 private fun MosaicBrowseGrid(
     onCategoryClick: (Category) -> Unit,
     isDark: Boolean,
-    textPrimary: Color
+    textPrimary: Color,
+    blurRadius: Dp = 0.dp
 ) {
     val categories = remember { MockData.browseCategories }
     
-    LazyColumn(
+    LazyVerticalStaggeredGrid(
+        columns = StaggeredGridCells.Fixed(2),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxSize()
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalItemSpacing = 12.dp,
+        modifier = Modifier
+            .fillMaxSize()
+            .blur(blurRadius)
     ) {
-        // Section Title
-        item {
+        // Section Title (Full width span)
+        item(span = StaggeredGridItemSpan.FullLine) {
             Text(
-                text = "Browse All",
-                fontSize = 22.sp,
+                text = "Explore Your Vibe",
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = textPrimary,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
         }
         
-        // Grid of Categories (2 columns using Row)
-        val rows = categories.chunked(2)
-        items(rows.size) { rowIndex ->
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                rows[rowIndex].forEach { category ->
-                    MosaicCategoryCard(
-                        category = category,
-                        isLarge = false,
-                        isDark = isDark,
-                        onClick = { onCategoryClick(category) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                // Fill empty space if odd number
-                if (rows[rowIndex].size == 1) {
-                    Spacer(Modifier.weight(1f))
-                }
-            }
+        // Staggered Category Cards
+        items(categories, key = { it.id }) { category ->
+            LivingCategoryCard(
+                category = category,
+                isDark = isDark,
+                onClick = { onCategoryClick(category) }
+            )
+        }
+        
+        // Bottom spacing for mini player
+        item(span = StaggeredGridItemSpan.FullLine) {
+            Spacer(Modifier.height(100.dp))
         }
     }
 }
 
+// ============================================================================
+// LIVING CATEGORY CARD: Animated gradient with priority sizing
+// ============================================================================
+
 @Composable
-private fun MosaicCategoryCard(
+private fun LivingCategoryCard(
     category: Category,
-    isLarge: Boolean,
     isDark: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Spotify aspect ratio: roughly 1.6:1 (width:height)
-    val height = if (isLarge) 110.dp else 90.dp
-    
-    // Category-specific colors (vibrant solids like Spotify)
-    val categoryColor = when (category.name.lowercase()) {
-        "pop" -> Color(0xFFE91E63)       // Pink
-        "hip-hop" -> Color(0xFFFF5722)   // Orange
-        "rock" -> Color(0xFF607D8B)       // Blue Gray
-        "indie" -> Color(0xFF009688)      // Teal
-        "r&b" -> Color(0xFF9C27B0)        // Purple
-        "electronic" -> Color(0xFF3F51B5) // Indigo
-        "podcasts" -> Color(0xFF4CAF50)   // Green
-        "new" -> Color(0xFFF44336)        // Red
-        "charts" -> Color(0xFF795548)     // Brown
-        "moods" -> Color(0xFF00BCD4)      // Cyan
-        else -> Color(category.color.toInt())
+    // Dynamic height based on priority
+    val height = when {
+        category.isPriority -> 160.dp  // "Louder" genres get bigger cards
+        category.isNew -> 130.dp       // Trending genres are medium
+        else -> 100.dp                  // Standard genres
     }
     
-    // Category icon emoji (for visual interest)
+    // Category-specific colors
+    val categoryColor = Color(category.color.toInt())
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // LIVING GRADIENT: Animated color shift
+    // ═══════════════════════════════════════════════════════════════════
+    val infiniteTransition = rememberInfiniteTransition(label = "livingGradient")
+    val gradientPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "gradientPhase"
+    )
+    
+    // Secondary color for gradient (lighter variation)
+    val secondaryColor = categoryColor.copy(
+        red = (categoryColor.red + 0.15f).coerceAtMost(1f),
+        green = (categoryColor.green + 0.1f).coerceAtMost(1f),
+        blue = (categoryColor.blue + 0.2f).coerceAtMost(1f)
+    )
+    
+    val animatedGradient = Brush.linearGradient(
+        colors = listOf(categoryColor, secondaryColor, categoryColor),
+        start = androidx.compose.ui.geometry.Offset(0f, 0f),
+        end = androidx.compose.ui.geometry.Offset(
+            x = 300f + (100f * gradientPhase),
+            y = 300f + (100f * (1 - gradientPhase))
+        )
+    )
+    
+    // Category icon emoji
     val categoryIcon = when (category.name.lowercase()) {
         "pop" -> "🎤"
         "hip-hop" -> "🎧"
@@ -569,7 +646,7 @@ private fun MosaicCategoryCard(
         "r&b" -> "💜"
         "electronic" -> "🎹"
         "podcasts" -> "🎙️"
-        "new" -> "✨"
+        "new releases" -> "✨"
         "charts" -> "📊"
         "moods" -> "🌙"
         else -> "🎵"
@@ -578,39 +655,63 @@ private fun MosaicCategoryCard(
     Box(
         modifier = modifier
             .height(height)
-            .clip(RoundedCornerShape(8.dp))
-            .background(categoryColor)
+            .fillMaxWidth()
+            .shadow(
+                elevation = if (category.isPriority) 12.dp else 6.dp,
+                shape = RoundedCornerShape(12.dp),
+                spotColor = categoryColor.copy(alpha = 0.4f)
+            )
+            .clip(RoundedCornerShape(12.dp))
+            .background(animatedGradient)
             .clickable(onClick = onClick)
     ) {
-        // Text (Top-Left, Bold) - Spotify style
+        // "NEW" badge for trending genres
+        if (category.isNew) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "NEW",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = categoryColor,
+                    letterSpacing = 0.5.sp
+                )
+            }
+        }
+        
+        // Genre name (Top-Left)
         Text(
             text = category.name,
-            fontSize = if (isLarge) 22.sp else 16.sp,
+            fontSize = if (category.isPriority) 20.sp else 16.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(12.dp)
+                .padding(14.dp)
         )
         
-        // Rotated Image/Icon (Bottom-Right, -25 degrees, "Tucked" into corner)
-        // This is Spotify's iconic visual detail
+        // Rotated icon (Bottom-Right, "tucked" into corner)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .size(if (isLarge) 80.dp else 56.dp)
-                .offset(x = 8.dp, y = 8.dp) // "Tucked" overflow effect
+                .size(if (category.isPriority) 72.dp else 52.dp)
+                .offset(x = 10.dp, y = 10.dp)
                 .graphicsLayer {
-                    rotationZ = 25f // Spotify uses clockwise rotation (appears as bottom-right tuck)
+                    rotationZ = 25f
                     shadowElevation = 8f
                 }
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color.White.copy(alpha = 0.15f)),
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.White.copy(alpha = 0.2f)),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = categoryIcon,
-                fontSize = if (isLarge) 36.sp else 28.sp
+                fontSize = if (category.isPriority) 36.sp else 28.sp
             )
         }
     }

@@ -36,7 +36,7 @@ import com.vikify.app.vikifyui.components.VaporCard
 fun MusicCard(
     title: String,
     subtitle: String,
-    artworkRes: Int,
+    placeholder: Any? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 140.dp,
@@ -68,7 +68,7 @@ fun MusicCard(
                 ) {
                     VikifyImage(
                         url = artworkUrl,
-                        placeholder = artworkRes,
+                        placeholder = placeholder,
                         contentDescription = title,
                         modifier = Modifier
                             .fillMaxSize()
@@ -85,7 +85,7 @@ fun MusicCard(
                     content = {
                         VikifyImage(
                             url = artworkUrl,
-                            placeholder = artworkRes,
+                            placeholder = placeholder,
                             contentDescription = title,
                             modifier = Modifier
                                 .fillMaxSize()
@@ -130,7 +130,7 @@ fun AlbumCard(
     MusicCard(
         title = album.title,
         subtitle = album.artist,
-        artworkRes = album.artwork,
+        placeholder = album.artwork,
         onClick = onClick,
         modifier = modifier,
         size = size,
@@ -148,7 +148,7 @@ fun TrackCard(
     MusicCard(
         title = track.title,
         subtitle = track.artist,
-        artworkRes = track.artwork,
+        placeholder = track.artwork,
         onClick = onClick,
         modifier = modifier,
         size = size,

@@ -1,60 +1,28 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <!-- Vikify Soundwave Logo: Remastered -->
-    <!-- Logic: 5 Pills, Spaced 10 units apart, Centered at X=54 -->
     
-    <!-- Bar 1: Left Small (Purple Gradient) -->
-    <path android:pathData="M30,48 C30,46.34 31.34,45 33,45 C34.66,45 36,46.34 36,48 L36,60 C36,61.66 34.66,63 33,63 C31.34,63 30,61.66 30,60 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:startY="45" android:endY="63" android:type="linear">
-                <item android:offset="0" android:color="#A78BFA"/> <!-- Light Purple -->
-                <item android:offset="1" android:color="#7C3AED"/> <!-- Deep Purple -->
-            </gradient>
-        </aapt:attr>
-    </path>
-
-    <!-- Bar 2: Left Medium (Blue Gradient) -->
-    <path android:pathData="M40,42 C40,40.34 41.34,39 43,39 C44.66,39 46,40.34 46,42 L46,66 C46,67.66 44.66,69 43,69 C41.34,69 40,67.66 40,66 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:startY="39" android:endY="69" android:type="linear">
-                <item android:offset="0" android:color="#60A5FA"/> <!-- Light Blue -->
-                <item android:offset="1" android:color="#2563EB"/> <!-- Deep Blue -->
-            </gradient>
-        </aapt:attr>
-    </path>
-
-    <!-- Bar 3: Center Tall (Cyan/Teal Gradient - The "Hero" Bar) -->
-    <path android:pathData="M50,34 C50,31.34 52.34,29 55,29 C57.66,29 60,31.34 60,34 L60,74 C60,76.66 57.66,79 55,79 C52.34,79 50,76.66 50,74 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:startY="29" android:endY="79" android:type="linear">
-                <item android:offset="0" android:color="#22D3EE"/> <!-- Cyan -->
-                <item android:offset="1" android:color="#0891B2"/> <!-- Dark Teal -->
-            </gradient>
-        </aapt:attr>
-    </path>
-
-    <!-- Bar 4: Right Medium (Pink Gradient) -->
-    <path android:pathData="M64,38 C64,36.34 65.34,35 67,35 C68.66,35 70,36.34 70,38 L70,70 C70,71.66 68.66,73 67,73 C65.34,73 64,71.66 64,70 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:startY="35" android:endY="73" android:type="linear">
-                <item android:offset="0" android:color="#F472B6"/> <!-- Light Pink -->
-                <item android:offset="1" android:color="#DB2777"/> <!-- Deep Pink -->
-            </gradient>
-        </aapt:attr>
-    </path>
-
-    <!-- Bar 5: Right Small (Orange/Red Gradient) -->
-    <path android:pathData="M74,48 C74,46.34 75.34,45 77,45 C78.66,45 80,46.34 80,48 L80,60 C80,61.66 78.66,63 77,63 C75.34,63 74,61.66 74,60 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:startY="45" android:endY="63" android:type="linear">
-                <item android:offset="0" android:color="#FB923C"/> <!-- Light Orange -->
-                <item android:offset="1" android:color="#EA580C"/> <!-- Deep Orange -->
-            </gradient>
-        </aapt:attr>
-    </path>
+    <!-- Background circle -->
+    <path
+        android:fillColor="#0EA5E9"
+        android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0"/>
+    
+    <!-- Dynamic Waveform Bars (Reflecting the iridescent logo) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M25,45 L25,63 C25,65.76 27.24,68 30,68 C32.76,68 35,65.76 35,63 L35,45 C35,42.24 32.76,40 30,40 C27.24,40 25,42.24 25,45 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,30 L38,78 C38,80.76 40.24,83 43,83 C45.76,83 48,80.76 48,78 L48,30 C48,27.24 45.76,25 43,25 C40.24,25 38,27.24 38,30 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M51,38 L51,70 C51,72.76 53.24,75 56,75 C58.76,75 61,72.76 61,70 L61,38 C61,35.24 58.76,33 56,33 C53.24,33 51,35.24 51,38 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,32 L64,76 C64,78.76 66.24,81 69,81 C71.76,81 74,78.76 74,76 L74,32 C74,29.24 71.76,27 69,27 C66.24,27 64,29.24 64,32 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M77,48 L77,60 C77,62.76 79.24,65 82,65 C84.76,65 87,62.76 87,60 L87,48 C87,45.24 84.76,43 82,43 C79.24,43 77,45.24 77,48 Z"/>
 </vector>

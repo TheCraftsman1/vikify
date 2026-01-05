@@ -1,10 +1,3 @@
-/*
- * Copyright (C) 2025 OuterTune Project
- *
- * SPDX-License-Identifier: GPL-3.0
- *
- * For any other attributions, refer to the git commit history
- */
 
 package com.vikify.app.utils
 
@@ -56,7 +49,7 @@ object YTPlayerUtils {
      */
     private val STREAM_FALLBACK_CLIENTS: Array<YouTubeClient> = arrayOf(
         // Could not parse deobfuscation function
-//        WEB_REMIX,
+        WEB_REMIX,
 //        ANDROID,
 //        TVHTML5,
 //        TVHTML5_SIMPLY_EMBEDDED_PLAYER,
@@ -106,10 +99,10 @@ object YTPlayerUtils {
 
         Log.d(TAG, "[$videoId] signatureTimestamp: $signatureTimestamp, isLoggedIn: $isLoggedIn")
 
-        val (webPlayerPot, webStreamingPot) = getWebClientPoTokenOrNull(videoId, sessionId)?.let {
+        val (webPlayerPot, webStreamingPot) = poTokenGenerator.getWebClientPoTokenSuspend(videoId, sessionId)?.let {
             Pair(it.playerRequestPoToken, it.streamingDataPoToken)
         } ?: Pair(null, null).also {
-            Log.w(TAG, "[$videoId] No po token")
+            Log.w(TAG, "[$videoId] No po token generated")
         }
 
         val mainPlayerResponse =
@@ -146,6 +139,11 @@ object YTPlayerUtils {
                 if (client.loginRequired && !isLoggedIn) {
                     // skip client if it requires login but user is not logged in
                     continue
+                }
+
+                if (client == com.zionhuang.innertube.models.YouTubeClient.WEB_REMIX && webPlayerPot == null) {
+                     Log.w(TAG, "Skipping WEB_REMIX because PoToken is missing (Safety Check)")
+                     // continue // Don't skip, try anyway it might work for some songs
                 }
 
                 streamPlayerResponse =
@@ -234,16 +232,31 @@ object YTPlayerUtils {
         playerResponse: PlayerResponse,
         audioQuality: AudioQuality,
         connectivityManager: ConnectivityManager,
-    ): PlayerResponse.StreamingData.Format? =
-        playerResponse.streamingData?.adaptiveFormats
+    ): PlayerResponse.StreamingData.Format? {
+        // Get all audio-only formats
+        val validFormats = playerResponse.streamingData?.adaptiveFormats
             ?.filter { it.isAudio }
-            ?.maxByOrNull {
-                it.bitrate * when (audioQuality) {
-                    AudioQuality.AUTO -> if (connectivityManager.isActiveNetworkMetered) -1 else 1
-                    AudioQuality.HIGH -> 1
-                    AudioQuality.LOW -> -1
-                } + (if (it.mimeType.startsWith("audio/webm")) 10240 else 0) // prefer opus stream
+            ?: return null
+
+        // STABILITY STRATEGY: Prioritize Bitrate, then Container
+        return validFormats.maxByOrNull { format ->
+            var score = format.bitrate.toLong()
+            
+            // Apply quality preference
+            score *= when (audioQuality) {
+                AudioQuality.AUTO -> if (connectivityManager.isActiveNetworkMetered) -1 else 1
+                AudioQuality.HIGH -> 10 // Increase weight of bitrate for HIGH quality
+                AudioQuality.LOW -> -1
             }
+            
+            // Container weight (M4A/AAC is more stable on Android)
+            if (format.mimeType.contains("mp4") || format.itag == 140) {
+                score += 50_000L // Smaller bonus so higher bitrate Opus can still win
+            }
+            
+            score
+        }
+    }
 
     /**
      * Checks if the stream url returns a successful status.
@@ -255,7 +268,12 @@ object YTPlayerUtils {
             val requestBuilder = okhttp3.Request.Builder()
                 .head()
                 .url(url)
-            val response = httpClient.newCall(requestBuilder.build()).execute()
+            val response = httpClient.newBuilder()
+                .connectTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
+                .newCall(requestBuilder.build())
+                .execute()
             return response.isSuccessful
         } catch (e: Exception) {
             reportException(e)

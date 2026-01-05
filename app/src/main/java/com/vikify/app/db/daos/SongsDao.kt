@@ -30,6 +30,10 @@ interface SongsDao {
     fun song(songId: String?): Flow<Song?>
 
     @Transaction
+    @Query("SELECT * FROM song WHERE id = :songId")
+    fun getSong(songId: String?): Song?
+
+    @Transaction
     @Query("SELECT * FROM song WHERE title LIKE '%' || :query || '%' AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL) LIMIT :previewSize")
     fun searchSongs(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Song>>
 
@@ -279,6 +283,12 @@ interface SongsDao {
     @Transaction
     @Query("SELECT * FROM song WHERE isLocal = 0 AND dateDownload IS NULL AND localPath IS NULL")
     fun downloadRelinkableSongs(): Flow<List<Song>>
+
+    @Query("SELECT * FROM song WHERE spotifyId = :spotifyId LIMIT 1")
+    fun getBySpotifyId(spotifyId: String): SongEntity?
+
+    @Query("SELECT spotifyId FROM song WHERE spotifyId IS NOT NULL")
+    fun allSpotifyIds(): Flow<List<String>>
 
     @Query("UPDATE song SET dateDownload = :dateDownload WHERE id = :songId")
     fun updateDownloadStatus(songId: String, dateDownload: LocalDateTime?)

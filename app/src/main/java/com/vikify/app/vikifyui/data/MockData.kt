@@ -12,60 +12,26 @@ import androidx.annotation.DrawableRes
  */
 
 // Core data models
-data class Track(
-    val id: String,
-    val title: String,
-    val artist: String,
-    @DrawableRes val artwork: Int = R.drawable.artwork_placeholder,
-    val remoteArtworkUrl: String? = null,
-    val duration: Long = -1L,
-    val originalBackendRef: Any? = null
-)
-
-data class Album(
-    val id: String,
-    val title: String,
-    val artist: String,
-    @DrawableRes val artwork: Int = R.drawable.artwork_placeholder,
-    val remoteArtworkUrl: String? = null,
-    val tracks: List<Track> = emptyList(),
-    val originalBackendRef: Any? = null
-)
-
-data class Playlist(
-    val id: String,
-    val name: String,
-    @DrawableRes val artwork: Int = R.drawable.artwork_placeholder,
-    val trackCount: Int = 0
-)
-
-// Player UI State - density-based expansion
-data class PlayerUIState(
-    val currentTrack: Track? = null,
-    val isPlaying: Boolean = false,
-    val progress: Float = 0f,           // 0.0 to 1.0
-    val density: Float = 0f,            // 0.0 = mini, 1.0 = expanded
-    val showQueue: Boolean = false,
-    val showLyrics: Boolean = false,
-    val shuffleEnabled: Boolean = false,
-    val repeatMode: Int = 0,            // 0=off, 1=all, 2=one
-    val isLiked: Boolean = false
-)
+// Core data models - Moved to separate files
+// data class Track(...) 
+// data class Album(...)
+// data class Playlist(...)
+// data class PlayerUIState(...)
 
 // Sample data
 object MockData {
     
     val sampleTracks = listOf(
-        Track("1", "Midnight Dreams", "Luna Wave"),
-        Track("2", "Ocean Waves", "Calm Collective"),
-        Track("3", "Starlight", "Nova"),
-        Track("4", "Golden Hour", "Sunset Beats"),
-        Track("5", "Morning Mist", "Ambient Flow"),
-        Track("6", "Electric Pulse", "Synth Masters"),
-        Track("7", "Velvet Sky", "Dream Weavers"),
-        Track("8", "Crystal Clear", "Pure Tones"),
-        Track("9", "Autumn Leaves", "Nature Sounds"),
-        Track("10", "Urban Nights", "City Vibes")
+        Track("1", "Midnight Dreams", "Luna Wave", null, 180000L, R.drawable.artwork_placeholder),
+        Track("2", "Ocean Waves", "Calm Collective", null, 200000L, R.drawable.artwork_placeholder),
+        Track("3", "Starlight", "Nova", null, 210000L, R.drawable.artwork_placeholder),
+        Track("4", "Golden Hour", "Sunset Beats", null, 190000L, R.drawable.artwork_placeholder),
+        Track("5", "Morning Mist", "Ambient Flow", null, 185000L, R.drawable.artwork_placeholder),
+        Track("6", "Electric Pulse", "Synth Masters", null, 220000L, R.drawable.artwork_placeholder),
+        Track("7", "Velvet Sky", "Dream Weavers", null, 195000L, R.drawable.artwork_placeholder),
+        Track("8", "Crystal Clear", "Pure Tones", null, 175000L, R.drawable.artwork_placeholder),
+        Track("9", "Autumn Leaves", "Nature Sounds", null, 205000L, R.drawable.artwork_placeholder),
+        Track("10", "Urban Nights", "City Vibes", null, 240000L, R.drawable.artwork_placeholder)
     )
     
     val sampleAlbums = listOf(
@@ -116,14 +82,16 @@ object MockData {
     
     // Browse categories
     val browseCategories = listOf(
-        Category("c1", "Pop", 0xFFFF6B6B),
-        Category("c2", "Hip-Hop", 0xFF4D96FF),
+        Category("c1", "Pop", 0xFFFF6B6B, isPriority = true),           // Louder
+        Category("c2", "Hip-Hop", 0xFF4D96FF, isPriority = true),       // Louder
         Category("c3", "Indie", 0xFF6BCB77),
-        Category("c4", "Electronic", 0xFF9D4EDD),
+        Category("c4", "Electronic", 0xFF9D4EDD, isNew = true),         // Trending
         Category("c5", "Podcasts", 0xFFFF9F43),
-        Category("c6", "New", 0xFFE74C3C),
-        Category("c7", "Charts", 0xFF34495E),
-        Category("c8", "Moods", 0xFF1ABC9C)
+        Category("c6", "New Releases", 0xFFE74C3C, isNew = true),       // Trending
+        Category("c7", "Charts", 0xFF34495E, isPriority = true),        // Louder
+        Category("c8", "Moods", 0xFF1ABC9C),
+        Category("c9", "Rock", 0xFF607D8B),
+        Category("c10", "R&B", 0xFF9C27B0, isNew = true)
     )
 }
 
@@ -139,7 +107,9 @@ data class Artist(
 data class Category(
     val id: String,
     val name: String,
-    val color: Long
+    val color: Long,
+    val isPriority: Boolean = false,  // "Louder" genres get bigger cards
+    val isNew: Boolean = false         // Trending/new indicator
 )
 
 

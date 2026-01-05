@@ -22,6 +22,10 @@ import java.time.ZoneOffset
     indices = [
         Index(
             value = ["albumId"]
+        ),
+        Index(
+            value = ["spotifyId"],
+            unique = true
         )
     ]
 )
@@ -48,6 +52,28 @@ data class SongEntity(
     val year: Int? = null,
     val date: LocalDateTime? = null, // ID3 tag property
     val dateModified: LocalDateTime? = null, // file property
+    
+    // === SPOTIFY MIGRATION FIELDS ===
+    // These allow instant playlist loading with background YouTube resolution
+    @ColumnInfo(name = "spotifyId", defaultValue = "NULL")
+    val spotifyId: String? = null,  // Original Spotify track ID for mapping
+    
+    @ColumnInfo(name = "spotifyTitle", defaultValue = "NULL")
+    val spotifyTitle: String? = null,  // Clean Spotify title (often better than YouTube)
+    
+    @ColumnInfo(name = "spotifyArtist", defaultValue = "NULL")
+    val spotifyArtist: String? = null,  // Clean Spotify artist name
+    
+    @ColumnInfo(name = "spotifyArtworkUrl", defaultValue = "NULL")
+    val spotifyArtworkUrl: String? = null,  // High-res Spotify artwork URL
+
+    // === JIT RESOLUTION FIELDS ===
+    // These allow lazy resolution of audio to prevent API throttling
+    @ColumnInfo(name = "streamUrl")
+    val streamUrl: String? = null, // Cached playable URL (googlevideo.com...)
+    
+    @ColumnInfo(name = "lastResolved")
+    val lastResolved: Long? = null, // Epoch millis when streamUrl was fetched
 ) {
 
     fun localToggleLike() = copy(
