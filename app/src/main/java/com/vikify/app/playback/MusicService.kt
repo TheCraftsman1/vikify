@@ -1,6 +1,5 @@
-/*
- * Copyright (C) 2024 z-huang/InnerTune
- * Copyright (C) 2025 OuterTune Project
+/**
+ * Copyright (C) 2025 Vikify Project
  *
  * SPDX-License-Identifier: GPL-3.0
  *
@@ -757,6 +756,20 @@ class MusicService : MediaLibraryService(),
         val maxQueues = dataStore.get(MaxQueuesKey, 19)
         if (persistQueue) {
             queueBoard = QueueBoard(this, queueBoard.masterQueues, database.readQueue().toMutableList(), maxQueues)
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // SESSION RESUME: Restore queue to player and seek to last position
+            // ═══════════════════════════════════════════════════════════════════════
+            if (queueBoard.masterQueues.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    val restoredQueue = queueBoard.setCurrQueue(shouldResume = true)
+                    if (restoredQueue != null) {
+                        Log.i(TAG, "Session restored: ${restoredQueue.title}, pos=${restoredQueue.lastSongPos}ms")
+                        player.prepare()
+                        // Don't auto-play, just restore state - user taps play to resume
+                    }
+                }
+            }
         } else {
             queueBoard = QueueBoard(this, queueBoard.masterQueues, maxQueues = maxQueues)
         }
@@ -810,6 +823,12 @@ class MusicService : MediaLibraryService(),
             }
         )
     }
+
+    /**
+     * Get the audio session ID for the Visualizer API
+     * Used by EcoVisualizerViewModel for FFT capture
+     */
+    fun getAudioSessionId(): Int = player.audioSessionId
 
     private fun createCacheDataSource(): CacheDataSource.Factory {
         return CacheDataSource.Factory()

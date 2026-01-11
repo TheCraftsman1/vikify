@@ -149,13 +149,16 @@ class ProfileViewModel @Inject constructor(
                 "Pop"
             }
             
+            // Get liked songs count first (correct value)
+            val likedCount = database.likedSongsCount().first()
+            
             _stats.value = ProfileStats(
                 minutesListened = minutesListened,
                 topGenre = topGenre,
-                likedSongsCount = database.getLifetimePlayCount(null) // Wait this is play count, not liked count
+                likedSongsCount = likedCount
             )
             
-             // Re-query liked count correctly
+             // Continue observing liked count for reactive updates
              database.likedSongsCount().collect { count ->
                  _stats.update { it.copy(likedSongsCount = count) }
              }

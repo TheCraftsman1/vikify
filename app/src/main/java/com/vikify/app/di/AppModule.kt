@@ -12,6 +12,7 @@ import com.vikify.app.db.MusicDatabase
 import com.vikify.app.utils.dataStore
 import com.vikify.app.utils.get
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.database.ktx.database
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import dagger.Module
@@ -79,4 +80,8 @@ object AppModule {
     @Singleton
     @Provides
     fun provideAuth(): com.google.firebase.auth.FirebaseAuth = com.google.firebase.ktx.Firebase.auth
+    
+    @Singleton
+    @Provides
+    fun provideRealtimeDatabase(): com.google.firebase.database.FirebaseDatabase = com.google.firebase.ktx.Firebase.database
 }

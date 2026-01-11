@@ -86,6 +86,7 @@ desugaring = { group = "com.android.tools", name = "desugar_jdk_libs", version =
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }
+firebase-database = { group = "com.google.firebase", name = "firebase-database" }
 play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version = "21.3.0" }
 
 junit = { group = "junit", name = "junit", version = "4.13.2" }

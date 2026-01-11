@@ -93,6 +93,19 @@ object MockData {
         Category("c9", "Rock", 0xFF607D8B),
         Category("c10", "R&B", 0xFF9C27B0, isNew = true)
     )
+
+    val trendingSearches = listOf(
+        "Taylor Swift",
+        "The Weeknd",
+        "Bad Bunny",
+        "Drake",
+        "Dua Lipa",
+        "BTS",
+        "Ed Sheeran",
+        "Billie Eilish",
+        "Post Malone",
+        "Ariana Grande"
+    )
 }
 
 // Artist model for recent searches

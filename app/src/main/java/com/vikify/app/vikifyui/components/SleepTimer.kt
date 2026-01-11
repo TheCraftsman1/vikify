@@ -66,7 +66,7 @@ fun SleepTimerDialog(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFFF8F8F8),
+        containerColor = VikifyTheme.colors.surfaceCard, // Fixed: Theme aware
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         dragHandle = {
             Box(
@@ -75,7 +75,7 @@ fun SleepTimerDialog(
                     .width(40.dp)
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(Color.LightGray)
+                    .background(VikifyTheme.colors.textSecondary.copy(alpha = 0.4f)) // Fixed: Theme aware
             )
         }
     ) {
@@ -109,15 +109,15 @@ fun SleepTimerDialog(
                         Text(
                             "Stops in ${currentState.remainingFormatted}",
                             fontSize = 14.sp,
-                            color = Color(0xFF4CAF50)
+                            color = VikifyTheme.colors.brandPrimary
                         )
                     }
                 }
             }
             
-            Divider(
+            HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                color = Color.LightGray.copy(alpha = 0.5f)
+                color = VikifyTheme.colors.divider
             )
             
             // Timer Options
@@ -132,14 +132,22 @@ fun SleepTimerDialog(
                                 onSelectDuration(duration)
                                 onDismiss()
                             }
-                            .background(if (isSelected) Color(0xFFE8F5E9) else Color.Transparent)
+                            .background(
+                                if (isSelected) 
+                                    VikifyTheme.colors.brandPrimary.copy(alpha = 0.1f) 
+                                else 
+                                    Color.Transparent
+                            )
                             .padding(horizontal = 20.dp, vertical = 16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = duration.label,
                             fontSize = 16.sp,
-                            color = if (duration == SleepTimerDuration.OFF) Color(0xFFE57373) else VikifyTheme.colors.textPrimary,
+                            color = if (duration == SleepTimerDuration.OFF) 
+                                VikifyTheme.colors.error 
+                            else 
+                                VikifyTheme.colors.textPrimary,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                             modifier = Modifier.weight(1f)
                         )
@@ -148,7 +156,7 @@ fun SleepTimerDialog(
                             Icon(
                                 Icons.Rounded.CheckCircle,
                                 contentDescription = null,
-                                tint = Color(0xFF4CAF50),
+                                tint = VikifyTheme.colors.brandPrimary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }

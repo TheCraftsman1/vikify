@@ -45,7 +45,9 @@ fun LyricsOverlay(
     val currentTimeMs = (currentProgress * trackDuration).toLong()
     
     // Find current lyric index based on timestamp
-    val currentLyricIndex = lyrics?.indexOfLast { it.timestamp <= currentTimeMs } ?: -1
+    // Add 800ms offset to compensate for UI update delay
+    val adjustedTimeMs = currentTimeMs + 800L
+    val currentLyricIndex = lyrics?.indexOfLast { it.timestamp <= adjustedTimeMs } ?: -1
     
     // Auto-scroll to current lyric
     val listState = rememberLazyListState()

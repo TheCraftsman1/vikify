@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,186 +22,98 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import com.vikify.app.vikifyui.theme.*
 
 /**
- * Premium Theme Switch with Animation
+ * Premium 3-Mode Theme Switch
  * 
- * Features:
- * - Smooth icon transition (Sun spins into Moon)
- * - Color morphing animation
- * - Scale/bounce effect on tap
- * - Haptic feedback
+ * ☀️ Sunlight = Light/White
+ * 🌙 Moon = Dark/Black  
+ * ✨ Cool = Mesh/Gradient
  */
 @Composable
 fun ThemeSwitch(
-    modifier: Modifier = Modifier,
-    onThemeChanged: ((Boolean) -> Unit)? = null
+    modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
-    val isDark = VikifyTheme.isDark
+    val currentMode = VikifyThemeState.currentMode
+    val colors = VikifyTheme.colors
     
-    // Rotation animation - Sun spins to Moon
-    val rotation by animateFloatAsState(
-        targetValue = if (isDark) 180f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "rotation"
-    )
-    
-    // Scale animation - bounce on tap
-    var isPressed by remember { mutableStateOf(false) }
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(colors.surfaceCard.copy(alpha = 0.5f))
+            .border(1.dp, colors.border.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        // Sunlight (Light)
+        ThemeModeButton(
+            icon = Icons.Filled.LightMode,
+            isSelected = currentMode == ThemeMode.SUNLIGHT,
+            selectedColor = Color(0xFFFFA726), // Warm orange
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                VikifyThemeState.setMode(ThemeMode.SUNLIGHT)
+            }
+        )
+        
+        // Moon (Dark)
+        ThemeModeButton(
+            icon = Icons.Filled.DarkMode,
+            isSelected = currentMode == ThemeMode.MOON,
+            selectedColor = Color(0xFF7C4DFF), // Purple
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                VikifyThemeState.setMode(ThemeMode.MOON)
+            }
+        )
+        
+        // Cool (Mesh/Gradient)
+        ThemeModeButton(
+            icon = Icons.Rounded.AutoAwesome,
+            isSelected = currentMode == ThemeMode.COOL,
+            selectedColor = Color(0xFF00BCD4), // Cyan
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                VikifyThemeState.setMode(ThemeMode.COOL)
+            }
+        )
+    }
+}
+
+@Composable
+private fun ThemeModeButton(
+    icon: ImageVector,
+    isSelected: Boolean,
+    selectedColor: Color,
+    onClick: () -> Unit
+) {
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.85f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
+        targetValue = if (isSelected) 1.1f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "scale"
     )
     
-    // Background color animation
     val backgroundColor by animateColorAsState(
-        targetValue = if (isDark) DarkColors.Surface else LightColors.Surface,
-        animationSpec = tween(300),
-        label = "bgColor"
+        targetValue = if (isSelected) selectedColor else Color.Transparent,
+        animationSpec = tween(200),
+        label = "bg"
     )
     
     val iconColor by animateColorAsState(
-        targetValue = if (isDark) DarkColors.Accent else LightColors.Accent,
-        animationSpec = tween(300),
-        label = "iconColor"
-    )
-    
-    val borderColor by animateColorAsState(
-        targetValue = if (isDark) DarkColors.Border else LightColors.Border,
-        animationSpec = tween(300),
-        label = "borderColor"
-    )
-    
-    Box(
-        modifier = modifier
-            .scale(scale)
-            .size(44.dp)
-            .clip(CircleShape)
-            .background(backgroundColor)
-            .border(1.dp, borderColor, CircleShape)
-            .clickable {
-                isPressed = true
-                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                VikifyThemeState.toggleTheme()
-                onThemeChanged?.invoke(!isDark)
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = if (isDark) Icons.Filled.DarkMode else Icons.Filled.LightMode,
-            contentDescription = if (isDark) "Dark Mode" else "Light Mode",
-            tint = iconColor,
-            modifier = Modifier
-                .size(24.dp)
-                .rotate(rotation)
-        )
-    }
-    
-    // Reset pressed state after animation
-    LaunchedEffect(isPressed) {
-        if (isPressed) {
-            kotlinx.coroutines.delay(100)
-            isPressed = false
-        }
-    }
-}
-
-/**
- * Premium Pill Theme Toggle
- * 
- * iOS-style segmented toggle with Sun/Moon icons
- */
-@Composable
-fun ThemePillToggle(
-    modifier: Modifier = Modifier
-) {
-    val isDark = VikifyTheme.isDark
-    val view = LocalView.current
-    
-    // Slider position animation
-    val sliderOffset by animateIntAsState(
-        targetValue = if (isDark) 1 else 0,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "sliderOffset"
-    )
-    
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isDark) DarkColors.SurfaceVariant else LightColors.SurfaceVariant,
-        animationSpec = tween(300),
-        label = "bgColor"
-    )
-    
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(24.dp))
-            .background(backgroundColor)
-            .padding(4.dp)
-    ) {
-        Row {
-            // Light Mode Button
-            ThemePillButton(
-                icon = Icons.Filled.LightMode,
-                isSelected = !isDark,
-                onClick = {
-                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                    VikifyThemeState.setMode(ThemeMode.LIGHT)
-                }
-            )
-            
-            Spacer(Modifier.width(4.dp))
-            
-            // Dark Mode Button
-            ThemePillButton(
-                icon = Icons.Filled.DarkMode,
-                isSelected = isDark,
-                onClick = {
-                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                    VikifyThemeState.setMode(ThemeMode.DARK)
-                }
-            )
-        }
-    }
-}
-
-@Composable
-private fun ThemePillButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isSelected) {
-            if (LocalIsDarkTheme.current) DarkColors.Accent else LightColors.Accent
-        } else Color.Transparent,
+        targetValue = if (isSelected) Color.White else VikifyTheme.colors.textSecondary,
         animationSpec = tween(200),
-        label = "pillBg"
-    )
-    
-    val iconColor by animateColorAsState(
-        targetValue = if (isSelected) Color.White else {
-            if (LocalIsDarkTheme.current) DarkColors.TextSecondary else LightColors.TextSecondary
-        },
-        animationSpec = tween(200),
-        label = "pillIcon"
+        label = "icon"
     )
     
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .scale(scale)
+            .size(36.dp)
             .clip(CircleShape)
             .background(backgroundColor)
             .clickable { onClick() },
@@ -216,9 +129,7 @@ private fun ThemePillButton(
 }
 
 /**
- * Theme Mode Row for Settings
- * 
- * Shows current theme mode with options to change
+ * Theme Mode Selector for Settings
  */
 @Composable
 fun ThemeModeSelector(
@@ -241,7 +152,7 @@ fun ThemeModeSelector(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
-                .background(colors.surface)
+                .background(colors.surfaceCard)
                 .border(1.dp, colors.border, RoundedCornerShape(16.dp))
                 .padding(4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
@@ -249,12 +160,18 @@ fun ThemeModeSelector(
             ThemeMode.entries.forEach { mode ->
                 val isSelected = mode == currentMode
                 
+                val (icon, label, selectedColor) = when (mode) {
+                    ThemeMode.SUNLIGHT -> Triple(Icons.Filled.LightMode, "Sunlight", Color(0xFFFFA726))
+                    ThemeMode.MOON -> Triple(Icons.Filled.DarkMode, "Moon", Color(0xFF7C4DFF))
+                    ThemeMode.COOL -> Triple(Icons.Rounded.AutoAwesome, "Cool", Color(0xFF00BCD4))
+                }
+                
                 val backgroundColor by animateColorAsState(
-                    targetValue = if (isSelected) colors.accent else Color.Transparent,
+                    targetValue = if (isSelected) selectedColor else Color.Transparent,
                     label = "modeBg"
                 )
                 
-                Box(
+                Column(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
@@ -264,15 +181,18 @@ fun ThemeModeSelector(
                             VikifyThemeState.setMode(mode)
                         }
                         .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = if (isSelected) Color.White else colors.textSecondary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = when (mode) {
-                            ThemeMode.LIGHT -> "Light"
-                            ThemeMode.DARK -> "Dark"
-                            ThemeMode.SYSTEM -> "Auto"
-                        },
-                        style = MaterialTheme.typography.labelMedium,
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
                         color = if (isSelected) Color.White else colors.textSecondary
                     )
                 }

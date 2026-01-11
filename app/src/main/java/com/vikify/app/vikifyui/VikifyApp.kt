@@ -3,6 +3,7 @@ package com.vikify.app.vikifyui
 import com.vikify.app.LocalPlayerConnection
 
 import android.app.Activity
+import android.content.Intent
 import com.zionhuang.innertube.YouTube
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -24,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,6 +48,7 @@ import com.vikify.app.vikifyui.screens.DownloadsScreen
 import com.vikify.app.vikifyui.screens.CinematicOnboardingScreen
 import com.vikify.app.vikifyui.screens.ProfileScreen
 import com.vikify.app.vikifyui.screens.PlaylistScreen
+import com.vikify.app.vikifyui.screens.PlaylistUiState
 import com.vikify.app.vikifyui.screens.SearchScreen
 import com.vikify.app.vikifyui.screens.TimeCapsuleScreen
 import com.vikify.app.vikifyui.theme.*
@@ -54,6 +57,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.vikify.app.viewmodels.HomeViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.vikify.app.vikifyui.screens.BrowseScreen
 import com.vikify.app.vikifyui.screens.MoodAndGenresScreen
 import com.vikify.app.vikifyui.screens.DownloadsScreen
@@ -98,6 +109,7 @@ fun VikifyApp(
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsState()
     val visualState by viewModel.visualState.collectAsState()
+    val sleepTimerState by viewModel.sleepTimerState.collectAsState()
     
     // ═══════════════════════════════════════════════════════════════
     // AMBIENT MODE - Contextual UI Density
@@ -118,7 +130,8 @@ fun VikifyApp(
     )
     
     val isExpanded = uiState.density > 0.5f
-    var isDarkTheme by remember { mutableStateOf(true) }
+    // Use global VikifyThemeState instead of local state
+    val isDarkTheme = VikifyThemeState.currentMode != ThemeMode.SUNLIGHT
     var currentScreen by remember { mutableStateOf(NavScreen.Home) }
     var selectedAlbumId by remember { mutableStateOf<String?>(null) }
     var selectedArtistId by remember { mutableStateOf<String?>(null) }
@@ -134,6 +147,23 @@ fun VikifyApp(
     var browseTitle by remember { mutableStateOf<String?>(null) }
     var browseColor by remember { mutableStateOf<Int?>(null) }
     
+    // Playlist Picker Dialog (Global)
+    var showPlaylistPicker by remember { mutableStateOf(false) }
+    val localPlaylists by viewModel.localPlaylists.collectAsState(initial = emptyList())
+
+    // ═══════════════════════════════════════════════════════════════
+    // JAM MODE - Collaborative Listening
+    // ═══════════════════════════════════════════════════════════════
+    val jamSessionState by viewModel.jamSessionState.collectAsState()
+    val jamError by viewModel.jamError.collectAsState()
+    val isJamLoading by viewModel.isJamLoading.collectAsState()
+    var showJamModeInvite by remember { mutableStateOf(false) }
+    // No longer using showJamModeFullScreen - unified with isExpanded logic
+    
+    // Check if there's an active Jam session
+    val isJamSessionActive = jamSessionState is com.vikify.app.vikifyui.data.JamSessionState.Active ||
+                           jamSessionState is com.vikify.app.vikifyui.data.JamSessionState.WaitingForGuest
+
     // Spotify state - shared across recompositions
     val context = LocalContext.current
     val spotifyRepo = remember { com.vikify.app.spotify.SpotifyRepository(context) }
@@ -201,23 +231,57 @@ fun VikifyApp(
             if (playlistId.startsWith("mock_")) {
                 // Mock handled by PlaylistScreen default logic
                 playlistTracks = emptyList()
+            } else if (!playlistId.matches(Regex("^[a-zA-Z0-9]{22}$"))) {
+                // NOT a Spotify ID (22 alphanumeric chars) - assume YouTube Music playlist
+                withContext(Dispatchers.IO) {
+                    // YouTube uses various prefixes, try the ID as-is first
+                    val queryId = if (playlistId.startsWith("VL")) playlistId.drop(2) else playlistId
+                    val result = YouTube.playlist(queryId)
+                    result.onSuccess { playlistPage ->
+                        withContext(Dispatchers.Main) {
+                            playlistTracks = playlistPage.songs.map { song ->
+                                com.vikify.app.vikifyui.data.Track(
+                                    id = song.id,
+                                    title = song.title,
+                                    artist = song.artists.firstOrNull()?.name ?: "Unknown",
+                                    remoteArtworkUrl = song.thumbnail,
+                                    duration = (song.duration?.toLong() ?: 0L) * 1000L,
+                                    originalBackendRef = song
+                                )
+                            }
+                            // Update playlist info if we don't have it
+                            if (activePlaylistInfo == null) {
+                                activePlaylistInfo = com.vikify.app.spotify.SpotifyPlaylist(
+                                    id = playlistId,
+                                    name = playlistPage.playlist.title,
+                                    imageUrl = playlistPage.playlist.thumbnail,
+                                    trackCount = playlistPage.songs.size,
+                                    owner = "YouTube Music"
+                                )
+                            }
+                        }
+                    }.onFailure {
+                        withContext(Dispatchers.Main) {
+                            playlistTracks = emptyList()
+                        }
+                    }
+                }
             } else {
-                // Try local first
+                // Spotify ID format - try local first, then Spotify
                 val localTracks = viewModel.loadLocalPlaylist(playlistId)
                 if (localTracks != null) {
                     playlistTracks = localTracks
                 } else {
                     // Spotify fetch with batch YouTube ID resolution (Hybrid Sync)
-                    // We use viewModel to access the database and ensure IDs match DB entities
                     val tracks = viewModel.loadSpotifyPlaylist(playlistId, spotifyRepo)
                     playlistTracks = tracks.map { st ->
                         com.vikify.app.vikifyui.data.Track(
-                            id = st.id, // This is now the DB ID (YT_ID or UNRESOLVED_...)
+                            id = st.id,
                             title = st.title,
                             artist = st.artist,
                             remoteArtworkUrl = st.imageUrl,
                             duration = st.duration,
-                            youtubeId = st.youtubeId  // Pre-resolved or null (JIT will handle nulls via UNRESOLVED mechanism)
+                            youtubeId = st.youtubeId
                         )
                     }
                 }
@@ -273,9 +337,7 @@ fun VikifyApp(
                 account.idToken?.let { idToken ->
                     scope.launch {
                         homeViewModel.authManager.signInWithGoogle(idToken)
-                        // Onboarding complete!
-                        prefs.edit().putBoolean("onboarding_complete", true).apply()
-                        hasCompletedOnboarding = true
+                        // Onboarding continues to Spotify stage, do not set complete yet
                     }
                 } ?: run {
                     Toast.makeText(context, "Google Sign In Failed: No ID Token", Toast.LENGTH_SHORT).show()
@@ -296,7 +358,16 @@ fun VikifyApp(
             onGuestLogin = {
                 scope.launch {
                     homeViewModel.authManager.signInAnonymously()
-                    // Onboarding complete for guest
+                    // Onboarding continues to Spotify stage
+                }
+            },
+            isLoggedIn = currentUser != null,
+            isSpotifyConnected = isSpotifyLoggedIn,
+            onSpotifyLogin = {
+                context.startActivity(spotifyRepo.startLogin())
+            },
+            onOnboardingComplete = {
+                scope.launch {
                     prefs.edit().putBoolean("onboarding_complete", true).apply()
                     hasCompletedOnboarding = true
                 }
@@ -368,7 +439,7 @@ fun VikifyApp(
         }
     }
     
-    VikifyTheme(themeMode = if (isDarkTheme) ThemeMode.DARK else ThemeMode.LIGHT) {
+    VikifyTheme { // Uses VikifyThemeState.currentMode by default
     Box(modifier = modifier.fillMaxSize()) {
         // Main content based on selected tab
         if (!isExpanded && !showLikedSongs && !showDownloads && !showMoodAndGenres && selectedBrowseId == null) {
@@ -393,6 +464,13 @@ fun VikifyApp(
                                 initialSearchQuery = moodTitle
                                 currentScreen = NavScreen.Search
                             }
+                        },
+                        onGenreSearch = { name, searchQuery, color ->
+                            // Navigate to SearchScreen with pre-filled query
+                            // This is more reliable than browse endpoints
+                            initialSearchQuery = searchQuery
+                            browseColor = color // For potential UI theming
+                            currentScreen = NavScreen.Search
                         },
                         onAlbumClick = { albumId ->
                             selectedAlbumId = albumId
@@ -458,8 +536,8 @@ fun VikifyApp(
                         likedSongsCount = likedSongsCount,
                         onLikedSongsClick = { showLikedSongs = true },
                         modifier = Modifier.fillMaxSize(),
-                        onThemeToggle = { isDarkTheme = !isDarkTheme },
-                        isDarkTheme = isDarkTheme,
+                        onThemeToggle = { VikifyThemeState.toggleTheme() },
+                        isDarkTheme = VikifyThemeState.currentMode != ThemeMode.SUNLIGHT,
                         userName = userDisplayName ?: currentUser?.displayName,
                         userEmail = currentUser?.email.also { 
                             android.util.Log.d("VikifyApp", "Profile User: ${currentUser?.uid}, Email: $it, Anon: ${currentUser?.isAnonymous}") 
@@ -524,7 +602,7 @@ fun VikifyApp(
                     viewModel.playTrack(track)
                 },
                 onShuffleClick = { /* TODO: Shuffle artist tracks */ },
-                onArtistClick = { newArtistName ->
+                onArtistClick = { newArtistName, _ ->
                     // Navigate to related artist
                     selectedArtistName = newArtistName
                 },
@@ -532,34 +610,100 @@ fun VikifyApp(
             )
         }
         
-        // Expanded player (full screen)
+        // Expanded player (full screen) - EITHER Standard Player OR Jam Mode
         if (isExpanded) {
-            val currentTrackId = uiState.currentTrack?.id ?: ""
-            PlayerContainer(
-                uiState = uiState,
-                lyrics = lyrics,
-                isDownloaded = downloadedTrackIds.contains(currentTrackId),
-                accentColor = visualState.accentColor, // Pass dynamic color
-                onPlayPause = viewModel::togglePlayPause,
-                onExpand = viewModel::expandPlayer,
-                onCollapse = viewModel::collapsePlayer,
-                onSkipNext = viewModel::skipNext,
-                onSkipPrevious = viewModel::skipPrevious,
-                onSeek = viewModel::updateProgress,
-                onQueueClick = viewModel::toggleQueue,
-                onLyricsClick = viewModel::toggleLyrics,
-                onShuffleClick = viewModel::toggleShuffle,
-                onRepeatClick = viewModel::toggleRepeat,
-                onLikeClick = viewModel::toggleLike,
-                onDownloadClick = viewModel::downloadCurrentTrack,
-                onAddToPlaylist = { showPlaylistPicker = true },
-                onArtistClick = { artistName ->
-                    selectedArtistName = artistName
-                    viewModel.collapsePlayer()
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+            
+            // If Jam Session is active -> Show Jam Mode Screen
+            if (isJamSessionActive) {
+                // Animated Visibility wrapper to handle transitions if needed, 
+                // but direct swap is cleaner for state consistency
+                val currentJamUser = viewModel.currentJamUser.collectAsState().value ?: 
+                    com.vikify.app.vikifyui.components.JamUser(
+                        id = "local_user",
+                        displayName = "You",
+                        avatarUrl = null
+                    )
+                
+                val chatMessages by viewModel.jamChatMessages.collectAsState()
+                val unreadChatCount by viewModel.unreadChatCount.collectAsState()
+                val isChatOpen by viewModel.isChatOpen.collectAsState()
+                
+                Box(modifier = Modifier.fillMaxSize()) {
+                    com.vikify.app.vikifyui.screens.JamModeScreen(
+                        sessionState = jamSessionState,
+                        uiState = uiState,
+                        currentUser = currentJamUser,
+                        chatMessages = chatMessages,
+                        unreadChatCount = unreadChatCount,
+                        isChatOpen = isChatOpen,
+                        lyrics = lyrics,
+                        accentColor = visualState.accentColor,
+                        onPlayPause = viewModel::togglePlayPause,
+                        onSkipNext = viewModel::skipNext,
+                        onSkipPrevious = viewModel::skipPrevious,
+                        onSeek = viewModel::updateProgress, // Enable seeking in Jam Mode
+                        onLeaveSession = viewModel::leaveJamSession,
+                        onMinimize = viewModel::collapsePlayer, // Minimize to background, keep session
+                        onSendChatMessage = viewModel::sendJamChatMessage,
+                        onToggleChat = viewModel::toggleJamChat,
+                        onAddToQueue = viewModel::addToJamQueue,
+                        onRemoveFromQueue = viewModel::removeFromJamQueue,
+                        onSearchTracks = viewModel::searchTracks,
+                        onSendReaction = viewModel::sendJamReaction,
+                        onShareSession = {
+                            // Get session code from current state
+                            val sessionCode = when (val state = jamSessionState) {
+                                is com.vikify.app.vikifyui.data.JamSessionState.Active -> state.session.sessionCode
+                                is com.vikify.app.vikifyui.data.JamSessionState.WaitingForGuest -> state.sessionCode
+                                else -> null
+                            }
+                            sessionCode?.let { code ->
+                                val shareIntent = Intent.createChooser(Intent().apply {
+                                    action = Intent.ACTION_SEND
+                                    putExtra(Intent.EXTRA_TEXT, "Join my Vikify Jam session! 🎵\n\nCode: $code\n\nOpen Vikify and enter the code to listen together!")
+                                    type = "text/plain"
+                                }, "Share Jam Session")
+                                context.startActivity(shareIntent)
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    
+                    // Minimize button removed - swipe down on Jam Mode screen handles this
+                }
+            } else {
+                // Otherwise -> Show Standard Player
+                val currentTrackId = uiState.currentTrack?.id ?: ""
+                PlayerContainer(
+                    uiState = uiState,
+                    lyrics = lyrics,
+                    isDownloaded = downloadedTrackIds.contains(currentTrackId),
+                    accentColor = visualState.accentColor, // Pass dynamic color
+                    sleepTimerState = sleepTimerState,
+                    onPlayPause = viewModel::togglePlayPause,
+                    onExpand = viewModel::expandPlayer,
+                    onCollapse = viewModel::collapsePlayer,
+                    onSkipNext = viewModel::skipNext,
+                    onSkipPrevious = viewModel::skipPrevious,
+                    onSeek = viewModel::updateProgress,
+                    onQueueClick = viewModel::toggleQueue,
+                    onLyricsClick = viewModel::toggleLyrics,
+                    onShuffleClick = viewModel::toggleShuffle,
+                    onRepeatClick = viewModel::toggleRepeat,
+                    onLikeClick = viewModel::toggleLike,
+                    onDownloadClick = viewModel::downloadCurrentTrack,
+                    onAddToPlaylist = { showPlaylistPicker = true },
+                    onArtistClick = { artistName ->
+                        selectedArtistName = artistName
+                        viewModel.collapsePlayer()
+                    },
+                    onJamModeClick = { showJamModeInvite = true }, // NEW: Open Jam Mode invite sheet
+                    onSleepTimerSelect = { duration -> viewModel.startSleepTimer(duration) },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         } else {
+             // 5. BROWSE OVERLAY
          // 5. BROWSE OVERLAY
         AnimatedVisibility(
             visible = selectedBrowseId != null && !isExpanded,
@@ -604,7 +748,11 @@ fun VikifyApp(
             )
         }
 
-        // 6. MINI PLAYER (Bottom Layer)
+        // 6. MINI PLAYER (Bottom Layer) - Hidden during full-screen Jam Mode logic
+        // If (isJamSessionActive && !isExpanded) -> Shows Mini Player + Floating Pill (which is above)
+        // If (!isJamSessionActive && !isExpanded) -> Shows Mini Player
+        // So simply: if (!isExpanded)
+        if (!isExpanded) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -637,7 +785,9 @@ fun VikifyApp(
                 }
             }
         }
+        } // End of else block for isExpanded
         
+
         // Queue overlay
         if (uiState.showQueue) {
             val queueTracks by viewModel.queueTracks.collectAsState()
@@ -669,7 +819,7 @@ fun VikifyApp(
         }
         
         // Lyrics overlay
-        if (uiState.showLyrics) {
+        if (uiState.showLyrics && uiState.currentTrack != null) {
             LyricsOverlay(
                 track = uiState.currentTrack,
                 currentProgress = uiState.progress,
@@ -688,7 +838,13 @@ fun VikifyApp(
                 playlistName = playlist?.name ?: activePlaylistId?.takeIf { it.startsWith("mock_") }?.substring(5) ?: "Playlist",
                 tracks = playlistTracks,
                 coverUrl = playlist?.imageUrl ?: playlistTracks.firstOrNull()?.remoteArtworkUrl,
-                currentTrack = uiState.currentTrack,
+                currentTrackId = uiState.currentTrack?.id,
+                uiState = PlaylistUiState(
+                    isDownloading = isDownloading,
+                    downloadProgress = downloadProgress,
+                    downloadedTrackIds = downloadedIds,
+                    isPlaylistDownloaded = playlistTracks.isNotEmpty() && playlistTracks.all { downloadedIds.contains(it.id) }
+                ),
                 onTrackClick = { track -> 
                     // Use playPlaylistWithIndex to queue the entire playlist
                     // ensuring continuous playback and queue context
@@ -703,17 +859,11 @@ fun VikifyApp(
                 onPlayAllClick = { viewModel.playAllTracks(playlistTracks, shuffle = false) },
                 onDownloadClick = { viewModel.downloadPlaylist(playlistTracks) },
                 onAddToQueue = { track -> viewModel.addToQueue(track) },
-                isDownloading = isDownloading,
-                downloadProgress = downloadProgress,
-                downloadedTrackIds = downloadedIds,
-                isPlaylistDownloaded = playlistTracks.isNotEmpty() && playlistTracks.all { downloadedIds.contains(it.id) },
                 modifier = Modifier.fillMaxSize()
             )
         }
         
-        // Playlist Picker Dialog (Global)
-        var showPlaylistPicker by remember { mutableStateOf(false) }
-        val localPlaylists by viewModel.localPlaylists.collectAsState()
+
         
         if (showPlaylistPicker) {
             PlaylistPickerDialog(
@@ -733,6 +883,118 @@ fun VikifyApp(
             )
         }
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // JAM MODE - Collaborative Listening (Now Minimizable!)
+        // ═══════════════════════════════════════════════════════════════════════
+        
+        // Jam Mode can be minimized to allow exploring the app while jamming
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        
+        // Collect chat state
+        val chatMessages by viewModel.jamChatMessages.collectAsState()
+        val unreadChatCount by viewModel.unreadChatCount.collectAsState()
+        val isChatOpen by viewModel.isChatOpen.collectAsState()
+        
+        // Floating Jam Mode Indicator (shown when Jam is minimized)
+        if (isJamSessionActive && !isExpanded) {
+            val currentState = jamSessionState
+            val sessionCode = when (currentState) {
+                is com.vikify.app.vikifyui.data.JamSessionState.WaitingForGuest -> currentState.sessionCode
+                is com.vikify.app.vikifyui.data.JamSessionState.Active -> currentState.session.sessionCode
+                else -> ""
+            }
+            val participantCount = when (currentState) {
+                is com.vikify.app.vikifyui.data.JamSessionState.Active -> currentState.session.participantCount + 1 // +1 for host
+                else -> 1
+            }
+            
+            Box(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(end = 12.dp, top = 8.dp)
+                    .align(Alignment.TopEnd) // Top-right corner instead of full width
+                    .zIndex(100f)
+            ) {
+                // Compact floating pill
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFF7C4DFF),
+                                    Color(0xFF00E5FF)
+                                )
+                            )
+                        )
+                        .clickable { viewModel.expandPlayer() }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Pulsing dot
+                    val infiniteTransition = rememberInfiniteTransition(label = "jamPulse")
+                    val dotAlpha by infiniteTransition.animateFloat(
+                        initialValue = 0.5f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(800),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "dotPulse"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = dotAlpha))
+                    )
+                    Text(
+                        text = "JAM",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "• $participantCount",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+        
+        
+        
+        // Jam Mode Invite Sheet (create/join options)
+        if (showJamModeInvite) {
+            com.vikify.app.vikifyui.components.JamModeInviteSheet(
+                isLoading = isJamLoading,
+                errorMessage = jamError,
+                onCreateSession = {
+                    // Set a default user if not already set
+                    if (viewModel.currentJamUser.value == null) {
+                        viewModel.setCurrentJamUser("local_user", "You", null)
+                    }
+                    viewModel.startJamSession()
+                    showJamModeInvite = false
+                },
+                onJoinSession = { code ->
+                    // Set a default user if not already set
+                    if (viewModel.currentJamUser.value == null) {
+                        viewModel.setCurrentJamUser("local_user", "You", null)
+                    }
+                    viewModel.joinJamSession(code)
+                    showJamModeInvite = false
+                },
+                onDismiss = { 
+                    showJamModeInvite = false 
+                    viewModel.clearJamError()
+                }
+            )
+        }
+        
         // Album Overlay (handled by PlaylistScreen)
         if (selectedAlbumId != null) {
             val downloadedIds by viewModel.downloadedTrackIds.collectAsState()
@@ -742,7 +1004,13 @@ fun VikifyApp(
                 playlistName = "Album", // Will be updated by ViewModel
                 tracks = playlistTracks, // ViewModel updates this
                 coverUrl = playlistTracks.firstOrNull()?.remoteArtworkUrl,
-                currentTrack = uiState.currentTrack,
+                currentTrackId = uiState.currentTrack?.id,
+                uiState = PlaylistUiState(
+                    isDownloading = isDownloading,
+                    downloadProgress = downloadProgress,
+                    downloadedTrackIds = downloadedIds,
+                    isPlaylistDownloaded = playlistTracks.isNotEmpty() && playlistTracks.all { downloadedIds.contains(it.id) }
+                ),
                 onTrackClick = { track -> 
                     // Use playFromPlaylist to queue the entire album
                     viewModel.playFromPlaylist(playlistTracks, playlistTracks.indexOf(track), "Album") 
@@ -753,12 +1021,7 @@ fun VikifyApp(
                 onShuffleClick = { viewModel.playAllTracks(playlistTracks, shuffle = true) },
                 onPlayAllClick = { viewModel.playAllTracks(playlistTracks, shuffle = false) },
                 onDownloadClick = { viewModel.downloadPlaylist(playlistTracks) },
-                onAddToQueue = { track -> viewModel.addToQueue(track) },
-                isDownloading = isDownloading,
-                downloadProgress = downloadProgress,
-                downloadedTrackIds = downloadedIds,
-                isPlaylistDownloaded = playlistTracks.isNotEmpty() && playlistTracks.all { downloadedIds.contains(it.id) },
-
+                onAddToQueue = { track -> viewModel.addToQueue(track) }
             )
         }
     }

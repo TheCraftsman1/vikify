@@ -57,32 +57,36 @@ class LyricsHelper @Inject constructor(
     suspend fun getLyrics(mediaMetadata: MediaMetadata): SemanticLyrics? {
         val trim = context.dataStore.get(LyricTrimKey, defaultValue = false)
         val multiline = context.dataStore.get(MultilineLrcKey, defaultValue = true)
-
         val prefLocal = context.dataStore.get(LyricSourcePrefKey, true)
 
         val cached = cache.get(mediaMetadata.id)?.firstOrNull()
-        if (cached != null) {
+        if (cached != null && cached.lyrics != LYRICS_NOT_FOUND) {
             return parseLrc(cached.lyrics, trim, multiline)
         }
         val dbLyrics = database.lyrics(mediaMetadata.id).let { it.first()?.lyrics }
+        // Check for the LYRICS_NOT_FOUND marker - return null for nice empty state
+        if (dbLyrics == LYRICS_NOT_FOUND) {
+            return null
+        }
         if (dbLyrics != null && !prefLocal) {
             return parseLrc(dbLyrics, trim, multiline)
         }
 
         val localLyrics: SemanticLyrics? =
             getLocalLyrics(mediaMetadata, LrcUtils.LrcParserOptions(trim, multiline, "Unable to parse lyrics"))
-        val remoteLyrics: String?
+        var remoteLyrics: String? = null
+        var plainLyrics: String? = null
 
         // fallback to secondary provider when primary is unavailable
         if (prefLocal) {
             if (localLyrics != null) {
                 return localLyrics
             }
-            if (dbLyrics != null) {
+            if (dbLyrics != null && dbLyrics != LYRICS_NOT_FOUND) {
                 return parseLrc(dbLyrics, trim, multiline)
             }
 
-            // "lazy eval" the remote lyrics cuz it is laughably slow
+            // Try remote lyrics (synced)
             remoteLyrics = getRemoteLyrics(mediaMetadata)
             if (remoteLyrics != null) {
                 database.query {
@@ -110,7 +114,33 @@ class LyricsHelper @Inject constructor(
             } else if (localLyrics != null) {
                 return localLyrics
             }
+        }
 
+        // Fallback: try to get plain (unsynced) lyrics from providers
+        lyricsProviders.forEach { provider ->
+            if (provider.isEnabled(context)) {
+                provider.getLyrics(
+                    mediaMetadata.id,
+                    mediaMetadata.title,
+                    mediaMetadata.artists.joinToString { it.name },
+                    mediaMetadata.duration
+                ).onSuccess { lyrics ->
+                    if (plainLyrics == null && !lyrics.contains("[")) { // crude check: no timestamps
+                        plainLyrics = lyrics
+                    }
+                }
+            }
+        }
+        if (plainLyrics != null) {
+            database.query {
+                upsert(
+                    LyricsEntity(
+                        id = mediaMetadata.id,
+                        lyrics = plainLyrics!!
+                    )
+                )
+            }
+            return parseLrc(plainLyrics!!, trim, multiline)
         }
 
         database.query {

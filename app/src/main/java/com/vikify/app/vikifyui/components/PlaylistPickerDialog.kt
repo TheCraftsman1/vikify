@@ -125,7 +125,7 @@ fun PlaylistPickerDialog(
                             Spacer(modifier = Modifier.width(16.dp))
                             Column {
                                 Text(
-                                    playlist.name,
+                                    playlist.title,
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = LocalVikifyColors.current.textPrimary
                                 )

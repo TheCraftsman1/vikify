@@ -1,4 +1,4 @@
-// https://github.com/FoedusProgramme/Gramophone/blob/94baf6aca52ce7ca97715325853cbda555e55ca7/app/src/main/java/org/akanework/gramophone/ui/MediaControllerViewModel.kt
+
 package com.vikify.app.playback
 
 import android.app.Application

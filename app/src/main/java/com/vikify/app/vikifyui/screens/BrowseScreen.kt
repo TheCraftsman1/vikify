@@ -299,6 +299,7 @@ fun CompactSongCard(
     artist: String,
     imageUrl: String?,
     isPlaying: Boolean,
+    stripeColor: Int? = null,  // For mood/genre gradient cards
     onClick: () -> Unit
 ) {
     Column(
@@ -311,14 +312,39 @@ fun CompactSongCard(
             modifier = Modifier
                 .size(140.dp)
                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
-                .background(Color.LightGray)
+                .background(
+                    // Use gradient if stripeColor provided and no image
+                    if (stripeColor != null && imageUrl == null) {
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color(stripeColor),
+                                Color(stripeColor).copy(alpha = 0.6f)
+                            )
+                        )
+                    } else {
+                        Brush.linearGradient(
+                            colors = listOf(Color.LightGray, Color.LightGray)
+                        )
+                    }
+                ),
+            contentAlignment = Alignment.Center
         ) {
-            coil3.compose.AsyncImage(
-                model = imageUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+            if (imageUrl != null) {
+                coil3.compose.AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (stripeColor != null) {
+                // Show a music note icon for mood cards
+                Icon(
+                    imageVector = Icons.Rounded.MusicNote,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.size(48.dp)
+                )
+            }
         }
         Spacer(Modifier.height(8.dp))
         Text(

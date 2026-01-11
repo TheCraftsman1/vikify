@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,7 +35,9 @@ fun SongContextMenu(
     onAddToPlaylistClick: () -> Unit,
     onShareClick: () -> Unit,
     onViewAlbumClick: () -> Unit,
-    isLiked: Boolean
+    onDownloadClick: () -> Unit, // NEW
+    isLiked: Boolean,
+    isDownloaded: Boolean // NEW
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -190,7 +193,17 @@ fun SongContextMenu(
             )
             
             MenuActionItem(
-                icon = Icons.Outlined.PlaylistAdd,
+                icon = if (isDownloaded) Icons.Outlined.DownloadDone else Icons.Outlined.Download,
+                text = if (isDownloaded) "Remove Download" else "Download",
+                tint = if (isDownloaded) RaataanPink else LocalVikifyColors.current.textPrimary,
+                onClick = {
+                    onDownloadClick()
+                    onDismissRequest()
+                }
+            )
+            
+            MenuActionItem(
+                icon = Icons.AutoMirrored.Outlined.PlaylistAdd,
                 text = "Add to playlist",
                 onClick = {
                     onAddToPlaylistClick()

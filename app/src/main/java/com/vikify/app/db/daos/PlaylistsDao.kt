@@ -210,7 +210,7 @@ interface PlaylistsDao {
     fun delete(playlist: PlaylistEntity)
 
     @Query("DELETE FROM playlist WHERE browseId = :browseId")
-    fun deletePlaylistById(browseId: String)
+    fun deletePlaylistByBrowseId(browseId: String)
 
     @Query("DELETE FROM playlist_song_map WHERE playlistId = :playlistId")
     fun clearPlaylist(playlistId: String)

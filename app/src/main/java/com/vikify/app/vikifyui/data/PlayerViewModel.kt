@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -94,7 +95,8 @@ class PlayerViewModel @Inject constructor(
     private val lyricsHelper: com.vikify.app.lyrics.LyricsHelper,
     private val downloadUtil: DownloadUtil,
     private val database: MusicDatabase,
-    private val playlistRepository: com.vikify.app.data.PlaylistRepository
+    private val playlistRepository: com.vikify.app.data.PlaylistRepository,
+    private val jamSessionManager: JamSessionManager
 ) : AndroidViewModel(application) {
     
     // We will initialize this from the MainActivity/VikifyApp level if needed,
@@ -113,9 +115,12 @@ class PlayerViewModel @Inject constructor(
     )
     val uiState: StateFlow<PlayerUIState> = _uiState.asStateFlow()
     
-    // Lyrics State
+    // Lyrics State - Simple list of SyncedLyric
     private val _lyrics = MutableStateFlow<List<com.vikify.app.vikifyui.components.SyncedLyric>?>(null)
     val lyrics: StateFlow<List<com.vikify.app.vikifyui.components.SyncedLyric>?> = _lyrics.asStateFlow()
+    
+    private val _isLyricsLoading = MutableStateFlow(false)
+    val isLyricsLoading: StateFlow<Boolean> = _isLyricsLoading.asStateFlow()
     
     // Download State
     private val _isDownloading = MutableStateFlow(false)
@@ -186,6 +191,40 @@ class PlayerViewModel @Inject constructor(
     // Track when continuous listening started
     private var listeningStartTime: Long = 0L
     private var ambientModeJob: kotlinx.coroutines.Job? = null
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // JAM MODE - Collaborative Listening
+    // ═══════════════════════════════════════════════════════════════════════
+    private val _jamSessionState = MutableStateFlow<JamSessionState>(JamSessionState.Idle)
+    val jamSessionState: StateFlow<JamSessionState> = _jamSessionState.asStateFlow()
+    
+    private val _jamError = MutableStateFlow<String?>(null)
+    val jamError: StateFlow<String?> = _jamError.asStateFlow()
+    
+    private val _isJamLoading = MutableStateFlow(false)
+    val isJamLoading: StateFlow<Boolean> = _isJamLoading.asStateFlow()
+    
+    // Current user info for Jam Mode
+    private val _currentJamUser = MutableStateFlow<com.vikify.app.vikifyui.components.JamUser?>(null)
+    val currentJamUser: StateFlow<com.vikify.app.vikifyui.components.JamUser?> = _currentJamUser.asStateFlow()
+    
+    // Jam session observation job
+    private var jamObserverJob: kotlinx.coroutines.Job? = null
+    
+    // Chat observation job
+    private var jamChatObserverJob: kotlinx.coroutines.Job? = null
+    
+    // Chat messages for the current Jam session
+    private val _jamChatMessages = MutableStateFlow<List<JamChatMessage>>(emptyList())
+    val jamChatMessages: StateFlow<List<JamChatMessage>> = _jamChatMessages.asStateFlow()
+    
+    // Unread chat message count (for showing badge)
+    private val _unreadChatCount = MutableStateFlow(0)
+    val unreadChatCount: StateFlow<Int> = _unreadChatCount.asStateFlow()
+    
+    // Whether chat panel is currently open
+    private val _isChatOpen = MutableStateFlow(false)
+    val isChatOpen: StateFlow<Boolean> = _isChatOpen.asStateFlow()
     
     val greeting: String
         get() = MockData.getGreeting(Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
@@ -314,6 +353,9 @@ class PlayerViewModel @Inject constructor(
                 } else if (!playing) {
                     listeningStartTime = 0L
                 }
+                
+                // Sync playback state to Jam session (host only)
+                syncJamPlaybackState()
             }
         }
         
@@ -338,19 +380,23 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             pc.mediaMetadata.collect { metadata ->
                 if (metadata != null) {
+                    val newTrack = Track(
+                        id = metadata.id ?: "",
+                        title = metadata.title ?: "Unknown",
+                        artist = metadata.artists.firstOrNull()?.name ?: "Unknown Artist",
+                        remoteArtworkUrl = metadata.thumbnailUrl,
+                        duration = if (metadata.duration > 30000) metadata.duration.toLong() else metadata.duration.toLong() * 1000L
+                    )
+                    
                     stateMutex.withLock {
                     _uiState.update { 
-                        it.copy(
-                            currentTrack = Track(
-                                id = metadata.id ?: "",
-                                title = metadata.title ?: "Unknown",
-                                artist = metadata.artists.firstOrNull()?.name ?: "Unknown Artist",
-                                remoteArtworkUrl = metadata.thumbnailUrl,
-                                duration = metadata.duration.toLong() * 1000L
-                            )
-                        )
+                        it.copy(currentTrack = newTrack)
                     }
                     }
+                    
+                    // Sync track change to Jam session (host only)
+                    syncJamTrackChange(newTrack)
+                    
                     // Fetch lyrics
                     fetchLyrics(metadata)
                 } else {
@@ -402,22 +448,44 @@ class PlayerViewModel @Inject constructor(
     
     private fun fetchLyrics(metadata: com.vikify.app.models.MediaMetadata) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val semanticLyrics = lyricsHelper.getLyrics(metadata)
-            if (semanticLyrics != null) {
-                // Convert SemanticLyrics to UI model
-                if (semanticLyrics is SemanticLyrics.SyncedLyrics) {
-                    val uiLyrics = semanticLyrics.text.map { line ->
-                        com.vikify.app.vikifyui.components.SyncedLyric(
-                            timestamp = line.start.toLong(),
-                            text = line.text
-                        )
+            _isLyricsLoading.value = true
+            
+            try {
+                // Timeout after 10 seconds to prevent infinite loading
+                val semanticLyrics = kotlinx.coroutines.withTimeoutOrNull(10_000L) {
+                    lyricsHelper.getLyrics(metadata)
+                }
+                
+                if (semanticLyrics != null) {
+                    // Convert SemanticLyrics to simple UI model
+                    val uiLyrics = when (semanticLyrics) {
+                        is org.akanework.gramophone.logic.utils.SemanticLyrics.SyncedLyrics -> {
+                            semanticLyrics.text.map { line ->
+                                com.vikify.app.vikifyui.components.SyncedLyric(
+                                    timestamp = line.start.toLong(),
+                                    text = line.text
+                                )
+                            }
+                        }
+                        is org.akanework.gramophone.logic.utils.SemanticLyrics.UnsyncedLyrics -> {
+                            // For unsynced lyrics, use index as fake timestamp
+                            semanticLyrics.unsyncedText.mapIndexed { index, pair ->
+                                com.vikify.app.vikifyui.components.SyncedLyric(
+                                    timestamp = index.toLong() * 1000,
+                                    text = pair.first
+                                )
+                            }
+                        }
+                        else -> emptyList()
                     }
                     _lyrics.value = uiLyrics
                 } else {
                     _lyrics.value = null
                 }
-            } else {
+            } catch (e: Exception) {
                 _lyrics.value = null
+            } finally {
+                _isLyricsLoading.value = false
             }
         }
     }
@@ -534,6 +602,29 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Search YouTube for tracks (for Jam Mode search)
+     */
+    suspend fun searchTracks(query: String): List<Track> {
+        return try {
+            val searchResult = com.zionhuang.innertube.YouTube.search(query, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
+            searchResult?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>()?.map { song ->
+                Track(
+                    id = song.id,
+                    title = song.title ?: "Unknown",
+                    artist = song.artists.firstOrNull()?.name ?: "Unknown Artist",
+                    remoteArtworkUrl = song.thumbnail,
+                    duration = (song.duration ?: 0) * 1000L,
+                    youtubeId = song.id,
+                    originalBackendRef = song
+                )
+            } ?: emptyList()
+        } catch (e: Exception) {
+            Log.e("PlayerViewModel", "Search failed: ${e.message}")
+            emptyList()
+        }
+    }
+
     private fun searchAndPlay(track: Track) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
@@ -551,13 +642,13 @@ class PlayerViewModel @Inject constructor(
                     }
                 } else if (songs.isNotEmpty()) {
                     // Fallback to first song if no good match found
-                    android.util.Log.w("PlayerViewModel", "No exact match found for '${track.title}', using first result")
+                    Log.w("PlayerViewModel", "No exact match found for '${track.title}', using first result")
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                         playMediaMetadata(songs.first().toMediaMetadata())
                     }
                 } else {
                     // No results with full query - try simplified searches
-                    android.util.Log.w("PlayerViewModel", "No results for '${track.title} ${track.artist}', trying title only...")
+                    Log.w("PlayerViewModel", "No results for '${track.title} ${track.artist}', trying title only...")
                     
                     // Try 1: Title only search
                     val titleOnlyResult = com.zionhuang.innertube.YouTube.search(track.title, com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG).getOrNull()
@@ -585,17 +676,17 @@ class PlayerViewModel @Inject constructor(
                                     playMediaMetadata(cleanSongs.first().toMediaMetadata())
                                 }
                             } else {
-                                android.util.Log.e("PlayerViewModel", "Could not find YouTube match for '${track.title}' by '${track.artist}'")
+                                Log.e("PlayerViewModel", "Could not find YouTube match for '${track.title}' by '${track.artist}'")
                                 _toastMessage.emit("Could not find matching song")
                             }
                         } else {
-                            android.util.Log.e("PlayerViewModel", "Could not find YouTube match for '${track.title}' by '${track.artist}'")
+                            Log.e("PlayerViewModel", "Could not find YouTube match for '${track.title}' by '${track.artist}'")
                             _toastMessage.emit("Could not find matching song")
                         }
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("PlayerViewModel", "Error searching for track: ${e.message}")
+                Log.e("PlayerViewModel", "Error searching for track: ${e.message}")
                 e.printStackTrace()
                 _toastMessage.emit("Playback failed: ${e.message}")
             }
@@ -864,7 +955,7 @@ class PlayerViewModel @Inject constructor(
                 title = song.song.title,
                 artist = song.song.artists.joinToString(", ") { it.name },
                 remoteArtworkUrl = song.song.thumbnailUrl,
-                duration = song.song.duration * 1000L,
+                duration = song.song.song.duration * 1000L,
                 originalBackendRef = song.song
             )
         }
@@ -1542,11 +1633,443 @@ class PlayerViewModel @Inject constructor(
         _sleepTimerState.value = com.vikify.app.vikifyui.components.SleepTimerState()
         viewModelScope.launch {
             _toastMessage.emit("Sleep timer cancelled")
+        }
     }
-}
     // === Spotify Helper ===
     suspend fun loadSpotifyPlaylist(playlistId: String, spotifyRepository: com.vikify.app.spotify.SpotifyRepository): List<com.vikify.app.spotify.SpotifyTrack> {
         return spotifyRepository.loadPlaylistAndSync(playlistId, database)
     }
-}
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // JAM MODE METHODS - Collaborative Listening
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    /**
+     * Set the current user info for Jam Mode display
+     */
+    fun setCurrentJamUser(userId: String, displayName: String, avatarUrl: String?) {
+        _currentJamUser.value = com.vikify.app.vikifyui.components.JamUser(
+            id = userId,
+            displayName = displayName,
+            avatarUrl = avatarUrl
+        )
+    }
+    
+    /**
+     * Start a new Jam session as host
+     * Uses Firebase Realtime Database for real-time sync
+     */
+    fun startJamSession() {
+        val currentUser = _currentJamUser.value ?: run {
+            // Auto-create user if not set (for anonymous users)
+            _currentJamUser.value = com.vikify.app.vikifyui.components.JamUser(
+                id = jamSessionManager.getCurrentUserId() ?: "anonymous",
+                displayName = "You",
+                avatarUrl = null
+            )
+            _currentJamUser.value!!
+        }
+        
+        _isJamLoading.value = true
+        _jamError.value = null
+        
+        viewModelScope.launch {
+            try {
+                val result = jamSessionManager.createSession(
+                    hostName = currentUser.displayName,
+                    hostAvatar = currentUser.avatarUrl
+                )
+                
+                result.fold(
+                    onSuccess = { session ->
+                        _jamSessionState.value = JamSessionState.WaitingForGuest(session.sessionCode, session)
+                        _isJamLoading.value = false
+                        
+                        // Reset last synced track for new session
+                        lastSyncedTrackId = null
+                        
+                        // Start observing the session for guest joins
+                        startSessionObserver(session.sessionId)
+                        
+                        // Start observing chat messages
+                        startChatObserver(session.sessionId)
+                        
+                        Log.d("PlayerViewModel", "Created Jam session: ${session.sessionCode}")
+                    },
+                    onFailure = { error ->
+                        _jamError.value = "Failed to create session: ${error.message}"
+                        _jamSessionState.value = JamSessionState.Idle
+                        _isJamLoading.value = false
+                    }
+                )
+                
+            } catch (e: Exception) {
+                _jamError.value = "Failed to create session: ${e.message}"
+                _jamSessionState.value = JamSessionState.Idle
+                _isJamLoading.value = false
+            }
+        }
+    }
+    
+    // Track the last synced track ID to avoid re-playing the same track
+    private var lastSyncedTrackId: String? = null
+    
+    /**
+     * Start observing a session for real-time updates
+     */
+    private fun startSessionObserver(sessionId: String) {
+        jamObserverJob?.cancel()
+        jamObserverJob = viewModelScope.launch {
+            jamSessionManager.observeSession(sessionId).collect { updatedSession ->
+                val currentState = _jamSessionState.value
+                val isHost = when (currentState) {
+                    is JamSessionState.WaitingForGuest -> true
+                    is JamSessionState.Active -> currentState.isHost
+                    else -> true
+                }
+                
+                // Check if a guest has joined
+                if (updatedSession.guestId != null) {
+                    _jamSessionState.value = JamSessionState.Active(updatedSession, isHost)
+                    Log.d("PlayerViewModel", "Guest joined: ${updatedSession.guestName}")
+                }
+                
+                // If we're the guest, sync playback state from host
+                if (!isHost) {
+                    // Update playback to match host
+                    if (updatedSession.isPlaying != _uiState.value.isPlaying) {
+                        if (updatedSession.isPlaying) {
+                            playerConnection?.player?.play()
+                        } else {
+                            playerConnection?.player?.pause()
+                        }
+                    }
+                    
+                    // Check if host changed the track
+                    val hostTrackId = updatedSession.currentTrackId
+                    if (hostTrackId != null && hostTrackId != lastSyncedTrackId) {
+                        lastSyncedTrackId = hostTrackId
+                        Log.d("PlayerViewModel", "Host changed track: ${updatedSession.currentTrackTitle}")
+                        
+                        // Play the host's track
+                        val hostTrack = Track(
+                            id = hostTrackId,
+                            title = updatedSession.currentTrackTitle ?: "Unknown",
+                            artist = updatedSession.currentTrackArtist ?: "Unknown",
+                            remoteArtworkUrl = updatedSession.currentTrackArtwork,
+                            youtubeId = hostTrackId // Use the ID directly as YouTube ID
+                        )
+                        playTrack(hostTrack)
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Join an existing Jam session with code
+     * Uses Firebase Realtime Database for real-time sync
+     */
+    fun joinJamSession(code: String) {
+        val currentUser = _currentJamUser.value ?: run {
+            // Auto-create user if not set
+            _currentJamUser.value = com.vikify.app.vikifyui.components.JamUser(
+                id = jamSessionManager.getCurrentUserId() ?: "anonymous_guest",
+                displayName = "Guest",
+                avatarUrl = null
+            )
+            _currentJamUser.value!!
+        }
+        
+        if (code.length != 6 || !code.all { it.isDigit() }) {
+            _jamError.value = "Invalid session code"
+            return
+        }
+        
+        _isJamLoading.value = true
+        _jamError.value = null
+        _jamSessionState.value = JamSessionState.Joining(code)
+        
+        viewModelScope.launch {
+            try {
+                val result = jamSessionManager.joinSession(
+                    code = code,
+                    guestName = currentUser.displayName,
+                    guestAvatar = currentUser.avatarUrl
+                )
+                
+                result.fold(
+                    onSuccess = { session ->
+                        _jamSessionState.value = JamSessionState.Active(session, isHost = false)
+                        _isJamLoading.value = false
+                        
+                        // Reset last synced track so we sync to host's current track
+                        lastSyncedTrackId = null
+                        
+                        // Start observing for host's playback updates
+                        startSessionObserver(session.sessionId)
+                        
+                        // Start observing chat messages
+                        startChatObserver(session.sessionId)
+                        
+                        // Immediately sync to host's current track if available
+                        if (session.currentTrackId != null) {
+                            Log.d("PlayerViewModel", "Initial sync to host track: ${session.currentTrackTitle}")
+                            lastSyncedTrackId = session.currentTrackId
+                            val hostTrack = Track(
+                                id = session.currentTrackId!!,
+                                title = session.currentTrackTitle ?: "Unknown",
+                                artist = session.currentTrackArtist ?: "Unknown",
+                                remoteArtworkUrl = session.currentTrackArtwork,
+                                youtubeId = session.currentTrackId
+                            )
+                            playTrack(hostTrack)
+                        }
+                        
+                        Log.d("PlayerViewModel", "Joined Jam session: $code")
+                    },
+                    onFailure = { error ->
+                        _jamError.value = error.message ?: "Failed to join session"
+                        _jamSessionState.value = JamSessionState.Idle
+                        _isJamLoading.value = false
+                    }
+                )
+                
+            } catch (e: Exception) {
+                _jamError.value = "Failed to join session: ${e.message}"
+                _jamSessionState.value = JamSessionState.Idle
+                _isJamLoading.value = false
+            }
+        }
+    }
+    
+    /**
+     * Leave the current Jam session
+     */
+    fun leaveJamSession() {
+        jamObserverJob?.cancel()
+        jamObserverJob = null
+        lastSyncedTrackId = null  // Reset for next session
+        
+        // Stop chat observer and clear messages
+        stopChatObserver()
+        _isChatOpen.value = false
+        
+        val currentState = _jamSessionState.value
+        
+        viewModelScope.launch {
+            when (currentState) {
+                is JamSessionState.Active -> {
+                    jamSessionManager.leaveSession(currentState.session.sessionId)
+                    jamSessionManager.clearSessionChat(currentState.session.sessionId)
+                    Log.d("PlayerViewModel", "Left Jam session: ${currentState.session.sessionId}")
+                }
+                is JamSessionState.WaitingForGuest -> {
+                    jamSessionManager.leaveSession(currentState.session.sessionId)
+                    jamSessionManager.clearSessionChat(currentState.session.sessionId)
+                    Log.d("PlayerViewModel", "Cancelled Jam session: ${currentState.sessionCode}")
+                }
+                else -> {}
+            }
+            
+            _jamSessionState.value = JamSessionState.Idle
+            _jamError.value = null
+        }
+    }
+    
+    /**
+     * Clear Jam error message
+     */
+    fun clearJamError() {
+        _jamError.value = null
+    }
+    
+    /**
+     * Sync playback state to Firebase (host only)
+     */
+    private fun syncJamPlaybackState() {
+        val currentState = _jamSessionState.value
+        if (currentState is JamSessionState.Active && currentState.isHost) {
+            viewModelScope.launch {
+                val position = (playerConnection?.player?.currentPosition ?: 0L)
+                jamSessionManager.updatePlaybackState(
+                    sessionId = currentState.session.sessionId,
+                    isPlaying = _uiState.value.isPlaying,
+                    position = position
+                )
+            }
+        }
+    }
+    
+    /**
+     * Sync track change to Firebase (host only)
+     * This notifies the guest when the host changes songs
+     */
+    private fun syncJamTrackChange(track: Track) {
+        val currentState = _jamSessionState.value
+        if (currentState is JamSessionState.Active && currentState.isHost) {
+            viewModelScope.launch {
+                jamSessionManager.changeTrack(
+                    sessionId = currentState.session.sessionId,
+                    track = track
+                )
+        Log.d("PlayerViewModel", "Synced track change to Jam: ${track.title}")
+            }
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // JAM QUEUE & REACTIONS
+    // ═══════════════════════════════════════════════════════════════════════════════
+    
+    fun addToJamQueue(track: Track) {
+        val currentState = _jamSessionState.value
+        val sessionId = when (currentState) {
+            is JamSessionState.Active -> currentState.session.sessionId
+            is JamSessionState.WaitingForGuest -> currentState.session.sessionId
+            else -> return
+        }
+        
+        val currentUser = _currentJamUser.value
+        val addedByName = currentUser?.displayName ?: "User"
 
+        viewModelScope.launch {
+            jamSessionManager.addToQueue(
+                sessionId = sessionId,
+                trackId = track.id,
+                title = track.title,
+                artist = track.artist,
+                artwork = track.remoteArtworkUrl,
+                duration = track.duration,
+                addedByName = addedByName
+            ).onFailure { e ->
+                _toastMessage.emit("Failed to add to queue: ${e.message}")
+            }
+        }
+    }
+    
+    fun removeFromJamQueue(itemId: String) {
+        val currentState = _jamSessionState.value
+        val sessionId = when (currentState) {
+            is JamSessionState.Active -> currentState.session.sessionId
+            is JamSessionState.WaitingForGuest -> currentState.session.sessionId
+            else -> return
+        }
+        
+        viewModelScope.launch {
+            jamSessionManager.removeFromQueue(sessionId, itemId)
+        }
+    }
+    
+    fun sendJamReaction(emoji: String) {
+        val currentState = _jamSessionState.value
+        val sessionId = when (currentState) {
+            is JamSessionState.Active -> currentState.session.sessionId
+            is JamSessionState.WaitingForGuest -> currentState.session.sessionId
+            else -> return
+        }
+        
+        viewModelScope.launch {
+            jamSessionManager.sendReaction(sessionId, emoji)
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // JAM CHAT - Real-time messaging
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    /**
+     * Start observing chat messages for the current session
+     */
+    private fun startChatObserver(sessionId: String) {
+        jamChatObserverJob?.cancel()
+        _jamChatMessages.value = emptyList()
+        _unreadChatCount.value = 0
+        
+        jamChatObserverJob = viewModelScope.launch {
+            jamSessionManager.observeChat(sessionId).collect { messages ->
+                val previousCount = _jamChatMessages.value.size
+                _jamChatMessages.value = messages
+                
+                // Update unread count if chat is closed and new messages arrived
+                if (!_isChatOpen.value && messages.size > previousCount) {
+                    _unreadChatCount.value += (messages.size - previousCount)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Stop observing chat messages
+     */
+    private fun stopChatObserver() {
+        jamChatObserverJob?.cancel()
+        jamChatObserverJob = null
+        _jamChatMessages.value = emptyList()
+        _unreadChatCount.value = 0
+    }
+    
+    /**
+     * Send a chat message in the current Jam session
+     */
+    fun sendJamChatMessage(message: String) {
+        val trimmedMessage = message.trim()
+        if (trimmedMessage.isEmpty()) return
+        
+        val currentState = _jamSessionState.value
+        val sessionId = when (currentState) {
+            is JamSessionState.Active -> currentState.session.sessionId
+            is JamSessionState.WaitingForGuest -> currentState.session.sessionId
+            else -> return
+        }
+        
+        val currentUser = _currentJamUser.value ?: return
+        
+        viewModelScope.launch {
+            val result = jamSessionManager.sendChatMessage(
+                sessionId = sessionId,
+                senderName = currentUser.displayName,
+                senderAvatar = currentUser.avatarUrl,
+                message = trimmedMessage
+            )
+            
+            result.fold(
+                onSuccess = {
+                    Log.d("PlayerViewModel", "Sent chat message: ${trimmedMessage.take(20)}...")
+                },
+                onFailure = { error ->
+                    Log.e("PlayerViewModel", "Failed to send chat: ${error.message}")
+                    viewModelScope.launch {
+                        _toastMessage.emit("Failed to send message")
+                    }
+                }
+            )
+        }
+    }
+    
+    /**
+     * Open the chat panel and clear unread count
+     */
+    fun openJamChat() {
+        _isChatOpen.value = true
+        _unreadChatCount.value = 0
+    }
+    
+    /**
+     * Close the chat panel
+     */
+    fun closeJamChat() {
+        _isChatOpen.value = false
+    }
+    
+    /**
+     * Toggle chat panel visibility
+     */
+    fun toggleJamChat() {
+        if (_isChatOpen.value) {
+            closeJamChat()
+        } else {
+            openJamChat()
+        }
+    }
+}

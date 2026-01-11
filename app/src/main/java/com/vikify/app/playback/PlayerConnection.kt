@@ -115,6 +115,14 @@ class PlayerConnection(
     fun setAutoplayEnabled(enabled: Boolean) {
         service.autoplayManager.setAutoplayEnabled(enabled)
     }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // AUDIO SESSION (For Visualizer API)
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    /** Audio session ID for EcoVisualizerViewModel */
+    val audioSessionId: Int
+        get() = service.getAudioSessionId()
 
     init {
         player.addListener(this)

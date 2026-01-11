@@ -8,9 +8,11 @@ import com.vikify.app.constants.PlaylistFilter
 import com.vikify.app.constants.PlaylistSortType
 import com.vikify.app.db.MusicDatabase
 import com.vikify.app.db.entities.Album
+import com.vikify.app.db.entities.Artist
 import com.vikify.app.db.entities.LocalItem
 import com.vikify.app.db.entities.Song
 import com.vikify.app.models.SimilarRecommendation
+import com.vikify.app.models.RailItemType
 import com.vikify.app.models.toMediaMetadata
 import com.vikify.app.playback.generateSongDNA
 import com.vikify.app.playback.getTimeBasedEnergyRange
@@ -35,48 +37,18 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
+import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.models.AlbumItem
+import com.vikify.app.models.FeedSection
+import com.vikify.app.models.RailItem
+import com.vikify.app.models.QuickResumeItem
+import com.vikify.app.models.QuickResumeType
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HOME SECTION - Unified data model for layered home feed
+// HOME VIEW MODEL
 // ═══════════════════════════════════════════════════════════════════════════════
-sealed class HomeSection {
-    abstract val id: String
-    
-    /** Local songs row (Quick Picks, Daily Mix, Jump Back In, etc.) */
-    data class LocalSongRow(
-        override val id: String,
-        val title: String,
-        val subtitle: String? = null,
-        val songs: List<Song>
-    ) : HomeSection()
-    
-    /** YouTube items row (Albums, Artists, Playlists from YT Music) */
-    data class YouTubeRow(
-        override val id: String,
-        val title: String,
-        val subtitle: String? = null,
-        val items: List<YTItem>
-    ) : HomeSection()
-    
-    /** Mood/Genre chips for discovery */
-    data class MoodChipRow(
-        override val id: String,
-        val title: String,
-        val moods: List<com.zionhuang.innertube.pages.MoodAndGenres.Item>
-    ) : HomeSection()
-    
-    /** Banner section for featured content */
-    data class BannerSection(
-        override val id: String,
-        val title: String,
-        val subtitle: String,
-        val imageUrl: String,
-        val browseId: String? = null
-    ) : HomeSection()
-}
 
 @HiltViewModel
-
 class HomeViewModel @Inject constructor(
     @ApplicationContext context: Context,
     val database: MusicDatabase,
@@ -141,7 +113,7 @@ class HomeViewModel @Inject constructor(
     // ═══════════════════════════════════════════════════════════════
     
     /** Unified feed sections (all layers combined) */
-    val homeSections = MutableStateFlow<List<HomeSection>>(emptyList())
+    val homeSections = MutableStateFlow<List<FeedSection>>(emptyList())
     
     /** Loading state for infinite scroll pagination */
     val isLoadingMore = MutableStateFlow(false)
@@ -209,8 +181,6 @@ class HomeViewModel @Inject constructor(
                 .filter { it is Song || it is Album }
 
         if (YouTube.cookie != null) { // if logged in
-            // InnerTune way is YouTube.likedPlaylists().onSuccess { ... }
-            // OuterTune uses YouTube.library("FEmusic_liked_playlists").completedL().onSuccess { ... }
             YouTube.library("FEmusic_liked_playlists").completed().onSuccess {
                 accountPlaylists.value = it.items.filterIsInstance<PlaylistItem>()
             }.onFailure {
@@ -275,98 +245,307 @@ class HomeViewModel @Inject constructor(
                 homePage.value?.sections?.flatMap { it.items }.orEmpty()
 
         // ═══════════════════════════════════════════════════════════════
-        // BUILD UNIFIED SECTIONS - Layered content for infinite discovery
+        // BUILD UNIFIED SECTIONS - LOCAL/PERSONAL CONTENT FIRST
         // ═══════════════════════════════════════════════════════════════
-        val sections = mutableListOf<HomeSection>()
+        val sections = mutableListOf<FeedSection>()
         
-        // LAYER 1: "RIGHT NOW" - Contextual picks
-        if (quickPicks.value?.isNotEmpty() == true) {
-            sections.add(HomeSection.LocalSongRow(
-                id = "quick_picks",
-                title = "Quick Picks",
-                subtitle = "Based on your recent listening",
-                songs = quickPicks.value!!.take(10)
+        // Get local playlists from database
+        val localPlaylists = playlists.value
+        
+        // ─────────────────────────────────────────────────────────────────
+        // SECTION 1: Quick Resume Grid (Liked Songs, Downloads, Recent)
+        // ─────────────────────────────────────────────────────────────────
+        val resumeItems = mutableListOf<QuickResumeItem>()
+        resumeItems.add(QuickResumeItem("liked_songs", "Liked Songs", null, QuickResumeType.LIKED_SONGS))
+        resumeItems.add(QuickResumeItem("downloaded", "Downloaded", null, QuickResumeType.DOWNLOADED))
+        // Add top playlists to quick resume
+        localPlaylists?.take(2)?.forEach { playlist ->
+            resumeItems.add(QuickResumeItem(
+                id = playlist.playlist.id,
+                title = playlist.playlist.name,
+                imageUrl = playlist.thumbnails.firstOrNull(),
+                type = QuickResumeType.PLAYLIST
             ))
         }
-        
-        if (dailyMix.value?.isNotEmpty() == true) {
-            sections.add(HomeSection.LocalSongRow(
-                id = "daily_mix",
-                title = "${timeBasedGreeting.value} Mix",
-                subtitle = "Energy-matched for your vibe",
-                songs = dailyMix.value!!
-            ))
+        // Add recent tracks
+        quickPicks.value?.take(2)?.forEach { song ->
+            resumeItems.add(QuickResumeItem(song.song.id, song.song.title, song.song.thumbnailUrl, QuickResumeType.RECENT_SONG))
         }
-        
-        // LAYER 2: "GLOBAL PULSE" - New releases and trending
-        explorePage.value?.let { explore ->
-            if (explore.newReleaseAlbums.isNotEmpty()) {
-                sections.add(HomeSection.YouTubeRow(
-                    id = "new_releases",
-                    title = "New Releases",
-                    subtitle = "Fresh music just dropped",
-                    items = explore.newReleaseAlbums.take(12)
-                ))
-            }
+        if (resumeItems.isNotEmpty()) {
+            sections.add(FeedSection.QuickResumeGrid(items = resumeItems.take(6)))
         }
-        
-        // LAYER 3: "DEEP DIVE" - Random moods for discovery
-        YouTube.moodAndGenres().onSuccess { moods ->
-            val flatMoods = moods.flatMap { it.items }
-            if (flatMoods.isNotEmpty()) {
-                val randomThree = flatMoods.shuffled().take(3)
-                randomMoods.value = randomThree
-                sections.add(HomeSection.MoodChipRow(
-                    id = "discover_moods",
-                    title = "Explore Moods",
-                    moods = randomThree
-                ))
-            }
-        }
-        
-        // LAYER 4: "TIME MACHINE" - Nostalgia
+
+        // ─────────────────────────────────────────────────────────────────
+        // SECTION 2: Jump Back In (Your most played recently)
+        // ─────────────────────────────────────────────────────────────────
         if (jumpBackIn.value?.isNotEmpty() == true) {
-            sections.add(HomeSection.LocalSongRow(
+            sections.add(FeedSection.HorizontalRail(
                 id = "jump_back_in",
                 title = "Jump Back In",
                 subtitle = "Your recent favorites",
-                songs = jumpBackIn.value!!
+                items = jumpBackIn.value!!.map { it.toRailItem() }
             ))
         }
-        
+
+        // ─────────────────────────────────────────────────────────────────
+        // SECTION 3: Daily Mix (Energy-matched for time of day)
+        // ─────────────────────────────────────────────────────────────────
+        if (dailyMix.value?.isNotEmpty() == true) {
+            sections.add(FeedSection.HorizontalRail(
+                id = "daily_mix",
+                title = "${timeBasedGreeting.value} Mix",
+                subtitle = "Energy-matched for your vibe",
+                items = dailyMix.value!!.map { it.toRailItem() }
+            ))
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // SECTION 4: Your Playlists (Local playlists)
+        // ─────────────────────────────────────────────────────────────────
+        localPlaylists?.takeIf { it.isNotEmpty() }?.let { playlists ->
+            sections.add(FeedSection.HorizontalRail(
+                id = "your_playlists",
+                title = "Your Playlists",
+                subtitle = "${playlists.size} playlists",
+                items = playlists.take(10).map { playlist ->
+                    RailItem(
+                        id = playlist.playlist.id,
+                        title = playlist.playlist.name,
+                        subtitle = "${playlist.songCount} songs",
+                        imageUrl = playlist.thumbnails.firstOrNull()
+                    )
+                }
+            ))
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // SECTION 5: Quick Picks (Recent listening history)
+        // ─────────────────────────────────────────────────────────────────
+        if (quickPicks.value?.isNotEmpty() == true) {
+            sections.add(FeedSection.HorizontalRail(
+                id = "quick_picks",
+                title = "Quick Picks",
+                subtitle = "Based on your recent listening",
+                items = quickPicks.value!!.take(10).map { it.toRailItem() }
+            ))
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // SECTION 6: Keep Listening (Continue where you left off)
+        // ─────────────────────────────────────────────────────────────────
+        keepListening.value?.takeIf { it.isNotEmpty() }?.let { items ->
+            val songItems = items.filterIsInstance<Song>().take(8)
+            if (songItems.isNotEmpty()) {
+                sections.add(FeedSection.HorizontalRail(
+                    id = "keep_listening",
+                    title = "Keep Listening",
+                    subtitle = "Continue where you left off",
+                    items = songItems.map { it.toRailItem() }
+                ))
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // SECTION 7: Forgotten Favorites (Rediscover old songs)
+        // ─────────────────────────────────────────────────────────────────
         if (forgottenFavorites.value?.isNotEmpty() == true) {
-            sections.add(HomeSection.LocalSongRow(
+            sections.add(FeedSection.HorizontalRail(
                 id = "forgotten_favorites",
                 title = "Rediscover",
                 subtitle = "Songs you haven't played in a while",
-                songs = forgottenFavorites.value!!.take(10)
+                items = forgottenFavorites.value!!.take(10).map { it.toRailItem() }
             ))
         }
-        
-        // Similar recommendations from artists
+
+        // ─────────────────────────────────────────────────────────────────
+        // SECTION 8: Personalized Recommendations (Similar to favorites)
+        // ─────────────────────────────────────────────────────────────────
         similarRecommendations.value?.forEach { rec ->
             if (rec.items.isNotEmpty()) {
-                sections.add(HomeSection.YouTubeRow(
+                val titleText = when (val title = rec.title) {
+                    is Song -> "Because you like ${title.song.title}"
+                    is com.vikify.app.db.entities.Artist -> "More from ${title.artist.name}"
+                    else -> "Recommended for you"
+                }
+                sections.add(FeedSection.HorizontalRail(
                     id = "similar_${rec.title.hashCode()}",
-                    title = "Similar to ${(rec.title as? Song)?.song?.title ?: (rec.title as? com.vikify.app.db.entities.Artist)?.artist?.name ?: "Your Picks"}",
-                    items = rec.items.take(10)
+                    title = titleText,
+                    subtitle = "Based on your taste",
+                    items = rec.items.take(10).map { it.toRailItem() }
+                ))
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // YOUTUBE CONTENT (Placed at the END for discovery)
+        // ═══════════════════════════════════════════════════════════════
+        
+        // New Releases from YouTube Explore
+        explorePage.value?.let { explore ->
+            if (explore.newReleaseAlbums.isNotEmpty()) {
+                sections.add(FeedSection.LargeSquareRail(
+                    id = "new_releases",
+                    title = "New Releases",
+                    subtitle = "Fresh music just dropped",
+                    items = explore.newReleaseAlbums.take(12).map { album ->
+                        RailItem(
+                            id = album.browseId,
+                            title = album.title,
+                            subtitle = album.artists?.firstOrNull()?.name ?: "Album",
+                            imageUrl = album.thumbnail
+                        )
+                    }
                 ))
             }
         }
         
-        // LAYER 5: "INFINITE SCROLL" - YouTube Home sections
-        homePage.value?.sections?.forEach { ytSection ->
-            sections.add(HomeSection.YouTubeRow(
-                id = "yt_${ytSection.title.hashCode()}",
-                title = ytSection.title,
-                items = ytSection.items
+        // Mood discovery chips removed per user request
+        
+        // YouTube Home sections - Split into Song sections and Playlist/Album sections
+        // This gives the feed variety between individual songs and collections
+        // Filter out video/performance sections to keep feed music-focused
+        val excludedSectionPatterns = listOf(
+            "video",
+            "live performance",
+            "live session",
+            "concert",
+            "performance"
+        )
+        
+        val filteredSections = homePage.value?.sections
+            ?.filter { section -> 
+                excludedSectionPatterns.none { pattern -> 
+                    section.title.contains(pattern, ignoreCase = true) 
+                }
+            }
+            ?.take(6) // Take more sections to extract variety
+            ?: emptyList()
+        
+        // Extract songs from YouTube sections for a "Songs for You" rail
+        val ytSongsForYou = filteredSections
+            .flatMap { it.items }
+            .filterIsInstance<SongItem>()
+            .distinctBy { it.id }
+            .take(15)
+        
+        if (ytSongsForYou.isNotEmpty()) {
+            sections.add(FeedSection.HorizontalRail(
+                id = "yt_songs_for_you",
+                title = "Songs for You",
+                subtitle = "Handpicked tracks",
+                items = ytSongsForYou.map { it.toRailItem() }
+            ))
+        }
+        
+        // Add 2 playlist/album-focused sections (original behavior)
+        filteredSections
+            .filter { section -> 
+                section.items.any { it is PlaylistItem || it is AlbumItem }
+            }
+            .take(2)
+            .forEach { ytSection ->
+                sections.add(FeedSection.HorizontalRail(
+                    id = "yt_${ytSection.title.hashCode()}",
+                    title = ytSection.title,
+                    items = ytSection.items.map { it.toRailItem() }
+                ))
+            }
+        
+        // Add another song section for variety ("More Songs")
+        val moreSongs = filteredSections
+            .flatMap { it.items }
+            .filterIsInstance<SongItem>()
+            .distinctBy { it.id }
+            .drop(15)  // Skip the ones already used
+            .take(12)
+        
+        if (moreSongs.isNotEmpty()) {
+            sections.add(FeedSection.HorizontalRail(
+                id = "yt_more_songs",
+                title = "More Songs",
+                subtitle = "Keep the music flowing",
+                items = moreSongs.map { it.toRailItem() }
             ))
         }
         
         homeSections.value = sections
-        
         isLoading.value = false
+    }
 
+    private fun Song.toRailItem() = RailItem(
+        id = song.id,
+        title = cleanSongTitle(song.title),
+        subtitle = artists.joinToString { it.name },
+        imageUrl = song.thumbnailUrl
+    )
+
+    private fun YTItem.toRailItem() = RailItem(
+        id = id,
+        title = cleanSongTitle(title),
+        subtitle = when (this) {
+            is SongItem -> artists.joinToString { it.name }
+            is AlbumItem -> artists?.joinToString { it.name } ?: "Album"
+            is PlaylistItem -> "Playlist"
+            else -> ""
+        },
+        imageUrl = thumbnail,
+        itemType = when (this) {
+            is SongItem -> RailItemType.SONG
+            is AlbumItem -> RailItemType.ALBUM
+            is PlaylistItem -> RailItemType.PLAYLIST
+            else -> RailItemType.SONG
+        }
+    )
+
+    /**
+     * Cleans YouTube-style titles to show only the song name.
+     * Removes common suffixes like (Official Video), [Music Video], etc.
+     */
+    private fun cleanSongTitle(title: String): String {
+        val patterns = listOf(
+            // Parentheses variations
+            "\\s*\\(Official Video\\)\\s*",
+            "\\s*\\(Official Music Video\\)\\s*",
+            "\\s*\\(Music Video\\)\\s*",
+            "\\s*\\(Official Audio\\)\\s*",
+            "\\s*\\(Audio\\)\\s*",
+            "\\s*\\(Lyric Video\\)\\s*",
+            "\\s*\\(Lyrics\\)\\s*",
+            "\\s*\\(Official Lyric Video\\)\\s*",
+            "\\s*\\(Official Visualizer\\)\\s*",
+            "\\s*\\(Visualizer\\)\\s*",
+            "\\s*\\(Official\\)\\s*",
+            "\\s*\\(HD\\)\\s*",
+            "\\s*\\(HQ\\)\\s*",
+            "\\s*\\(4K\\)\\s*",
+            "\\s*\\(Full Video\\)\\s*",
+            "\\s*\\(Video\\)\\s*",
+            // Bracket variations
+            "\\s*\\[Official Video\\]\\s*",
+            "\\s*\\[Official Music Video\\]\\s*",
+            "\\s*\\[Music Video\\]\\s*",
+            "\\s*\\[Official Audio\\]\\s*",
+            "\\s*\\[Audio\\]\\s*",
+            "\\s*\\[Lyric Video\\]\\s*",
+            "\\s*\\[Lyrics\\]\\s*",
+            "\\s*\\[Official\\]\\s*",
+            "\\s*\\[HD\\]\\s*",
+            "\\s*\\[HQ\\]\\s*",
+            "\\s*\\[4K\\]\\s*",
+            "\\s*\\[Video\\]\\s*",
+            // Common text suffixes
+            "\\s*-\\s*Official Video\\s*$",
+            "\\s*-\\s*Official Music Video\\s*$",
+            "\\s*-\\s*Music Video\\s*$",
+            "\\s*\\|\\s*Official Video\\s*$",
+            "\\s*\\|\\s*Official Music Video\\s*$"
+        )
+        
+        var cleaned = title
+        patterns.forEach { pattern ->
+            cleaned = cleaned.replace(Regex(pattern, RegexOption.IGNORE_CASE), "")
+        }
+        return cleaned.trim()
     }
 
     private val _isLoadingMore = MutableStateFlow(false)
@@ -395,13 +574,21 @@ class HomeViewModel @Inject constructor(
             )
             
             // Append to unified homeSections for infinite scroll
-            val newSections = nextSections.sections.map { ytSection ->
-                HomeSection.YouTubeRow(
-                    id = "yt_${ytSection.title.hashCode()}_${System.currentTimeMillis()}",
-                    title = ytSection.title,
-                    items = ytSection.items
-                )
-            }
+            // Filter out video/performance sections
+            val excludedPatterns = listOf("video", "live performance", "live session", "concert", "performance")
+            val newSections = nextSections.sections
+                .filter { section -> 
+                    excludedPatterns.none { pattern -> 
+                        section.title.contains(pattern, ignoreCase = true) 
+                    }
+                }
+                .map { ytSection ->
+                    FeedSection.HorizontalRail(
+                        id = "yt_${ytSection.title.hashCode()}_${System.currentTimeMillis()}",
+                        title = ytSection.title,
+                        items = ytSection.items.map { it.toRailItem() }
+                    )
+                }
             homeSections.value = homeSections.value + newSections
             
             _isLoadingMore.value = false

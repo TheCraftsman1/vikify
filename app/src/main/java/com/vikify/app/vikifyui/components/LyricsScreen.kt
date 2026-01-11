@@ -46,10 +46,16 @@ fun LyricsScreen(
     onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Determine active line based on timestamp
-    val safeLyrics = lyrics ?: emptyList() 
+    // Theme colors for Dual Identity support
+    val colors = VikifyTheme.colors
+    val isDark = VikifyTheme.isDark
     
-    val activeIndex = safeLyrics.indexOfLast { it.timestamp <= currentTimeMs }.coerceAtLeast(0)
+    // Determine active line based on timestamp
+    // Add 800ms offset to compensate for UI update delay and make lyrics feel "ahead"
+    val safeLyrics = lyrics ?: emptyList() 
+    val adjustedTimeMs = currentTimeMs + 800L // Offset to sync lyrics better
+    
+    val activeIndex = safeLyrics.indexOfLast { it.timestamp <= adjustedTimeMs }.coerceAtLeast(0)
     
     val listState = rememberLazyListState()
 
@@ -61,7 +67,7 @@ fun LyricsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(colors.surfaceBackground)
     ) {
         // 1. Atmospheric Background
         Box(modifier = Modifier.fillMaxSize()) {
@@ -75,11 +81,14 @@ fun LyricsScreen(
                     .blur(60.dp),
                 contentScale = ContentScale.Crop
             )
-            // Dark Overlay for Contrast
+            // Overlay for Contrast (Studio: lighter, Aurora: darker)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f))
+                    .background(
+                        if (isDark) Color.Black.copy(alpha = 0.6f)
+                        else colors.surfaceBackground.copy(alpha = 0.75f)
+                    )
             )
         }
 
@@ -99,7 +108,9 @@ fun LyricsScreen(
             ) {
                 IconButton(
                     onClick = onClose,
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
+                    colors = IconButtonDefaults.iconButtonColors(
+                        contentColor = colors.textPrimary
+                    )
                 ) {
                     Icon(Icons.Rounded.Close, "Close", modifier = Modifier.size(28.dp))
                 }
@@ -108,26 +119,62 @@ fun LyricsScreen(
                     Text(
                         text = track.title.uppercase(),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
+                        color = colors.textPrimary,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
                     )
                     Text(
                         text = track.artist,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.7f)
+                        color = colors.textSecondary
                     )
                 }
 
                 IconButton(
                     onClick = { /* Options */ },
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
+                    colors = IconButtonDefaults.iconButtonColors(
+                        contentColor = colors.textPrimary
+                    )
                 ) {
                     Icon(Icons.Rounded.MoreHoriz, "Options")
                 }
             }
 
-            // 3. Lyrics List
+            // 3. Lyrics List or Empty State
+            if (safeLyrics.isEmpty()) {
+                // Empty state - No lyrics available
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "🎵",
+                            fontSize = 64.sp
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text(
+                            text = "No lyrics available",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = colors.textPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "We couldn't find lyrics for this track",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.textSecondary,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            } else {
             LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(vertical = 40.dp, horizontal = 24.dp),
@@ -137,8 +184,11 @@ fun LyricsScreen(
                     val isActive = index == activeIndex
                     
                     // Animate properties for smooth focus effect
+                    // Studio Mode: Charcoal to light gray
+                    // Aurora Mode: White to dimmed white
                     val textColor by animateColorAsState(
-                        targetValue = if (isActive) Color.White else Color.White.copy(alpha = 0.4f),
+                        targetValue = if (isActive) colors.lyricsActive 
+                                     else colors.lyricsInactive,
                         animationSpec = tween(300), 
                         label = "color"
                     )
@@ -174,6 +224,7 @@ fun LyricsScreen(
                     )
                 }
             }
+            } // End of else block
 
             // 4. Bottom Mini-Player Control
             LyricsFooter(
@@ -191,6 +242,9 @@ fun LyricsFooter(
     isPlaying: Boolean,
     onPlayPause: () -> Unit
 ) {
+    val colors = VikifyTheme.colors
+    val isDark = VikifyTheme.isDark
+    
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -211,26 +265,28 @@ fun LyricsFooter(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = track.title,
-                color = Color.White,
+                color = colors.textPrimary,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 16.sp,
                 maxLines = 1
             )
             Text(
                 text = track.artist,
-                color = Color.White.copy(alpha = 0.7f),
+                color = colors.textSecondary,
                 fontSize = 14.sp,
                 maxLines = 1
             )
         }
         
         // Circular Play Button
+        // Studio Mode: Charcoal button with white icon
+        // Aurora Mode: White button with black icon
         FilledIconButton(
             onClick = onPlayPause,
             modifier = Modifier.size(56.dp),
             colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = Color.White,
-                contentColor = Color.Black
+                containerColor = if (isDark) Color.White else colors.textPrimary,
+                contentColor = if (isDark) Color.Black else Color.White
             )
         ) {
             Icon(

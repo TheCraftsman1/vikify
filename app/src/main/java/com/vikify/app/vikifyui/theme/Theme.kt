@@ -39,9 +39,35 @@ private val VikifyDarkColorScheme = darkColorScheme(
     error = StatusError
 )
 
+// --- Theme Mode ---
+
+enum class ThemeMode {
+    SUNLIGHT, MOON, COOL
+}
+
+object VikifyThemeState {
+    var currentMode by mutableStateOf(ThemeMode.COOL) // Default to Premium Cool
+        private set
+        
+    fun setMode(mode: ThemeMode) {
+        currentMode = mode
+    }
+
+    fun toggleTheme() {
+        currentMode = when (currentMode) {
+            ThemeMode.SUNLIGHT -> ThemeMode.MOON
+            ThemeMode.MOON -> ThemeMode.COOL
+            ThemeMode.COOL -> ThemeMode.SUNLIGHT
+        }
+    }
+}
+
 // --- Semantic Token Sets ---
 
 private val LightTokens = VikifyColors(
+    physics = VisualPhysics.STUDIO,
+    atmosphereType = AtmosphereType.PASTEL_GRADIENT,
+    
     brandPrimary = BrandCyan,
     brandSecondary = BrandPurple,
     accent = LightColors.Accent,
@@ -56,6 +82,8 @@ private val LightTokens = VikifyColors(
     textPrimary = NeutralBlack,
     textSecondary = NeutralGray500,
     textTertiary = NeutralGray400,
+    
+    // Fixed: Added missing parameters
     onSurface = LightColors.TextPrimary,
     onSurfaceVariant = LightColors.TextSecondary,
     onAccent = Color.White,
@@ -64,17 +92,32 @@ private val LightTokens = VikifyColors(
     glassBorder = NeutralWhite.copy(alpha = 0.5f),
     
     border = NeutralGray200,
-    divider = NeutralGray100,
+    divider = NeutralGray200,
     
     error = StatusError,
     success = StatusSuccess,
+    // warning removed as it doesn't exist in VikifyColors
     
     glow = BrandCyan,
     shimmerBase = NeutralGray200,
-    shimmerHighlight = NeutralOffWhite
+    shimmerHighlight = NeutralOffWhite,
+    
+    // Lyrics - Studio Mode (Paper & Ink)
+    lyricsActive = NeutralBlack,
+    lyricsInactive = NeutralGray400,
+    lyricsPassed = NeutralGray200,
+    lyricsHighlight = BrandCyan.copy(alpha = 0.1f),  // Soft watercolor
+    
+    // Player - Studio Mode
+    playerSurface = NeutralWhite,
+    progressTrack = NeutralGray200,
+    progressFill = BrandCyan
 )
 
 private val DarkTokens = VikifyColors(
+    physics = VisualPhysics.AURORA,
+    atmosphereType = AtmosphereType.AURORA_MESH,
+    
     brandPrimary = BrandCyan,
     brandSecondary = BrandPurple,
     accent = DarkColors.Accent,
@@ -104,28 +147,66 @@ private val DarkTokens = VikifyColors(
     
     glow = BrandPurple,
     shimmerBase = VoidCardHover,
-    shimmerHighlight = VoidBorder
+    shimmerHighlight = VoidBorder,
+    
+    // Lyrics - Aurora Mode (Glow & Neon)
+    lyricsActive = NeutralWhite,
+    lyricsInactive = NeutralWhite.copy(alpha = 0.4f),
+    lyricsPassed = NeutralWhite.copy(alpha = 0.25f),
+    lyricsHighlight = BrandPurple.copy(alpha = 0.2f),  // Neon glow
+    
+    // Player - Aurora Mode
+    playerSurface = VoidCard,
+    progressTrack = VoidCardHover,
+    progressFill = BrandCyan
 )
 
-// --- Theme State ---
-
-enum class ThemeMode { LIGHT, DARK, SYSTEM }
-
-object VikifyThemeState {
-    var currentMode by mutableStateOf(ThemeMode.SYSTEM)
+private val CoolTokens = VikifyColors(
+    physics = VisualPhysics.AURORA,
+    atmosphereType = AtmosphereType.AURORA_MESH,
     
-    fun toggleTheme() {
-        currentMode = when (currentMode) {
-            ThemeMode.LIGHT -> ThemeMode.DARK
-            ThemeMode.DARK -> ThemeMode.LIGHT
-            ThemeMode.SYSTEM -> ThemeMode.DARK
-        }
-    }
+    brandPrimary = BrandCyan,
+    brandSecondary = BrandPurple,
+    accent = BrandCyan,
     
-    fun setMode(mode: ThemeMode) {
-        currentMode = mode
-    }
-}
+    surfaceBackground = Color(0xFF0F111A), // Blend
+    surfaceCard = Color(0x99181A24),
+    surfaceSheet = VoidCard,
+    surface = VoidCard,
+    surfaceElevated = Color(0xFF1E1E24),
+    background = Color(0xFF0F111A),
+    
+    textPrimary = NeutralWhite,
+    textSecondary = NeutralGray400,
+    textTertiary = NeutralGray600,
+    onSurface = DarkColors.TextPrimary,
+    onSurfaceVariant = DarkColors.TextSecondary,
+    onAccent = Color.White,
+    
+    glassBackground = VoidBlack.copy(alpha = 0.5f),
+    glassBorder = NeutralWhite.copy(alpha = 0.1f),
+    
+    border = VoidBorder,
+    divider = VoidCardHover,
+    
+    error = StatusError,
+    success = StatusSuccess,
+    
+    glow = BrandCyan,
+    shimmerBase = VoidCardHover,
+    shimmerHighlight = VoidBorder,
+    
+    // Lyrics
+    lyricsActive = NeutralWhite,
+    lyricsInactive = NeutralWhite.copy(alpha = 0.4f),
+    lyricsPassed = NeutralWhite.copy(alpha = 0.25f),
+    lyricsHighlight = BrandCyan.copy(alpha = 0.2f),
+    
+    // Player
+    playerSurface = VoidCard,
+    progressTrack = VoidCardHover,
+    progressFill = BrandCyan
+)
 
 /**
  * CompositionLocal for dark theme status
@@ -140,20 +221,24 @@ fun VikifyTheme(
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {
-        ThemeMode.LIGHT -> false
-        ThemeMode.DARK -> true
-        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.SUNLIGHT -> false
+        ThemeMode.MOON -> true
+        ThemeMode.COOL -> true
     }
     
     val colorScheme = if (darkTheme) VikifyDarkColorScheme else VikifyLightColorScheme
-    val vikifyColors = if (darkTheme) DarkTokens else LightTokens
+    val vikifyColors = when (themeMode) {
+        ThemeMode.SUNLIGHT -> LightTokens
+        ThemeMode.MOON -> DarkTokens
+        ThemeMode.COOL -> CoolTokens
+    }
     
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = Color.Transparent.toArgb()
-            window.navigationBarColor = if (darkTheme) VoidDark.toArgb() else NeutralOffWhite.toArgb()
+            window.navigationBarColor = Color.Transparent.toArgb()
             
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = !darkTheme

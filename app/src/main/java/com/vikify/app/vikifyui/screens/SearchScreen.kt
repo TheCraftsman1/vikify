@@ -1,182 +1,258 @@
+/*
+ * Copyright (C) 2025 Vikify Project
+ *
+ * SPDX-License-Identifier: GPL-3.0
+ *
+ * Premium Search Screen - Discovery Interface
+ */
 package com.vikify.app.vikifyui.screens
 
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
-import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
-import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.staggeredgrid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.*
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.platform.*
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.Dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.palette.graphics.Palette
+import coil3.BitmapImage
+import coil3.ImageLoader
 import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
+import com.vikify.app.R
+import com.vikify.app.spotify.SpotifyPlaylist
+import com.vikify.app.spotify.SpotifyRepository
 import com.vikify.app.vikifyui.data.SearchViewModel
-import com.vikify.app.vikifyui.data.SearchSource
 import com.vikify.app.vikifyui.data.UnifiedSearchResult
+import com.vikify.app.vikifyui.data.SearchSource
 import com.vikify.app.vikifyui.data.Track
-import com.vikify.app.vikifyui.data.Artist
-import com.vikify.app.vikifyui.data.Category
-import com.vikify.app.vikifyui.data.MockData
-import com.vikify.app.vikifyui.theme.LivingBackground
 import com.vikify.app.vikifyui.theme.*
 import com.zionhuang.innertube.models.AlbumItem
+import com.zionhuang.innertube.models.SongItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// ============================================================================
-// PREMIUM SEARCH SCREEN - NEXT-GEN DISCOVERY INTERFACE
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
+// COLOR PALETTE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+private object SearchColors {
+    val AccentPurple = Color(0xFF7C4DFF)
+    val AccentCyan = Color(0xFF00E5FF)
+    val AccentPink = Color(0xFFFF4081)
+    
+    val GlassSurface = Color.White.copy(alpha = 0.08f)
+    val GlassBorder = Color.White.copy(alpha = 0.12f)
+    
+    // Genre colors
+    val genreColors = mapOf(
+        "pop" to Color(0xFFFF6B9D),
+        "hip-hop" to Color(0xFF7C4DFF),
+        "rock" to Color(0xFFEF4444),
+        "indie" to Color(0xFF10B981),
+        "r&b" to Color(0xFF8B5CF6),
+        "electronic" to Color(0xFF06B6D4),
+        "jazz" to Color(0xFFF59E0B),
+        "classical" to Color(0xFF6366F1),
+        "podcasts" to Color(0xFFEC4899),
+        "charts" to Color(0xFF14B8A6),
+        "new releases" to Color(0xFFF97316),
+        "moods" to Color(0xFF8B5CF6)
+    )
+    
+    fun getGenreColor(genre: String): Color {
+        return genreColors[genre.lowercase()] ?: AccentPurple
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DATA MODELS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+data class SearchCategory(
+    val id: String,
+    val name: String,
+    val icon: String,
+    val color: Color,
+    val isPriority: Boolean = false,
+    val isNew: Boolean = false
+)
+
+// Note: UnifiedSearchResult is imported from com.vikify.app.vikifyui.data
+
+data class RecentSearch(
+    val id: String,
+    val query: String,
+    val timestamp: Long,
+    val resultType: String? = null,
+    val imageUrl: String? = null
+)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SAMPLE DATA
+// ═══════════════════════════════════════════════════════════════════════════════
+
+private val sampleCategories = listOf(
+    SearchCategory("1", "Pop", "🎤", SearchColors.genreColors["pop"]!!, isPriority = true),
+    SearchCategory("2", "Hip-Hop", "🎧", SearchColors.genreColors["hip-hop"]!!, isPriority = true),
+    SearchCategory("3", "Rock", "🎸", SearchColors.genreColors["rock"]!!),
+    SearchCategory("4", "Indie", "🌿", SearchColors.genreColors["indie"]!!),
+    SearchCategory("5", "R&B", "💜", SearchColors.genreColors["r&b"]!!, isNew = true),
+    SearchCategory("6", "Electronic", "🎹", SearchColors.genreColors["electronic"]!!),
+    SearchCategory("7", "Jazz", "🎷", SearchColors.genreColors["jazz"]!!),
+    SearchCategory("8", "Classical", "🎻", SearchColors.genreColors["classical"]!!),
+    SearchCategory("9", "Podcasts", "🎙️", SearchColors.genreColors["podcasts"]!!),
+    SearchCategory("10", "Charts", "📊", SearchColors.genreColors["charts"]!!, isPriority = true),
+    SearchCategory("11", "New Releases", "✨", SearchColors.genreColors["new releases"]!!, isNew = true),
+    SearchCategory("12", "Moods", "🌙", SearchColors.genreColors["moods"]!!)
+)
+
+private val trendingSearches = listOf(
+    "The Weeknd",
+    "Taylor Swift",
+    "Bad Bunny",
+    "Drake",
+    "Dua Lipa"
+)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN SCREEN
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
 fun SearchScreen(
-    onCategoryClick: (Category) -> Unit,
-    onArtistClick: (Artist) -> Unit,
-    onAlbumClick: (AlbumItem) -> Unit,
-    onTrackClick: (Track) -> Unit,
-    onPlaylistClick: (String, com.vikify.app.spotify.SpotifyPlaylist?) -> Unit = { _, _ -> },
-    spotifyRepository: com.vikify.app.spotify.SpotifyRepository? = null,
-    initialQuery: String? = null, // Pre-filled search query (e.g., from mood click)
-    onInitialQueryConsumed: () -> Unit = {}, // Clear initial query after consuming
-    modifier: Modifier = Modifier,
-    searchViewModel: SearchViewModel = hiltViewModel()
+    onCategoryClick: (SearchCategory) -> Unit = {},
+    onArtistClick: (UnifiedSearchResult.Artist) -> Unit = {},
+    onAlbumClick: (UnifiedSearchResult.Album) -> Unit = {},
+    onTrackClick: (Track) -> Unit = {},
+    onPlaylistClick: (String, SpotifyPlaylist?) -> Unit = { _, _ -> },
+    onVoiceSearchResult: (String) -> Unit = {},
+    recentSearches: List<RecentSearch> = emptyList(),
+    onClearRecentSearches: () -> Unit = {},
+    onRemoveRecentSearch: (String) -> Unit = {},
+    onRecentSearchClick: (RecentSearch) -> Unit = {},
+    spotifyRepository: Any? = null,
+    initialQuery: String? = null,
+    onInitialQueryConsumed: () -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
-    val view = LocalView.current
+    // ViewModel for real search functionality
+    val searchViewModel: SearchViewModel = hiltViewModel()
+    
+    // Observe ViewModel state
+    val searchResults by searchViewModel.unifiedResults.collectAsState()
+    val isSearching by searchViewModel.isSearching.collectAsState()
+    val searchSource by searchViewModel.searchSource.collectAsState()
+    
+    // Set SpotifyRepository for Spotify search capability
+    LaunchedEffect(spotifyRepository) {
+        if (spotifyRepository is SpotifyRepository) {
+            searchViewModel.setSpotifyRepository(spotifyRepository)
+        }
+    }
+    
+    val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val isDark = VikifyTheme.isDark
     
-    // Voice Search Launcher
+    // Local state
+    var localQuery by remember { mutableStateOf(initialQuery ?: "") }
+    var isSearchFocused by remember { mutableStateOf(false) }
+    var selectedFilter by remember { mutableStateOf("All") }
+    
+    // Sync with external query and consume it
+    LaunchedEffect(initialQuery) {
+        if (!initialQuery.isNullOrEmpty() && localQuery != initialQuery) {
+            localQuery = initialQuery
+            searchViewModel.updateQuery(initialQuery) // Trigger search
+            onInitialQueryConsumed()
+        }
+    }
+    
+    // Update ViewModel query when local query changes (debounced via ViewModel)
+    LaunchedEffect(localQuery) {
+        searchViewModel.updateQuery(localQuery)
+    }
+    
+    // Voice search launcher
     val voiceLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             matches?.firstOrNull()?.let { spokenText ->
-                searchViewModel.updateQuery(spokenText)
+                localQuery = spokenText
+                onVoiceSearchResult(spokenText)
             }
         }
     }
     
-    // Theme-aware colors
-    val isDark = VikifyTheme.isDark
-    val backgroundColor = if (isDark) DarkColors.Background else LightColors.Background
-    val surfaceColor = if (isDark) DarkColors.Surface else LightColors.Surface
-    val textPrimary = if (isDark) DarkColors.TextPrimary else LightColors.TextPrimary
-    val textSecondary = if (isDark) DarkColors.TextSecondary else LightColors.TextSecondary
-    val accentColor = if (isDark) DarkColors.Accent else LightColors.Accent
-    
-    // ViewModel-driven state
-    val searchQuery by searchViewModel.query.collectAsState()
-    val searchSource by searchViewModel.searchSource.collectAsState()
-    val unifiedResults by searchViewModel.unifiedResults.collectAsState()
-    val isSearching by searchViewModel.isSearching.collectAsState()
-    
-    // Initialize Spotify repository
-    LaunchedEffect(spotifyRepository) {
-        searchViewModel.setSpotifyRepository(spotifyRepository)
-    }
-    
-    // Local query for immediate UI feedback
-    var localQuery by remember { mutableStateOf(searchQuery) }
-    var isSearchFocused by remember { mutableStateOf(false) }
-    
-    // Handle initial query from external navigation (e.g., mood click)
-    LaunchedEffect(initialQuery) {
-        if (!initialQuery.isNullOrEmpty() && localQuery != initialQuery) {
-            localQuery = initialQuery
-            searchViewModel.updateQuery(initialQuery)
-            onInitialQueryConsumed()
-        }
-    }
-    
-    // FIX: Prevent infinite loop with distinct check
-    // Only update VM when local actually changes to something different
-    LaunchedEffect(localQuery) {
-        if (searchQuery != localQuery) {
-            searchViewModel.updateQuery(localQuery)
-        }
-    }
-    
-    // Only update local if VM changes externally (e.g., category search)
-    // This also has the distinct check to prevent loops
-    LaunchedEffect(searchQuery) {
-        if (searchQuery != localQuery) {
-            localQuery = searchQuery
-        }
-    }
-    
-    // Blur micro-interaction: mosaic blurs when search focused (context preserved)
-    val blurRadius by animateDpAsState(
-        targetValue = if (isSearchFocused && localQuery.isEmpty()) 12.dp else 0.dp,
+    // Blur effect when focused with empty query
+    val backgroundBlur by animateDpAsState(
+        targetValue = if (isSearchFocused && localQuery.isEmpty()) 8.dp else 0.dp,
         animationSpec = tween(300),
-        label = "blurEffect"
+        label = "backgroundBlur"
     )
 
-    // Theme-aware Logic
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .background(VikifyTheme.colors.background)
     ) {
-        if (VikifyTheme.isDark) {
-            com.vikify.app.vikifyui.theme.LivingBackground(modifier = Modifier.matchParentSize()) { }
+        // Background
+        if (isDark) {
+            LivingBackground(modifier = Modifier.matchParentSize()) {}
         } else {
-            com.vikify.app.vikifyui.theme.EtherealBackground(modifier = Modifier.matchParentSize()) { }
+            EtherealBackground(modifier = Modifier.matchParentSize()) {}
         }
 
         Column(
@@ -185,22 +261,21 @@ fun SearchScreen(
                 .statusBarsPadding()
                 .imePadding()
         ) {
-            // ═══════════════════════════════════════════════════════════════
-            // 1. LIQUID SEARCH HEADER
-            // ═══════════════════════════════════════════════════════════════
-            LiquidSearchHeader(
+            // Search Header
+            SearchHeader(
                 query = localQuery,
                 onQueryChange = { localQuery = it },
-                onClear = { 
+                onClear = {
                     localQuery = ""
-                    try { keyboardController?.hide() } catch (e: Exception) { /* Safe ignore */ }
+                    keyboardController?.hide()
                     focusManager.clearFocus()
                 },
                 onVoiceClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     try {
                         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Sing or say lyrics to find your song...")
+                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Search for songs, artists, or lyrics...")
                         }
                         voiceLauncher.launch(intent)
                     } catch (e: Exception) {
@@ -209,114 +284,89 @@ fun SearchScreen(
                 },
                 isFocused = isSearchFocused,
                 onFocusChange = { isSearchFocused = it },
-                focusRequester = focusRequester,
-                isDark = isDark,
-                textPrimary = textPrimary,
-                textSecondary = textSecondary,
-                surfaceColor = surfaceColor,
-                accentColor = accentColor
+                focusRequester = focusRequester
             )
-            
-            // ═══════════════════════════════════════════════════════════════
-            // 2. CONTENT AREA
-            // ═══════════════════════════════════════════════════════════════
-            
-            // Filter state for search results
-            var selectedFilter by remember { mutableStateOf("All") }
-            val filterOptions = listOf("All", "Songs", "Artists", "Playlists")
-            
+
+            // Content
             Crossfade(
                 targetState = localQuery.isEmpty(),
-                label = "searchContent",
-                animationSpec = tween(200)
-            ) { isEmptyQuery ->
-                if (isEmptyQuery) {
-                    // BROWSE STATE: Staggered Mosaic Grid with blur effect
-                    MosaicBrowseGrid(
-                        onCategoryClick = { category ->
-                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                            searchViewModel.searchByCategory(category.name)
+                animationSpec = tween(200),
+                label = "searchContent"
+            ) { isEmpty ->
+                if (isEmpty) {
+                    // Browse State
+                    BrowseContent(
+                        recentSearches = recentSearches,
+                        onClearRecent = onClearRecentSearches,
+                        onRemoveRecent = onRemoveRecentSearch,
+                        onRecentClick = { recent ->
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            localQuery = recent.query
+                            onRecentSearchClick(recent)
                         },
-                        isDark = isDark,
-                        textPrimary = textPrimary,
-                        blurRadius = blurRadius
+                        onCategoryClick = { category ->
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            // Search for category content
+                            localQuery = category.name
+                            searchViewModel.searchByCategory(category.name)
+                            onCategoryClick(category)
+                        },
+                        onTrendingClick = { query ->
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            localQuery = query
+                        },
+                        blurRadius = backgroundBlur,
+                        modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    // SEARCH RESULTS STATE with Filter Chips
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        // ═══════════════════════════════════════════════════════════════
-                        // SPOTIFY-STYLE FILTER CHIPS ROW
-                        // ═══════════════════════════════════════════════════════════════
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                        ) {
-                            items(filterOptions) { filter ->
-                                val isSelected = selectedFilter == filter
-                                
-                                FilterChip(
-                                    selected = isSelected,
-                                    onClick = { 
-                                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                                        selectedFilter = filter 
-                                    },
-                                    label = {
-                                        Text(
-                                            text = filter,
-                                            fontSize = 13.sp,
-                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                                        )
-                                    },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        containerColor = if (isDark) Color(0xFF2A2A2A) else Color(0xFFE8E8E8),
-                                        labelColor = textSecondary,
-                                        selectedContainerColor = accentColor,
-                                        selectedLabelColor = Color.White
-                                    ),
-                                    border = FilterChipDefaults.filterChipBorder(
-                                        borderColor = Color.Transparent,
-                                        selectedBorderColor = Color.Transparent,
-                                        enabled = true,
-                                        selected = isSelected
-                                    ),
-                                    shape = RoundedCornerShape(16.dp),
-                                    modifier = Modifier.height(32.dp)
-                                )
+                    // Results State
+                    SearchResultsContent(
+                        results = searchResults,
+                        isSearching = isSearching,
+                        query = localQuery,
+                        selectedFilter = selectedFilter,
+                        onFilterSelect = { selectedFilter = it },
+                        onResultClick = { result ->
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            when (result) {
+                                is UnifiedSearchResult.Song -> {
+                                    // Convert SongItem to Track for playback
+                                    val songItem = result.originalItem
+                                    val track = Track(
+                                        id = result.id,
+                                        title = songItem?.title ?: result.headline,
+                                        artist = songItem?.artists?.firstOrNull()?.name ?: result.subheadline.removePrefix("Song • "),
+                                        remoteArtworkUrl = songItem?.thumbnail ?: result.imageUrl,
+                                        duration = songItem?.duration?.times(1000L) ?: -1L,
+                                        originalBackendRef = songItem,
+                                        youtubeId = result.id
+                                    )
+                                    onTrackClick(track)
+                                }
+                                is UnifiedSearchResult.Artist -> onArtistClick(result)
+                                is UnifiedSearchResult.Album -> onAlbumClick(result)
+                                is UnifiedSearchResult.Playlist -> onPlaylistClick(result.id, result.spotifyPlaylist)
+                                is UnifiedSearchResult.Video -> {
+                                    val track = Track(
+                                        id = result.id,
+                                        title = result.headline,
+                                        artist = result.subheadline,
+                                        remoteArtworkUrl = result.imageUrl,
+                                        duration = result.duration ?: -1L,
+                                        youtubeId = result.id
+                                    )
+                                    onTrackClick(track)
+                                }
                             }
-                        }
-                        
-                        // Filter results based on selected chip
-                        val filteredResults = when (selectedFilter) {
-                            "Songs" -> unifiedResults.filter { it.type == "track" || it.type == "song" }
-                            "Artists" -> unifiedResults.filter { it.type == "artist" }
-                            "Playlists" -> unifiedResults.filter { it.type == "playlist" }
-                            else -> unifiedResults // "All"
-                        }
-                        
-                        SpotlightResultsList(
-                            results = filteredResults,
-                            isSearching = isSearching,
-                            query = localQuery,
-                            isDark = isDark,
-                            textPrimary = textPrimary,
-                            textSecondary = textSecondary,
-                            surfaceColor = surfaceColor,
-                            accentColor = accentColor,
-                            onResultClick = { result ->
-                                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                                handleResultClick(result, onTrackClick, onAlbumClick, onArtistClick, onPlaylistClick)
-                            }
-                        )
-                    }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
         }
-        
-        // Clickable overlay to clear focus when blur is active
-        if (blurRadius > 0.dp) {
+
+        // Tap to dismiss focus
+        if (backgroundBlur > 0.dp) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -332,40 +382,34 @@ fun SearchScreen(
     }
 }
 
-// ============================================================================
-// LIQUID SEARCH HEADER
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEARCH HEADER
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun LiquidSearchHeader(
+private fun SearchHeader(
     query: String,
     onQueryChange: (String) -> Unit,
     onClear: () -> Unit,
     onVoiceClick: () -> Unit,
     isFocused: Boolean,
     onFocusChange: (Boolean) -> Unit,
-    focusRequester: FocusRequester,
-    isDark: Boolean,
-    textPrimary: Color,
-    textSecondary: Color,
-    surfaceColor: Color,
-    accentColor: Color
+    focusRequester: FocusRequester
 ) {
-    val view = LocalView.current
+    val haptic = LocalHapticFeedback.current
     
-    // Animation for header transformation
     val headerPadding by animateDpAsState(
         targetValue = if (query.isEmpty() && !isFocused) 20.dp else 16.dp,
         animationSpec = spring(stiffness = Spring.StiffnessLow),
         label = "headerPadding"
     )
-    
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = headerPadding, vertical = 12.dp)
     ) {
-        // Large Title (Collapses when typing)
+        // Large title (collapses when searching)
         AnimatedVisibility(
             visible = query.isEmpty() && !isFocused,
             enter = fadeIn() + expandVertically(),
@@ -374,161 +418,53 @@ private fun LiquidSearchHeader(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(bottom = 16.dp, top = 12.dp)
+                modifier = Modifier.padding(bottom = 16.dp, top = 8.dp)
             ) {
-                androidx.compose.foundation.Image(
-                    painter = androidx.compose.ui.res.painterResource(id = com.vikify.app.R.drawable.vikify_logo),
+                Image(
+                    painter = painterResource(id = R.drawable.vikify_logo),
                     contentDescription = null,
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(36.dp)
                 )
                 Text(
                     text = "Search",
-                    fontSize = 34.sp,
+                    fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
-                    color = textPrimary
+                    color = VikifyTheme.colors.textPrimary
                 )
             }
         }
 
-        // Glass Pill Search Bar
+        // Search bar row
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Main Search Input
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .shadow(
-                        elevation = if (isFocused) 12.dp else 6.dp,
-                        shape = RoundedCornerShape(26.dp),
-                        spotColor = if (isDark) DarkColors.Accent.copy(alpha = 0.2f) else CardShadow
-                    )
-                    .background(surfaceColor, RoundedCornerShape(26.dp))
-                    .border(
-                        width = if (isFocused) 1.5.dp else 0.dp,
-                        color = if (isFocused) accentColor.copy(alpha = 0.5f) else Color.Transparent,
-                        shape = RoundedCornerShape(26.dp)
-                    )
-                    .clip(RoundedCornerShape(26.dp)),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp)
-                ) {
-                    Icon(
-                        Icons.Rounded.Search,
-                        contentDescription = null,
-                        tint = textSecondary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    
-                    BasicTextField(
-                        value = query,
-                        onValueChange = onQueryChange,
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(focusRequester)
-                            .onFocusChanged { onFocusChange(it.isFocused) },
-                        singleLine = true,
-                        textStyle = TextStyle(
-                            fontSize = 17.sp, 
-                            color = textPrimary,
-                            fontWeight = FontWeight.Normal
-                        ),
-                        cursorBrush = SolidColor(accentColor),
-                        decorationBox = { innerTextField ->
-                            if (query.isEmpty()) {
-                                Text(
-                                    "What's the vibe today?",
-                                    color = textSecondary,
-                                    fontSize = 17.sp
-                                )
-                            }
-                            innerTextField()
-                        },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { 
-                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                        })
-                    )
-                    
-                    // Mic & Camera Icons (Idle state)
-                    AnimatedVisibility(
-                        visible = query.isEmpty(),
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(
-                                Icons.Rounded.Mic,
-                                contentDescription = "Voice Search",
-                                tint = textSecondary,
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .clickable {
-                                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                                        onVoiceClick()
-                                    }
-                            )
-                        }
-                    }
-                    
-                    // Clear Button (Active state)
-                    AnimatedVisibility(
-                        visible = query.isNotEmpty(),
-                        enter = fadeIn() + scaleIn(),
-                        exit = fadeOut() + scaleOut()
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .background(textSecondary.copy(alpha = 0.2f), CircleShape)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) { 
-                                    try {
-                                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                                        onQueryChange("") 
-                                    } catch (e: Exception) {
-                                        // Safe ignore
-                                        onQueryChange("")
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = "Clear",
-                                tint = textPrimary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                }
-            }
+            // Main search input
+            SearchInputField(
+                query = query,
+                onQueryChange = onQueryChange,
+                onVoiceClick = onVoiceClick,
+                isFocused = isFocused,
+                onFocusChange = onFocusChange,
+                focusRequester = focusRequester,
+                modifier = Modifier.weight(1f)
+            )
 
-            // Cancel Button
+            // Cancel button
             AnimatedVisibility(
                 visible = query.isNotEmpty() || isFocused,
-                enter = fadeIn() + slideInHorizontally(initialOffsetX = { it }),
-                exit = fadeOut() + slideOutHorizontally(targetOffsetX = { it })
+                enter = fadeIn() + slideInHorizontally { it },
+                exit = fadeOut() + slideOutHorizontally { it }
             ) {
                 Text(
                     text = "Cancel",
-                    color = accentColor,
-                    fontSize = 17.sp,
+                    color = VikifyTheme.colors.accent,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
-                    modifier = Modifier.clickable { 
-                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                        onClear() 
+                    modifier = Modifier.clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onClear()
                     }
                 )
             }
@@ -536,329 +472,741 @@ private fun LiquidSearchHeader(
     }
 }
 
-// ============================================================================
-// DISCOVERY PORTAL: STAGGERED GENRE MOSAIC
-// Pinterest-style layout with "louder" cards for priority genres
-// ============================================================================
-
 @Composable
-private fun MosaicBrowseGrid(
-    onCategoryClick: (Category) -> Unit,
-    isDark: Boolean,
-    textPrimary: Color,
-    blurRadius: Dp = 0.dp
+private fun SearchInputField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onVoiceClick: () -> Unit,
+    isFocused: Boolean,
+    onFocusChange: (Boolean) -> Unit,
+    focusRequester: FocusRequester,
+    modifier: Modifier = Modifier
 ) {
-    val categories = remember { MockData.browseCategories }
+    val haptic = LocalHapticFeedback.current
     
-    LazyVerticalStaggeredGrid(
-        columns = StaggeredGridCells.Fixed(2),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalItemSpacing = 12.dp,
-        modifier = Modifier
-            .fillMaxSize()
-            .blur(blurRadius)
+    val borderColor by animateColorAsState(
+        targetValue = if (isFocused) 
+            VikifyTheme.colors.accent.copy(alpha = 0.5f) 
+        else 
+            Color.Transparent,
+        animationSpec = tween(200),
+        label = "borderColor"
+    )
+    
+    val elevation by animateDpAsState(
+        targetValue = if (isFocused) 12.dp else 6.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "elevation"
+    )
+
+    Box(
+        modifier = modifier
+            .height(52.dp)
+            .shadow(
+                elevation = elevation,
+                shape = RoundedCornerShape(26.dp),
+                spotColor = VikifyTheme.colors.accent.copy(alpha = 0.2f)
+            )
+            .background(VikifyTheme.colors.surface, RoundedCornerShape(26.dp))
+            .border(1.5.dp, borderColor, RoundedCornerShape(26.dp))
+            .clip(RoundedCornerShape(26.dp)),
+        contentAlignment = Alignment.CenterStart
     ) {
-        // Section Title (Full width span)
-        item(span = StaggeredGridItemSpan.FullLine) {
-            Text(
-                text = "Explore Your Vibe",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = textPrimary,
-                modifier = Modifier.padding(vertical = 8.dp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+        ) {
+            // Search icon
+            Icon(
+                Icons.Rounded.Search,
+                contentDescription = null,
+                tint = VikifyTheme.colors.textSecondary,
+                modifier = Modifier.size(22.dp)
             )
-        }
-        
-        // Staggered Category Cards
-        items(categories, key = { it.id }) { category ->
-            LivingCategoryCard(
-                category = category,
-                isDark = isDark,
-                onClick = { onCategoryClick(category) }
+            
+            Spacer(Modifier.width(12.dp))
+
+            // Text field
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { onFocusChange(it.isFocused) },
+                singleLine = true,
+                textStyle = TextStyle(
+                    fontSize = 17.sp,
+                    color = VikifyTheme.colors.textPrimary,
+                    fontWeight = FontWeight.Normal
+                ),
+                cursorBrush = SolidColor(VikifyTheme.colors.accent),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (query.isEmpty()) {
+                            Text(
+                                "Songs, artists, or podcasts",
+                                color = VikifyTheme.colors.textSecondary,
+                                fontSize = 17.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                })
             )
-        }
-        
-        // Bottom spacing for mini player
-        item(span = StaggeredGridItemSpan.FullLine) {
-            Spacer(Modifier.height(100.dp))
+
+            // Voice/Clear buttons
+            AnimatedContent(
+                targetState = query.isEmpty(),
+                transitionSpec = {
+                    fadeIn(tween(150)) + scaleIn(initialScale = 0.8f) togetherWith
+                    fadeOut(tween(100)) + scaleOut(targetScale = 0.8f)
+                },
+                label = "actionButton"
+            ) { isEmpty ->
+                if (isEmpty) {
+                    // Voice search
+                    Icon(
+                        Icons.Rounded.Mic,
+                        contentDescription = "Voice Search",
+                        tint = VikifyTheme.colors.textSecondary,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onVoiceClick()
+                            }
+                    )
+                } else {
+                    // Clear button
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(
+                                VikifyTheme.colors.textSecondary.copy(alpha = 0.2f),
+                                CircleShape
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onQueryChange("")
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = "Clear",
+                            tint = VikifyTheme.colors.textPrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
-// ============================================================================
-// LIVING CATEGORY CARD: Animated gradient with priority sizing
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
+// BROWSE CONTENT
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun LivingCategoryCard(
-    category: Category,
-    isDark: Boolean,
-    onClick: () -> Unit,
+private fun BrowseContent(
+    recentSearches: List<RecentSearch>,
+    onClearRecent: () -> Unit,
+    onRemoveRecent: (String) -> Unit,
+    onRecentClick: (RecentSearch) -> Unit,
+    onCategoryClick: (SearchCategory) -> Unit,
+    onTrendingClick: (String) -> Unit,
+    blurRadius: Dp,
     modifier: Modifier = Modifier
 ) {
-    // Dynamic height based on priority
-    val height = when {
-        category.isPriority -> 160.dp  // "Louder" genres get bigger cards
-        category.isNew -> 130.dp       // Trending genres are medium
-        else -> 100.dp                  // Standard genres
+    LazyVerticalStaggeredGrid(
+        columns = StaggeredGridCells.Fixed(2),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalItemSpacing = 12.dp,
+        modifier = modifier.blur(blurRadius)
+    ) {
+        // Recent searches section
+        if (recentSearches.isNotEmpty()) {
+            item(span = StaggeredGridItemSpan.FullLine) {
+                RecentSearchesSection(
+                    searches = recentSearches,
+                    onClear = onClearRecent,
+                    onRemove = onRemoveRecent,
+                    onSearchClick = onRecentClick
+                )
+            }
+        }
+
+        // Trending searches
+        item(span = StaggeredGridItemSpan.FullLine) {
+            TrendingSearchesSection(onTrendingClick = onTrendingClick)
+        }
+
+        // Browse categories header
+        item(span = StaggeredGridItemSpan.FullLine) {
+            Text(
+                text = "Browse All",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = VikifyTheme.colors.textPrimary,
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+            )
+        }
+
+        // Category cards
+        itemsIndexed(
+            items = sampleCategories,
+            key = { _, category -> category.id }
+        ) { index, category ->
+            CategoryCard(
+                category = category,
+                index = index,
+                onClick = { onCategoryClick(category) }
+            )
+        }
+
+        // Bottom spacing
+        item(span = StaggeredGridItemSpan.FullLine) {
+            Spacer(Modifier.height(120.dp))
+        }
+    }
+}
+
+@Composable
+private fun RecentSearchesSection(
+    searches: List<RecentSearch>,
+    onClear: () -> Unit,
+    onRemove: (String) -> Unit,
+    onSearchClick: (RecentSearch) -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Recent Searches",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = VikifyTheme.colors.textPrimary
+            )
+            
+            Text(
+                text = "Clear all",
+                fontSize = 14.sp,
+                color = VikifyTheme.colors.accent,
+                modifier = Modifier.clickable {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClear()
+                }
+            )
+        }
+        
+        Spacer(Modifier.height(12.dp))
+        
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(searches.take(10), key = { it.id }) { search ->
+                RecentSearchChip(
+                    search = search,
+                    onClick = { onSearchClick(search) },
+                    onRemove = { onRemove(search.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentSearchChip(
+    search: RecentSearch,
+    onClick: () -> Unit,
+    onRemove: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(VikifyTheme.colors.surface)
+            .clickable(onClick = onClick)
+            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)
+    ) {
+        // Image or icon
+        if (search.imageUrl != null) {
+            AsyncImage(
+                model = search.imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+            )
+        } else {
+            Icon(
+                Icons.Rounded.History,
+                contentDescription = null,
+                tint = VikifyTheme.colors.textSecondary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        
+        Spacer(Modifier.width(8.dp))
+        
+        Text(
+            text = search.query,
+            fontSize = 14.sp,
+            color = VikifyTheme.colors.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        
+        IconButton(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onRemove()
+            },
+            modifier = Modifier.size(28.dp)
+        ) {
+            Icon(
+                Icons.Rounded.Close,
+                contentDescription = "Remove",
+                tint = VikifyTheme.colors.textSecondary,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrendingSearchesSection(onTrendingClick: (String) -> Unit) {
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                Icons.Rounded.TrendingUp,
+                contentDescription = null,
+                tint = VikifyTheme.colors.accent,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = "Trending",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = VikifyTheme.colors.textPrimary
+            )
+        }
+        
+        Spacer(Modifier.height(12.dp))
+        
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            itemsIndexed(trendingSearches) { index, query ->
+                TrendingSearchChip(
+                    query = query,
+                    rank = index + 1,
+                    onClick = { onTrendingClick(query) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrendingSearchChip(
+    query: String,
+    rank: Int,
+    onClick: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(
+                        VikifyTheme.colors.accent.copy(alpha = 0.15f),
+                        VikifyTheme.colors.surface
+                    )
+                )
+            )
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            }
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = "#$rank",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = VikifyTheme.colors.accent
+        )
+        
+        Spacer(Modifier.width(8.dp))
+        
+        Text(
+            text = query,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = VikifyTheme.colors.textPrimary
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CATEGORY CARD
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun CategoryCard(
+    category: SearchCategory,
+    index: Int,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        label = "cardScale"
+    )
+    
+    // Staggered entrance animation
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(index * 50L)
+        isVisible = true
     }
     
-    // Category-specific colors
-    val categoryColor = Color(category.color.toInt())
+    val alpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(300),
+        label = "cardAlpha"
+    )
     
-    // ═══════════════════════════════════════════════════════════════════
-    // LIVING GRADIENT: Animated color shift
-    // ═══════════════════════════════════════════════════════════════════
-    val infiniteTransition = rememberInfiniteTransition(label = "livingGradient")
+    // Dynamic height based on priority
+    val height = when {
+        category.isPriority -> 150.dp
+        category.isNew -> 130.dp
+        else -> 110.dp
+    }
+    
+    // Animated gradient
+    val infiniteTransition = rememberInfiniteTransition(label = "categoryGradient")
     val gradientPhase by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = LinearEasing),
+            animation = tween(5000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "gradientPhase"
     )
     
-    // Secondary color for gradient (lighter variation)
-    val secondaryColor = categoryColor.copy(
-        red = (categoryColor.red + 0.15f).coerceAtMost(1f),
-        green = (categoryColor.green + 0.1f).coerceAtMost(1f),
-        blue = (categoryColor.blue + 0.2f).coerceAtMost(1f)
+    val secondaryColor = category.color.copy(
+        red = (category.color.red + 0.15f).coerceAtMost(1f),
+        green = (category.color.green + 0.1f).coerceAtMost(1f),
+        blue = (category.color.blue + 0.2f).coerceAtMost(1f)
     )
     
-    val animatedGradient = Brush.linearGradient(
-        colors = listOf(categoryColor, secondaryColor, categoryColor),
-        start = androidx.compose.ui.geometry.Offset(0f, 0f),
-        end = androidx.compose.ui.geometry.Offset(
+    val gradient = Brush.linearGradient(
+        colors = listOf(category.color, secondaryColor, category.color),
+        start = Offset(0f, 0f),
+        end = Offset(
             x = 300f + (100f * gradientPhase),
-            y = 300f + (100f * (1 - gradientPhase))
+            y = 300f + (100f * (1f - gradientPhase))
         )
     )
-    
-    // Category icon emoji
-    val categoryIcon = when (category.name.lowercase()) {
-        "pop" -> "🎤"
-        "hip-hop" -> "🎧"
-        "rock" -> "🎸"
-        "indie" -> "🌿"
-        "r&b" -> "💜"
-        "electronic" -> "🎹"
-        "podcasts" -> "🎙️"
-        "new releases" -> "✨"
-        "charts" -> "📊"
-        "moods" -> "🌙"
-        else -> "🎵"
-    }
-    
+
     Box(
-        modifier = modifier
+        modifier = Modifier
             .height(height)
             .fillMaxWidth()
+            .alpha(alpha)
+            .scale(scale)
             .shadow(
                 elevation = if (category.isPriority) 12.dp else 6.dp,
-                shape = RoundedCornerShape(12.dp),
-                spotColor = categoryColor.copy(alpha = 0.4f)
+                shape = RoundedCornerShape(16.dp),
+                spotColor = category.color.copy(alpha = 0.4f)
             )
-            .clip(RoundedCornerShape(12.dp))
-            .background(animatedGradient)
-            .clickable(onClick = onClick)
+            .clip(RoundedCornerShape(16.dp))
+            .background(gradient)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
     ) {
-        // "NEW" badge for trending genres
+        // "NEW" badge
         if (category.isNew) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(8.dp)
-                    .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color.White.copy(alpha = 0.95f))
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
             ) {
                 Text(
                     text = "NEW",
                     fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = categoryColor,
+                    fontWeight = FontWeight.Black,
+                    color = category.color,
                     letterSpacing = 0.5.sp
                 )
             }
         }
-        
-        // Genre name (Top-Left)
+
+        // Category name
         Text(
             text = category.name,
-            fontSize = if (category.isPriority) 20.sp else 16.sp,
+            fontSize = if (category.isPriority) 20.sp else 17.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(14.dp)
         )
-        
-        // Rotated icon (Bottom-Right, "tucked" into corner)
+
+        // Rotated emoji icon
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .size(if (category.isPriority) 72.dp else 52.dp)
-                .offset(x = 10.dp, y = 10.dp)
+                .size(if (category.isPriority) 70.dp else 55.dp)
+                .offset(x = 12.dp, y = 12.dp)
                 .graphicsLayer {
-                    rotationZ = 25f
+                    rotationZ = 20f
                     shadowElevation = 8f
                 }
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color.White.copy(alpha = 0.2f)),
+                .background(Color.White.copy(alpha = 0.25f)),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = categoryIcon,
-                fontSize = if (category.isPriority) 36.sp else 28.sp
+                text = category.icon,
+                fontSize = if (category.isPriority) 34.sp else 28.sp
             )
         }
     }
 }
 
-// ============================================================================
-// SPOTLIGHT RESULTS LIST
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEARCH RESULTS CONTENT
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun SpotlightResultsList(
+private fun SearchResultsContent(
     results: List<UnifiedSearchResult>,
     isSearching: Boolean,
     query: String,
-    isDark: Boolean,
-    textPrimary: Color,
-    textSecondary: Color,
-    surfaceColor: Color,
-    accentColor: Color,
+    selectedFilter: String,
+    onFilterSelect: (String) -> Unit,
+    onResultClick: (UnifiedSearchResult) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val filterOptions = listOf("All", "Songs", "Artists", "Albums", "Playlists")
+    
+    // Filter results
+    val filteredResults = remember(results, selectedFilter) {
+        when (selectedFilter) {
+            "Songs" -> results.filterIsInstance<UnifiedSearchResult.Song>()
+            "Artists" -> results.filterIsInstance<UnifiedSearchResult.Artist>()
+            "Albums" -> results.filterIsInstance<UnifiedSearchResult.Album>()
+            "Playlists" -> results.filterIsInstance<UnifiedSearchResult.Playlist>()
+            else -> results
+        }
+    }
+
+    Column(modifier = modifier) {
+        // Filter chips
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
+            items(filterOptions) { filter ->
+                SearchFilterChip(
+                    label = filter,
+                    isSelected = selectedFilter == filter,
+                    onClick = { onFilterSelect(filter) }
+                )
+            }
+        }
+
+        // Results list
+        when {
+            isSearching -> {
+                SearchLoadingSkeleton()
+            }
+            filteredResults.isEmpty() && query.isNotEmpty() -> {
+                EmptySearchState(query = query)
+            }
+            else -> {
+                SearchResultsList(
+                    results = filteredResults,
+                    query = query,
+                    onResultClick = onResultClick
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchFilterChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) 
+            VikifyTheme.colors.accent 
+        else 
+            VikifyTheme.colors.surface,
+        animationSpec = tween(200),
+        label = "chipBg"
+    )
+    
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) 
+            Color.White 
+        else 
+            VikifyTheme.colors.textSecondary,
+        animationSpec = tween(200),
+        label = "chipContent"
+    )
+
+    Box(
+        modifier = Modifier
+            .height(34.dp)
+            .clip(RoundedCornerShape(17.dp))
+            .background(backgroundColor)
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            color = contentColor
+        )
+    }
+}
+
+@Composable
+private fun SearchResultsList(
+    results: List<UnifiedSearchResult>,
+    query: String,
     onResultClick: (UnifiedSearchResult) -> Unit
 ) {
     LazyColumn(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.fillMaxSize()
     ) {
-        // Loading State
-        if (isSearching) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        color = accentColor,
-                        modifier = Modifier.size(40.dp),
-                        strokeWidth = 3.dp
-                    )
-                }
-            }
-        }
-        // Empty State
-        else if (results.isEmpty() && query.isNotEmpty()) {
-            item {
-                EmptySearchState(
+        // Top result spotlight
+        results.firstOrNull()?.let { topResult ->
+            item(key = "top_${topResult.id}") {
+                TopResultCard(
+                    result = topResult,
                     query = query,
-                    isDark = isDark,
-                    textPrimary = textPrimary,
-                    textSecondary = textSecondary,
-                    accentColor = accentColor
+                    onClick = { onResultClick(topResult) }
                 )
-            }
-        }
-        // Results
-        else {
-            // TOP RESULT SPOTLIGHT (First item gets special treatment)
-            results.firstOrNull()?.let { topResult ->
-                item {
-                    SpotlightTopResultCard(
-                        result = topResult,
-                        query = query,
-                        isDark = isDark,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary,
-                        surfaceColor = surfaceColor,
-                        accentColor = accentColor,
-                        onClick = { onResultClick(topResult) }
-                    )
-                }
-                
-                // "Songs" section header
-                if (results.size > 1) {
-                    item {
-                        Text(
-                            text = "Results",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = textPrimary,
-                            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
-                        )
-                    }
-                }
             }
             
-            // Remaining results
-            items(results.drop(1), key = { it.id }) { result ->
-                SearchResultRow(
-                    result = result,
-                    query = query,
-                    isDark = isDark,
-                    textPrimary = textPrimary,
-                    textSecondary = textSecondary,
-                    surfaceColor = surfaceColor,
-                    onClick = { onResultClick(result) }
-                )
+            if (results.size > 1) {
+                item(key = "header") {
+                    Text(
+                        text = "More Results",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = VikifyTheme.colors.textPrimary,
+                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                    )
+                }
             }
         }
-        
-        // Bottom spacing for mini player
-        item { Spacer(Modifier.height(100.dp)) }
+
+        // Remaining results with staggered animation
+        itemsIndexed(
+            items = results.drop(1),
+            key = { _, result -> result.id }
+        ) { index, result ->
+            SearchResultRow(
+                result = result,
+                query = query,
+                index = index,
+                onClick = { onResultClick(result) }
+            )
+        }
+
+        // Bottom spacing
+        item(key = "spacer") {
+            Spacer(Modifier.height(120.dp))
+        }
     }
 }
 
-// ============================================================================
-// SPOTLIGHT TOP RESULT CARD
-// ============================================================================
-
 @Composable
-private fun SpotlightTopResultCard(
+private fun TopResultCard(
     result: UnifiedSearchResult,
     query: String,
-    isDark: Boolean,
-    textPrimary: Color,
-    textSecondary: Color,
-    surfaceColor: Color,
-    accentColor: Color,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val view = LocalView.current
-    var glowColor by remember { mutableStateOf(accentColor) }
+    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val defaultAccent = VikifyTheme.colors.accent
     
-    // Extract dominant color from artwork
+    var glowColor by remember { mutableStateOf(defaultAccent) }
+    
+    // Extract dominant color
     LaunchedEffect(result.imageUrl) {
-        if (result.imageUrl != null) {
-            withContext(Dispatchers.IO) {
-                try {
-                    val request = ImageRequest.Builder(context)
-                        .data(result.imageUrl)
-                        .allowHardware(false)
-                        .build()
-                    val imageResult = coil3.ImageLoader(context).execute(request)
-                    val bitmap = (imageResult.image as? coil3.BitmapImage)?.bitmap
-                    if (bitmap != null) {
-                        Palette.from(bitmap).generate { palette ->
-                            val vibrant = palette?.vibrantSwatch?.rgb
-                            val dominant = palette?.dominantSwatch?.rgb
-                            glowColor = Color(vibrant ?: dominant ?: accentColor.toArgb())
-                        }
-                    }
-                } catch (e: Exception) { /* Keep default */ }
+        result.imageUrl?.let { url ->
+            scope.launch {
+                extractDominantColor(context, url)?.let { color ->
+                    glowColor = color
+                }
             }
         }
     }
     
+    val isArtist = result is UnifiedSearchResult.Artist
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -871,16 +1219,12 @@ private fun SpotlightTopResultCard(
             .background(
                 Brush.horizontalGradient(
                     colors = listOf(
-                        glowColor.copy(alpha = if (isDark) 0.25f else 0.15f),
-                        surfaceColor
+                        glowColor.copy(alpha = 0.2f),
+                        VikifyTheme.colors.surface
                     )
                 )
             )
-            .border(
-                width = 1.dp,
-                color = glowColor.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(20.dp)
-            )
+            .border(1.dp, glowColor.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
             .padding(16.dp)
     ) {
@@ -888,8 +1232,7 @@ private fun SpotlightTopResultCard(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Large Artwork - Circle for Artists, Square for Songs
-            val isArtist = result.type == "artist"
+            // Artwork
             AsyncImage(
                 model = result.imageUrl,
                 contentDescription = null,
@@ -901,7 +1244,6 @@ private fun SpotlightTopResultCard(
             
             Spacer(Modifier.width(16.dp))
             
-            // Info
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "TOP RESULT",
@@ -910,19 +1252,20 @@ private fun SpotlightTopResultCard(
                     color = glowColor,
                     letterSpacing = 1.sp
                 )
+                
                 Spacer(Modifier.height(4.dp))
-                // Highlighted title
+                
                 Text(
                     text = buildHighlightedText(result.headline, query, glowColor),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = textPrimary,
+                    color = VikifyTheme.colors.textPrimary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                
                 Spacer(Modifier.height(4.dp))
                 
-                // Subheadline + Type Badge Row
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -930,43 +1273,34 @@ private fun SpotlightTopResultCard(
                     Text(
                         text = result.subheadline,
                         fontSize = 14.sp,
-                        color = textSecondary,
+                        color = VikifyTheme.colors.textSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     
-                    // Type Badge (Artist, Song, Playlist)
+                    // Type badge
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
-                            .background(
-                                if (isDark) Color.White.copy(alpha = 0.1f) 
-                                else Color.Black.copy(alpha = 0.08f)
-                            )
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .background(VikifyTheme.colors.surface)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = when (result.type) {
-                                "artist" -> "ARTIST"
-                                "track", "song" -> "SONG"
-                                "playlist" -> "PLAYLIST"
-                                "album" -> "ALBUM"
-                                else -> result.type.uppercase()
-                            },
+                            text = result.type.uppercase(),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = textSecondary,
+                            color = VikifyTheme.colors.textSecondary,
                             letterSpacing = 0.5.sp
                         )
                     }
                 }
             }
             
-            // Floating Play FAB
+            // Play button
             FloatingActionButton(
                 onClick = {
-                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onClick()
                 },
                 containerColor = glowColor,
@@ -983,27 +1317,58 @@ private fun SpotlightTopResultCard(
     }
 }
 
-// ============================================================================
-// SEARCH RESULT ROW
-// ============================================================================
-
 @Composable
 private fun SearchResultRow(
     result: UnifiedSearchResult,
     query: String,
-    isDark: Boolean,
-    textPrimary: Color,
-    textSecondary: Color,
-    surfaceColor: Color,
+    index: Int,
     onClick: () -> Unit
 ) {
+    // Staggered entrance
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(index * 30L)
+        isVisible = true
+    }
+    
+    val alpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(200),
+        label = "rowAlpha"
+    )
+    
+    val offsetX by animateDpAsState(
+        targetValue = if (isVisible) 0.dp else 20.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "rowOffset"
+    )
+    
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isPressed) 
+            VikifyTheme.colors.surface.copy(alpha = 0.8f) 
+        else 
+            Color.Transparent,
+        label = "rowBg"
+    )
+    
+    val isArtist = result is UnifiedSearchResult.Artist
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(alpha)
+            .offset(x = offsetX)
             .clip(RoundedCornerShape(12.dp))
-            .background(surfaceColor)
-            .clickable(onClick = onClick)
+            .background(backgroundColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .padding(12.dp)
     ) {
         // Artwork
@@ -1012,74 +1377,168 @@ private fun SearchResultRow(
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(56.dp)
-                .clip(if (result.isCircular) CircleShape else RoundedCornerShape(8.dp))
+                .size(52.dp)
+                .clip(if (isArtist) CircleShape else RoundedCornerShape(8.dp))
         )
         
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(14.dp))
         
-        // Info
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = buildHighlightedText(result.headline, query, if (isDark) DarkColors.Accent else LightColors.Accent),
+                text = buildHighlightedText(result.headline, query, VikifyTheme.colors.accent),
                 fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = textPrimary,
+                fontWeight = FontWeight.Medium,
+                color = VikifyTheme.colors.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = result.subheadline,
-                fontSize = 14.sp,
-                color = textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            
+            Spacer(Modifier.height(2.dp))
+            
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Type indicator icon
+                val typeIcon = when (result) {
+                    is UnifiedSearchResult.Song -> Icons.Rounded.MusicNote
+                    is UnifiedSearchResult.Artist -> Icons.Rounded.Person
+                    is UnifiedSearchResult.Album -> Icons.Rounded.Album
+                    is UnifiedSearchResult.Playlist -> Icons.AutoMirrored.Rounded.QueueMusic
+                    is UnifiedSearchResult.Video -> Icons.Rounded.PlayArrow
+                }
+                
+                Icon(
+                    imageVector = typeIcon,
+                    contentDescription = null,
+                    tint = VikifyTheme.colors.textSecondary,
+                    modifier = Modifier.size(14.dp)
+                )
+                
+                Text(
+                    text = result.subheadline,
+                    fontSize = 14.sp,
+                    color = VikifyTheme.colors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         
-        // More button
         Icon(
             Icons.Rounded.MoreVert,
-            contentDescription = "More",
-            tint = textSecondary,
+            contentDescription = "More options",
+            tint = VikifyTheme.colors.textSecondary,
             modifier = Modifier.size(20.dp)
         )
     }
 }
 
-// ============================================================================
-// EMPTY SEARCH STATE
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOADING & EMPTY STATES
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun EmptySearchState(
-    query: String,
-    isDark: Boolean,
-    textPrimary: Color,
-    textSecondary: Color,
-    accentColor: Color
-) {
+private fun SearchLoadingSkeleton() {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmerAlpha"
+    )
+
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 60.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .fillMaxSize()
+            .padding(16.dp)
     ) {
-        // Lost astronaut illustration (placeholder icon)
+        // Top result skeleton
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(VikifyTheme.colors.surface.copy(alpha = shimmerAlpha))
+        )
+        
+        Spacer(Modifier.height(24.dp))
+        
+        // Row skeletons
+        repeat(6) {
+            Row(
+                modifier = Modifier.padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(VikifyTheme.colors.surface.copy(alpha = shimmerAlpha))
+                )
+                
+                Spacer(Modifier.width(14.dp))
+                
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .width(180.dp)
+                            .height(16.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(VikifyTheme.colors.surface.copy(alpha = shimmerAlpha))
+                    )
+                    
+                    Spacer(Modifier.height(6.dp))
+                    
+                    Box(
+                        modifier = Modifier
+                            .width(120.dp)
+                            .height(14.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(VikifyTheme.colors.surface.copy(alpha = shimmerAlpha))
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptySearchState(query: String) {
+    val infiniteTransition = rememberInfiniteTransition(label = "emptyIcon")
+    val iconScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "iconScale"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
         Box(
             modifier = Modifier
                 .size(120.dp)
-                .background(
-                    if (isDark) DarkColors.SurfaceVariant else LightColors.SurfaceVariant,
-                    CircleShape
-                ),
+                .scale(iconScale)
+                .clip(CircleShape)
+                .background(VikifyTheme.colors.surface),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Rounded.SearchOff,
                 contentDescription = null,
-                tint = textSecondary,
-                modifier = Modifier.size(60.dp)
+                tint = VikifyTheme.colors.textSecondary,
+                modifier = Modifier.size(56.dp)
             )
         }
         
@@ -1089,48 +1548,72 @@ private fun EmptySearchState(
             text = "No results for \"$query\"",
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
-            color = textPrimary
+            color = VikifyTheme.colors.textPrimary,
+            textAlign = TextAlign.Center
         )
         
         Spacer(Modifier.height(8.dp))
         
         Text(
-            text = "Check the spelling or try a different search",
+            text = "Check the spelling or try different keywords",
             fontSize = 14.sp,
-            color = textSecondary
+            color = VikifyTheme.colors.textSecondary,
+            textAlign = TextAlign.Center
         )
         
         Spacer(Modifier.height(24.dp))
         
-        // Suggestion button
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(24.dp))
-                .background(accentColor)
-                .clickable { /* Try suggestion */ }
-                .padding(horizontal = 20.dp, vertical = 12.dp)
+        // Suggestion chips
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = "Try \"The Weeknd\"",
-                color = Color.White,
-                fontWeight = FontWeight.Medium
-            )
+            items(listOf("The Weeknd", "Taylor Swift", "Drake")) { suggestion ->
+                SuggestionChip(
+                    suggestion = suggestion,
+                    onClick = { /* Apply suggestion */ }
+                )
+            }
         }
     }
 }
 
-// ============================================================================
-// HELPER: Highlight matching text
-// ============================================================================
+@Composable
+private fun SuggestionChip(
+    suggestion: String,
+    onClick: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(VikifyTheme.colors.accent)
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            }
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = "Try \"$suggestion\"",
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UTILITY FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
 private fun buildHighlightedText(
     text: String,
     query: String,
     highlightColor: Color
-) = buildAnnotatedString {
-    // ✅ CRITICAL FIX: Guard against empty query to prevent infinite loop
-    // String.indexOf("") always returns startIndex, causing while(true) to never end
+): AnnotatedString = buildAnnotatedString {
+    // Guard against empty query
     if (query.isBlank()) {
         append(text)
         return@buildAnnotatedString
@@ -1140,55 +1623,47 @@ private fun buildHighlightedText(
     val lowerQuery = query.lowercase()
     var startIndex = 0
     
-    while (true) {
-        val index = lowerText.indexOf(lowerQuery, startIndex)
-        if (index < 0) {
+    while (startIndex < text.length) {
+        val matchIndex = lowerText.indexOf(lowerQuery, startIndex)
+        
+        if (matchIndex < 0) {
             append(text.substring(startIndex))
             break
         }
         
-        // Append text before match
-        append(text.substring(startIndex, index))
-        
-        // Append highlighted match
-        withStyle(SpanStyle(color = highlightColor, fontWeight = FontWeight.Bold)) {
-            append(text.substring(index, index + query.length))
+        // Text before match
+        if (matchIndex > startIndex) {
+            append(text.substring(startIndex, matchIndex))
         }
         
-        startIndex = index + query.length
+        // Highlighted match
+        withStyle(SpanStyle(color = highlightColor, fontWeight = FontWeight.Bold)) {
+            append(text.substring(matchIndex, matchIndex + query.length))
+        }
+        
+        startIndex = matchIndex + query.length
     }
 }
 
-// ============================================================================
-// RESULT CLICK HANDLER
-// ============================================================================
-
-private fun handleResultClick(
-    result: UnifiedSearchResult,
-    onTrackClick: (Track) -> Unit,
-    onAlbumClick: (AlbumItem) -> Unit,
-    onArtistClick: (Artist) -> Unit,
-    onPlaylistClick: (String, com.vikify.app.spotify.SpotifyPlaylist?) -> Unit
-) {
-    when (result) {
-        is UnifiedSearchResult.Song -> {
-            result.originalItem?.let { songItem ->
-                onTrackClick(Track(
-                    id = songItem.id,
-                    title = songItem.title,
-                    artist = songItem.artists.firstOrNull()?.name ?: "Unknown",
-                    remoteArtworkUrl = songItem.thumbnail
-                ))
-            }
+private suspend fun extractDominantColor(
+    context: android.content.Context,
+    imageUrl: String
+): Color? = withContext(Dispatchers.IO) {
+    try {
+        val request = ImageRequest.Builder(context)
+            .data(imageUrl)
+            .allowHardware(false)
+            .build()
+        val result = ImageLoader(context).execute(request)
+        val bitmap = (result.image as? BitmapImage)?.bitmap ?: return@withContext null
+        
+        Palette.from(bitmap).generate()?.let { palette ->
+            val rgb = palette.vibrantSwatch?.rgb
+                ?: palette.dominantSwatch?.rgb
+                ?: return@let null
+            Color(rgb)
         }
-        is UnifiedSearchResult.Album -> {
-            result.originalItem?.let { onAlbumClick(it) }
-        }
-        is UnifiedSearchResult.Artist -> {
-            onArtistClick(Artist(id = result.id, name = result.headline, remoteArtworkUrl = result.imageUrl))
-        }
-        is UnifiedSearchResult.Playlist -> {
-            onPlaylistClick(result.id, result.spotifyPlaylist)
-        }
+    } catch (e: Exception) {
+        null
     }
 }

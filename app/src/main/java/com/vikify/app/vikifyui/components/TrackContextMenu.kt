@@ -9,6 +9,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -116,7 +117,7 @@ fun TrackContextMenu(
                 }
             }
             
-            Divider(
+            HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                 color = Color.LightGray.copy(alpha = 0.5f)
             )
@@ -154,7 +155,7 @@ fun TrackContextMenu(
             )
             
             ContextMenuItem(
-                icon = Icons.Rounded.PlaylistAdd,
+                icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
                 label = "Add to Playlist",
                 onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
@@ -192,7 +193,7 @@ fun TrackContextMenu(
             
             // Optional navigation items
             if (onGoToArtist != null) {
-                Divider(
+                HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                     color = Color.LightGray.copy(alpha = 0.5f)
                 )
