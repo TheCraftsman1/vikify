@@ -1,0 +1,18 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Vikify Local Properties - EXAMPLE FILE
+# ═══════════════════════════════════════════════════════════════════════════════
+# Copy this file to 'local.properties' and fill in your own values.
+# NEVER commit the real local.properties file to version control!
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Android SDK path (required)
+sdk.dir=C:/Users/YOUR_USERNAME/AppData/Local/Android/Sdk
+
+# Google API Key for PoToken (required for playback)
+# Get from: https://console.cloud.google.com/apis/credentials
+GOOGLE_API_KEY=your_google_api_key_here
+
+# Spotify API Credentials (required for Spotify integration)
+# Get from: https://developer.spotify.com/dashboard
+SPOTIFY_CLIENT_ID=your_spotify_client_id_here
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here

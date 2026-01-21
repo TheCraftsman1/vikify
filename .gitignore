@@ -1,0 +1,109 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Vikify Project Root .gitignore
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECRETS & CREDENTIALS - NEVER COMMIT THESE
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Local configuration (contains SDK paths and API keys)
+local.properties
+**/local.properties
+
+# Firebase/Google Services (contains API keys and OAuth client IDs)
+google-services.json
+**/google-services.json
+
+# Keystore files (signing keys)
+*.jks
+*.keystore
+keystore.properties
+**/keystore.properties
+
+# Environment files
+.env
+.env.*
+*.env
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GRADLE & BUILD
+# ─────────────────────────────────────────────────────────────────────────────
+
+.gradle/
+**/build/
+!**/src/**/build/
+
+# Gradle wrapper (optional - some prefer to commit this)
+# gradle/wrapper/gradle-wrapper.jar
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IDE & EDITOR
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+.navigation/
+captures/
+
+# Visual Studio Code
+.vscode/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OS ARTIFACTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BUILD OUTPUTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+*.apk
+*.aab
+*.aar
+*.dex
+*.class
+
+# Native library outputs
+*.so
+!ffmpeg/**/*.so
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOGS & CRASH REPORTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+*.log
+crash-*.txt
+hs_err_pid*
+fabric.properties
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MISC
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Local test files
+/test-output/
+/lint-output/
+
+# Proguard
+proguard/
+
+# Video files (too large for git)
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Python cache
+__pycache__/
+*.py[cod]
