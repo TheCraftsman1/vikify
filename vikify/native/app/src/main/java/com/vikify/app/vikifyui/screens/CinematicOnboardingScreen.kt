@@ -1296,113 +1296,130 @@ private fun LanguageSetupStep(
         label = "alpha"
     )
     
-    Column(
+    val contentOffset by animateFloatAsState(
+        targetValue = if (visible) 0f else 40f,
+        animationSpec = tween(600, easing = FastOutSlowInEasing),
+        label = "offset"
+    )
+    
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 24.dp)
-            .graphicsLayer { alpha = contentAlpha },
-        horizontalAlignment = Alignment.CenterHorizontally
+            .graphicsLayer {
+                alpha = contentAlpha
+                translationY = contentOffset
+            }
     ) {
-        Spacer(Modifier.height(60.dp))
-        
-        // Title with music note emoji
-        Text(
-            text = "🎵",
-            fontSize = 48.sp,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-        
-        Text(
-            text = "What languages do you\nlisten to?",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = AppColors.TextPrimary,
-            textAlign = TextAlign.Center,
-            lineHeight = 36.sp
-        )
-        
-        Spacer(Modifier.height(8.dp))
-        
-        Text(
-            text = "We'll personalize your feed",
-            fontSize = 16.sp,
-            color = AppColors.TextSecondary,
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(Modifier.height(32.dp))
-        
-        // Language grid
-        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.weight(1f)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            androidx.compose.foundation.lazy.grid.items(
-                items = languages,
-                key = { it.name }
-            ) { language ->
-                val isSelected = language in selectedLanguages
-                
-                OnboardingLanguageCard(
-                    language = language,
-                    isSelected = isSelected,
-                    onClick = {
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        selectedLanguages = if (isSelected) {
-                            selectedLanguages - language
-                        } else {
-                            selectedLanguages + language
+            Spacer(Modifier.height(48.dp))
+            
+            // Title with music note emoji
+            Text(
+                text = "🎵",
+                fontSize = 48.sp,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            
+            Text(
+                text = "What languages do you\nlisten to?",
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                color = AppColors.TextPrimary,
+                textAlign = TextAlign.Center,
+                lineHeight = 34.sp
+            )
+            
+            Spacer(Modifier.height(6.dp))
+            
+            Text(
+                text = "We'll personalize your feed",
+                fontSize = 15.sp,
+                color = AppColors.TextSecondary,
+                textAlign = TextAlign.Center
+            )
+            
+            Spacer(Modifier.height(24.dp))
+            
+            // Language grid with proper sizing
+            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 16.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                androidx.compose.foundation.lazy.grid.items(
+                    items = languages,
+                    key = { it.name }
+                ) { language ->
+                    val isSelected = language in selectedLanguages
+                    
+                    OnboardingLanguageCard(
+                        language = language,
+                        isSelected = isSelected,
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            selectedLanguages = if (isSelected) {
+                                selectedLanguages - language
+                            } else {
+                                selectedLanguages + language
+                            }
                         }
-                    }
+                    )
+                }
+            }
+            
+            // Bottom section with buttons
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                // Save and continue button
+                PrimaryButton(
+                    text = if (selectedLanguages.isEmpty()) "Continue" else "Continue (${selectedLanguages.size} selected)",
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                        // Save language preferences
+                        scope.launch {
+                            MusicPreferences.getInstance(context).setMusicLanguages(selectedLanguages.toList())
+                        }
+                        onContinue()
+                    },
+                    modifier = Modifier.fillMaxWidth(0.85f)
                 )
+                
+                Spacer(Modifier.height(12.dp))
+                
+                // Skip option
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onSkip() }
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Skip for now",
+                        color = AppColors.TextMuted,
+                        fontSize = 15.sp
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
+                        tint = AppColors.TextMuted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
-        
-        Spacer(Modifier.height(24.dp))
-        
-        // Save and continue button
-        PrimaryButton(
-            text = if (selectedLanguages.isEmpty()) "Continue" else "Continue (${selectedLanguages.size} selected)",
-            onClick = {
-                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                // Save language preferences
-                scope.launch {
-                    MusicPreferences.getInstance(context).setMusicLanguages(selectedLanguages.toList())
-                }
-                onContinue()
-            },
-            modifier = Modifier.fillMaxWidth(0.8f)
-        )
-        
-        Spacer(Modifier.height(16.dp))
-        
-        // Skip option
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { onSkip() }
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Skip for now",
-                color = AppColors.TextMuted,
-                fontSize = 15.sp
-            )
-            Spacer(Modifier.width(4.dp))
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                contentDescription = null,
-                tint = AppColors.TextMuted,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        
-        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -1413,40 +1430,36 @@ private fun OnboardingLanguageCard(
     onClick: () -> Unit
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (isSelected) 1.02f else 1f,
+        targetValue = if (isSelected) 1.03f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "scale"
     )
     
-    val glowAlpha by animateFloatAsState(
-        targetValue = if (isSelected) 0.4f else 0f,
-        animationSpec = tween(200),
-        label = "glow"
-    )
-    
     Box(
         modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1.4f)  // Proper card aspect ratio
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
             .background(
                 if (isSelected) {
                     Brush.linearGradient(
                         colors = listOf(
-                            AppColors.Cyan.copy(alpha = 0.15f),
-                            AppColors.Purple.copy(alpha = 0.1f)
+                            AppColors.Cyan.copy(alpha = 0.2f),
+                            AppColors.Purple.copy(alpha = 0.15f)
                         )
                     )
                 } else {
                     Brush.linearGradient(
                         colors = listOf(
                             AppColors.CardSurface,
-                            AppColors.CardSurface
+                            AppColors.CardSurfaceLight
                         )
                     )
                 }
             )
             .border(
-                width = if (isSelected) 1.5.dp else 0.5.dp,
+                width = if (isSelected) 2.dp else 1.dp,
                 brush = if (isSelected) {
                     Brush.linearGradient(
                         colors = listOf(AppColors.Cyan, AppColors.Purple)
@@ -1454,15 +1467,15 @@ private fun OnboardingLanguageCard(
                 } else {
                     Brush.linearGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.1f),
-                            Color.White.copy(alpha = 0.05f)
+                            Color.White.copy(alpha = 0.08f),
+                            Color.White.copy(alpha = 0.04f)
                         )
                     )
                 },
                 shape = RoundedCornerShape(16.dp)
             )
             .clickable { onClick() }
-            .padding(16.dp),
+            .padding(12.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -1471,7 +1484,7 @@ private fun OnboardingLanguageCard(
         ) {
             Text(
                 text = language.emoji,
-                fontSize = 28.sp
+                fontSize = 32.sp
             )
             Spacer(Modifier.height(8.dp))
             Text(
@@ -1479,8 +1492,32 @@ private fun OnboardingLanguageCard(
                 fontSize = 14.sp,
                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                 color = if (isSelected) AppColors.Cyan else AppColors.TextPrimary,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                maxLines = 1
             )
+        }
+        
+        // Selection checkmark
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(AppColors.Cyan, AppColors.Purple)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
         }
     }
 }
