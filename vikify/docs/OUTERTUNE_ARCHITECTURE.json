@@ -1,0 +1,488 @@
+{
+  "projectName": "OuterTune",
+  "description": "Technical architecture breakdown for implementing similar features in Vikify",
+  "analyzedDate": "2025-12-17",
+  
+  "dataLayer": {
+    "innertubeModule": {
+      "location": "native/innertube/src/main/java/com/zionhuang/innertube",
+      "description": "Custom YouTube Music API wrapper",
+      "coreClasses": {
+        "InnerTube": {
+          "file": "InnerTube.kt",
+          "purpose": "Low-level HTTP client for YouTube API",
+          "keyProperties": [
+            "locale",
+            "visitorData",
+            "dataSyncId",
+            "cookie",
+            "proxy"
+          ],
+          "endpoints": [
+            "search",
+            "player",
+            "browse",
+            "next",
+            "registerPlayback"
+          ]
+        },
+        "YouTube": {
+          "file": "YouTube.kt",
+          "purpose": "High-level API wrapper with parsed responses",
+          "keyMethods": [
+            "searchSuggestions",
+            "search",
+            "album",
+            "artist",
+            "playlist",
+            "player",
+            "home",
+            "likeVideo",
+            "likePlaylist"
+          ]
+        }
+      },
+      "authentication": {
+        "method": "Cookie-based with SAPISID hash",
+        "implementation": {
+          "cookieStorage": "Persisted cookie string",
+          "authHeader": "SAPISIDHASH with timestamp and SHA1 hash",
+          "formula": "sha1(timestamp + SAPISID + origin)"
+        }
+      },
+      "clientTypes": [
+        {
+          "name": "WEB_REMIX",
+          "use": "Primary client for metadata and premium formats"
+        },
+        {
+          "name": "ANDROID_VR_NO_AUTH",
+          "use": "Currently used as main client (working)"
+        },
+        {
+          "name": "IOS",
+          "use": "Fallback client for streams"
+        }
+      ]
+    }
+  },
+
+  "playbackEngine": {
+    "service": {
+      "file": "MusicService.kt",
+      "location": "app/src/main/java/com/dd3boh/outertune/playback",
+      "baseClass": "MediaLibraryService",
+      "interfaces": ["Player.Listener", "PlaybackStatsListener.Callback"],
+      "keyComponents": {
+        "player": {
+          "type": "ExoPlayer",
+          "configuration": {
+            "wakeMode": "WAKE_MODE_NETWORK",
+            "audioAttributes": {
+              "usage": "USAGE_MEDIA",
+              "contentType": "AUDIO_CONTENT_TYPE_MUSIC"
+            },
+            "seekIncrement": 5000
+          }
+        },
+        "mediaSession": "MediaLibrarySession",
+        "queueBoard": "QueueBoard"
+      }
+    },
+    "streamResolution": {
+      "file": "createDataSourceFactory()",
+      "logic": [
+        {
+          "step": 1,
+          "check": "Is local file?",
+          "action": "Return file URI directly"
+        },
+        {
+          "step": 2,
+          "check": "Is downloaded?",
+          "action": "Return download cache path"
+        },
+        {
+          "step": 3,
+          "check": "Is cached?",
+          "action": "Return from player cache"
+        },
+        {
+          "step": 4,
+          "check": "None of above",
+          "action": "Fetch stream URL from YouTube via YTPlayerUtils"
+        }
+      ],
+      "caching": {
+        "downloadCache": "SimpleCache for permanent downloads",
+        "playerCache": "SimpleCache for streaming cache",
+        "urlCache": "HashMap with expiry timestamps"
+      }
+    },
+    "audioProcessing": {
+      "normalization": {
+        "enabled": "AudioNormalizationKey preference",
+        "formula": "min(10^(-loudnessDb/20), 1.0)",
+        "source": "loudnessDb from FormatEntity"
+      },
+      "processors": [
+        {
+          "name": "SilenceSkippingAudioProcessor",
+          "purpose": "Skip silent sections"
+        },
+        {
+          "name": "SonicAudioProcessor",
+          "purpose": "Tempo and pitch adjustment"
+        }
+      ],
+      "equalizer": {
+        "method": "AudioEffect broadcast intents",
+        "actions": [
+          "ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION",
+          "ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION"
+        ]
+      }
+    }
+  },
+
+  "localMediaManagement": {
+    "scanner": {
+      "file": "LocalMediaScanner.kt",
+      "location": "app/src/main/java/com/dd3boh/outertune/utils/scanners",
+      "extractors": [
+        {
+          "name": "TagLibScanner",
+          "library": "TagLib (native)",
+          "file": "TagLibScanner.kt",
+          "capabilities": [
+            "Audio properties (duration, sampleRate, bitrate, codec)",
+            "ID3 tags",
+            "Multiple artist parsing",
+            "Multiple genre parsing"
+          ]
+        },
+        {
+          "name": "FFmpegScanner",
+          "library": "FFmpeg via nextlib",
+          "module": "ffMetadataEx",
+          "capabilities": [
+            "Advanced codec support",
+            "Wider format compatibility",
+            "ReplayGain extraction"
+          ]
+        }
+      ],
+      "bypassesMediaStore": true,
+      "reason": "MediaStore has limited tag support and doesn't handle multiple artists/genres"
+    },
+    "unifiedDatabase": {
+      "approach": "Single SongEntity table with isLocal flag",
+      "idGeneration": {
+        "remote": "YouTube videoId",
+        "local": "LS + 8 random alphanumeric chars"
+      }
+    }
+  },
+
+  "database": {
+    "type": "Room",
+    "file": "MusicDatabase.kt",
+    "version": 20,
+    "entities": [
+      {
+        "name": "SongEntity",
+        "table": "song",
+        "keyFields": {
+          "id": "Primary key (YT videoId or local ID)",
+          "title": "Song title",
+          "duration": "Duration in seconds",
+          "thumbnailUrl": "Cover art URL",
+          "isLocal": "Boolean flag for local vs remote",
+          "localPath": "File path for local songs",
+          "dateDownload": "Download timestamp (null = not downloaded)",
+          "liked": "Liked status",
+          "inLibrary": "Library membership timestamp",
+          "trackNumber": "Track number from tags",
+          "discNumber": "Disc number from tags",
+          "albumId": "Foreign key to album",
+          "year": "Release year",
+          "date": "Full release date",
+          "dateModified": "File modification date"
+        }
+      },
+      {
+        "name": "FormatEntity",
+        "table": "format",
+        "purpose": "Cache stream format info",
+        "keyFields": {
+          "id": "Song ID",
+          "itag": "YouTube format itag",
+          "mimeType": "Audio MIME type",
+          "codecs": "Codec string",
+          "bitrate": "Audio bitrate",
+          "sampleRate": "Sample rate",
+          "contentLength": "File size",
+          "loudnessDb": "Loudness for normalization"
+        }
+      },
+      {
+        "name": "PlaylistEntity",
+        "table": "playlist",
+        "keyFields": {
+          "id": "Local playlist ID",
+          "name": "Playlist name",
+          "browseId": "YouTube playlist ID (if synced)",
+          "isLocal": "Local vs remote flag",
+          "bookmarkedAt": "Bookmark timestamp"
+        },
+        "specialPlaylists": [
+          "LP_LIKED",
+          "LP_DOWNLOADED"
+        ]
+      },
+      {
+        "name": "QueueEntity",
+        "table": "queue",
+        "purpose": "Persistent queue state",
+        "keyFields": {
+          "id": "Queue ID",
+          "title": "Queue name",
+          "shuffled": "Shuffle state",
+          "queuePos": "Current position",
+          "playlistId": "Associated playlist"
+        }
+      },
+      {
+        "name": "LyricsEntity",
+        "table": "lyrics",
+        "purpose": "Cache fetched lyrics"
+      }
+    ],
+    "relationshipMaps": [
+      "SongArtistMap",
+      "SongAlbumMap",
+      "AlbumArtistMap",
+      "PlaylistSongMap",
+      "QueueSongMap",
+      "SongGenreMap",
+      "RelatedSongMap"
+    ]
+  },
+
+  "lyrics": {
+    "helper": {
+      "file": "LyricsHelper.kt",
+      "location": "app/src/main/java/com/dd3boh/outertune/lyrics"
+    },
+    "providers": [
+      {
+        "name": "YouTubeSubtitleLyricsProvider",
+        "source": "YouTube captions/subtitles"
+      },
+      {
+        "name": "LrcLibLyricsProvider",
+        "source": "LrcLib.net API",
+        "endpoint": "https://lrclib.net/api/search"
+      },
+      {
+        "name": "KuGouLyricsProvider",
+        "source": "KuGou music service"
+      },
+      {
+        "name": "YouTubeLyricsProvider",
+        "source": "YouTube Music lyrics"
+      },
+      {
+        "name": "LocalLyricsProvider",
+        "source": "Local .lrc files alongside audio"
+      }
+    ],
+    "resolution": {
+      "priority": [
+        "Cache (LRU)",
+        "Database",
+        "Local .lrc file (if prefLocalLyrics)",
+        "Remote providers"
+      ]
+    },
+    "parsing": {
+      "formats": ["LRC", "TTML", "SRT"],
+      "library": "SemanticLyrics from Gramophone",
+      "timestampFormat": "[mm:ss.xx]"
+    }
+  },
+
+  "multipleQueues": {
+    "manager": {
+      "file": "QueueBoard.kt",
+      "location": "app/src/main/java/com/dd3boh/outertune/playback"
+    },
+    "features": {
+      "maxQueues": "Configurable (default 19)",
+      "persistence": "Saved to database on shutdown",
+      "extensionQueues": "Queues with '+' suffix for user additions",
+      "shuffleState": "Per-queue shuffle tracking"
+    },
+    "operations": [
+      "addQueue",
+      "setCurrQueue",
+      "bubbleUp (reorder)",
+      "shuffleCurrent",
+      "unShuffleCurrent",
+      "enqueueEnd"
+    ],
+    "queueTypes": [
+      {
+        "name": "ListQueue",
+        "purpose": "Static list of songs"
+      },
+      {
+        "name": "YouTubeQueue",
+        "purpose": "Dynamic queue with continuation support"
+      },
+      {
+        "name": "YouTubeAlbumRadio",
+        "purpose": "Album-based radio queue"
+      }
+    ]
+  },
+
+  "uiArchitecture": {
+    "framework": "Jetpack Compose",
+    "materialVersion": 3,
+    "keyScreens": {
+      "player": {
+        "file": "Player.kt",
+        "location": "app/src/main/java/com/dd3boh/outertune/ui/player",
+        "components": [
+          "BottomSheetPlayer",
+          "Thumbnail",
+          "Controls",
+          "Slider",
+          "LyricsView"
+        ]
+      },
+      "miniPlayer": {
+        "file": "MiniPlayer.kt"
+      },
+      "queue": {
+        "file": "Queue.kt"
+      }
+    },
+    "stateManagement": {
+      "type": "StateFlow + collectAsState",
+      "bridge": "PlayerConnection class"
+    }
+  },
+
+  "glueClasses": {
+    "PlayerConnection": {
+      "file": "PlayerConnection.kt",
+      "purpose": "Bridge between UI and MusicService",
+      "exposedFlows": [
+        "playbackState",
+        "isPlaying",
+        "mediaMetadata",
+        "currentSong",
+        "currentLyrics",
+        "queueWindows",
+        "shuffleModeEnabled",
+        "repeatMode"
+      ],
+      "delegatedMethods": [
+        "playQueue",
+        "enqueueNext",
+        "enqueueEnd",
+        "toggleLike",
+        "toggleLibrary"
+      ]
+    },
+    "YTPlayerUtils": {
+      "file": "YTPlayerUtils.kt",
+      "purpose": "Stream URL resolution with fallback clients",
+      "features": [
+        "Signature timestamp generation",
+        "PoToken generation for bot detection bypass",
+        "Multi-client fallback",
+        "Stream validation"
+      ],
+      "returnType": {
+        "name": "PlaybackData",
+        "fields": [
+          "audioConfig",
+          "videoDetails",
+          "playbackTracking",
+          "format",
+          "streamUrl",
+          "streamExpiresInSeconds"
+        ]
+      }
+    },
+    "MediaMetadata": {
+      "file": "MediaMetadata.kt",
+      "purpose": "Unified song representation for UI",
+      "keyFields": [
+        "id",
+        "title",
+        "artists",
+        "duration",
+        "thumbnailUrl",
+        "album",
+        "isLocal",
+        "localPath",
+        "liked"
+      ]
+    }
+  },
+
+  "architectureDiagram": {
+    "layers": [
+      {
+        "name": "UI Layer",
+        "components": ["Jetpack Compose screens", "PlayerConnection"]
+      },
+      {
+        "name": "Service Layer",
+        "components": ["MusicService", "ExoPlayer", "QueueBoard", "LyricsHelper"]
+      },
+      {
+        "name": "Data Resolution",
+        "components": ["YTPlayerUtils", "LocalMediaScanner"]
+      },
+      {
+        "name": "API Layer",
+        "components": ["InnerTube", "YouTube object"]
+      },
+      {
+        "name": "Persistence",
+        "components": ["Room Database", "SimpleCache"]
+      }
+    ]
+  },
+
+  "keyTechnologies": {
+    "android": {
+      "minSdk": 24,
+      "targetSdk": 34
+    },
+    "mediaPlayback": "Media3 (ExoPlayer)",
+    "ui": "Jetpack Compose + Material 3",
+    "database": "Room",
+    "networking": "Ktor + OkHttp",
+    "serialization": "Kotlinx Serialization",
+    "dependencyInjection": "Hilt",
+    "tagReading": ["TagLib (native)", "FFmpeg (optional)"],
+    "imageLoading": "Coil 3"
+  },
+
+  "implementationNotes": {
+    "forVikify": [
+      "InnerTube module is self-contained and can be extracted",
+      "Cookie-based auth requires WebView for initial login",
+      "Stream URLs expire - cache timestamps for refresh",
+      "Local scanner needs native library (TagLib AAR)",
+      "Multiple queue system requires careful state management",
+      "Lyrics providers have rate limits - implement caching"
+    ]
+  }
+}
