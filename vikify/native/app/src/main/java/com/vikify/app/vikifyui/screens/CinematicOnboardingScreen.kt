@@ -99,10 +99,9 @@ private enum class OnboardingStep {
     WELCOME,
     FEATURES,
     SIGN_IN,
-    NAME_SETUP,         // Added: Set up your name after sign-in
+    NAME_SETUP,         // Set up your name after sign-in
     SPOTIFY_CONNECT,
-    LANGUAGE_SETUP,     // Added: Language preferences before full music prefs
-    MUSIC_PREFERENCES,
+    LANGUAGE_SETUP,     // Language preferences (final step)
     READY
 }
 
@@ -244,11 +243,8 @@ fun CinematicOnboardingScreen(
                     onSkip = { goToStep(OnboardingStep.LANGUAGE_SETUP) }  // Skip to language setup
                 )
                 OnboardingStep.LANGUAGE_SETUP -> LanguageSetupStep(
-                    onContinue = { goToStep(OnboardingStep.MUSIC_PREFERENCES) },
-                    onSkip = { goToStep(OnboardingStep.MUSIC_PREFERENCES) }
-                )
-                OnboardingStep.MUSIC_PREFERENCES -> MusicPreferenceScreen(
-                    onComplete = { finishOnboarding() }
+                    onContinue = { finishOnboarding() },
+                    onSkip = { finishOnboarding() }
                 )
                 OnboardingStep.READY -> {
                     // Transition state
@@ -273,10 +269,9 @@ fun CinematicOnboardingScreen(
                     OnboardingStep.NAME_SETUP -> 2
                     OnboardingStep.SPOTIFY_CONNECT -> 3
                     OnboardingStep.LANGUAGE_SETUP -> 4
-                    OnboardingStep.MUSIC_PREFERENCES -> 5
                     else -> 0
                 },
-                totalSteps = 6
+                totalSteps = 5
             )
         }
     }

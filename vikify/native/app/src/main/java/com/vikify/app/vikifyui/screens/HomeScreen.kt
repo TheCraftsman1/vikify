@@ -154,6 +154,7 @@ fun HomeScreen(
     onGenreSearch: (String, String, Int) -> Unit = { _, _, _ -> },
     onAlbumClick: (String) -> Unit = {},
     onMoodAndGenresClick: () -> Unit = {},
+    onDJMixPlay: (List<String>) -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val playerConnection = LocalPlayerConnection.current
@@ -393,6 +394,10 @@ fun HomeScreen(
                                     onPlaylistClick = { id ->
                                         view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                                         onPlaylistClick(id, null)
+                                    },
+                                    onDJMixClick = { songIds ->
+                                        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                                        onDJMixPlay(songIds)
                                     }
                                 )
                             }
@@ -701,7 +706,8 @@ private fun FeedSectionRenderer(
     onQuickResumeClick: (QuickResumeItem) -> Unit,
     onGenreClick: (String, String, Int) -> Unit,
     onAlbumClick: (String) -> Unit,
-    onPlaylistClick: (String) -> Unit
+    onPlaylistClick: (String) -> Unit,
+    onDJMixClick: (List<String>) -> Unit = {}
 ) {
     when (section) {
         is FeedSection.QuickResumeGrid -> {
@@ -823,6 +829,13 @@ private fun FeedSectionRenderer(
                     )
                 }
             }
+        }
+        
+        is FeedSection.DJMixCard -> {
+            DJMixCardSection(
+                section = section,
+                onClick = { onDJMixClick(section.songIds) }
+            )
         }
     }
 }
@@ -1264,6 +1277,111 @@ private fun VerticalTrackListSection(
                 isPlaying = track.isPlaying,
                 onClick = { onTrackClick(track) }
             )
+        }
+    }
+}
+
+@Composable
+private fun DJMixCardSection(
+    section: FeedSection.DJMixCard,
+    onClick: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "djMixGradient")
+    val gradientOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "gradientShift"
+    )
+    
+    val gradientColors = section.gradientColors.map { Color(it) }
+    val animatedBrush = Brush.linearGradient(
+        colors = gradientColors,
+        start = Offset(gradientOffset * 200f, 0f),
+        end = Offset(gradientOffset * 200f + 400f, 400f)
+    )
+    
+    Spacer(Modifier.height(16.dp))
+    
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(animatedBrush)
+            .clickable(onClick = onClick)
+            .padding(20.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = section.title,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = section.subtitle,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.9f)
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = section.description,
+                    fontSize = 12.sp,
+                    color = Color.White.copy(alpha = 0.7f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${section.songCount} songs",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                    Text(
+                        text = "•",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.5f)
+                    )
+                    Text(
+                        text = section.duration,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                }
+            }
+            
+            // Play button
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_play),
+                    contentDescription = "Play mix",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
         }
     }
 }

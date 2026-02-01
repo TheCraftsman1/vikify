@@ -64,9 +64,11 @@ fun SleepTimerDialog(
     onSelectDuration: (SleepTimerDuration) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val colors = VikifyTheme.colors
+    
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFFF8F8F8),
+        containerColor = colors.background,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         dragHandle = {
             Box(
@@ -75,7 +77,7 @@ fun SleepTimerDialog(
                     .width(40.dp)
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(Color.LightGray)
+                    .background(colors.textSecondary.copy(alpha = 0.4f))
             )
         }
     ) {
@@ -94,7 +96,7 @@ fun SleepTimerDialog(
                 Icon(
                     Icons.Rounded.Bedtime,
                     contentDescription = null,
-                    tint = VikifyTheme.colors.textPrimary,
+                    tint = colors.accent,
                     modifier = Modifier.size(28.dp)
                 )
                 Spacer(Modifier.width(12.dp))
@@ -103,13 +105,13 @@ fun SleepTimerDialog(
                         "Sleep Timer",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = VikifyTheme.colors.textPrimary
+                        color = colors.textPrimary
                     )
                     if (currentState.isActive) {
                         Text(
                             "Stops in ${currentState.remainingFormatted}",
                             fontSize = 14.sp,
-                            color = Color(0xFF4CAF50)
+                            color = colors.accent
                         )
                     }
                 }
@@ -117,7 +119,7 @@ fun SleepTimerDialog(
             
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                color = Color.LightGray.copy(alpha = 0.5f)
+                color = colors.textSecondary.copy(alpha = 0.2f)
             )
             
             // Timer Options
@@ -132,14 +134,14 @@ fun SleepTimerDialog(
                                 onSelectDuration(duration)
                                 onDismiss()
                             }
-                            .background(if (isSelected) Color(0xFFE8F5E9) else Color.Transparent)
+                            .background(if (isSelected) colors.accent.copy(alpha = 0.15f) else Color.Transparent)
                             .padding(horizontal = 20.dp, vertical = 16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = duration.label,
                             fontSize = 16.sp,
-                            color = if (duration == SleepTimerDuration.OFF) Color(0xFFE57373) else VikifyTheme.colors.textPrimary,
+                            color = if (duration == SleepTimerDuration.OFF) Color(0xFFE57373) else colors.textPrimary,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                             modifier = Modifier.weight(1f)
                         )
@@ -148,7 +150,7 @@ fun SleepTimerDialog(
                             Icon(
                                 Icons.Rounded.CheckCircle,
                                 contentDescription = null,
-                                tint = Color(0xFF4CAF50),
+                                tint = colors.accent,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -170,11 +172,13 @@ fun SleepTimerIndicator(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = VikifyTheme.colors
+    
     if (state.isActive) {
         Row(
             modifier = modifier
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF4CAF50).copy(alpha = 0.15f))
+                .background(colors.accent.copy(alpha = 0.15f))
                 .clickable { onClick() }
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -182,14 +186,14 @@ fun SleepTimerIndicator(
             Icon(
                 Icons.Rounded.Bedtime,
                 contentDescription = "Sleep Timer",
-                tint = Color(0xFF4CAF50),
+                tint = colors.accent,
                 modifier = Modifier.size(16.dp)
             )
             Spacer(Modifier.width(4.dp))
             Text(
                 text = state.remainingFormatted,
                 fontSize = 12.sp,
-                color = Color(0xFF4CAF50),
+                color = colors.accent,
                 fontWeight = FontWeight.Medium
             )
         }

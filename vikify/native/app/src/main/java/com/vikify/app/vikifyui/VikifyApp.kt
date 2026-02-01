@@ -390,7 +390,8 @@ fun VikifyApp(
             isLoggedIn = currentUser != null,
             isSpotifyConnected = isSpotifyLoggedIn,
             onSpotifyLogin = {
-                context.startActivity(spotifyRepo.startLogin())
+                // Use SpotifyAuthManager with PKCE flow instead of SpotifyRepository
+                com.vikify.app.spotify.SpotifyAuthManager.startAuthFlow(context)
             },
             onOnboardingComplete = {
                 scope.launch {

@@ -35,7 +35,7 @@ class SpotifyRepository(
         private const val PREFS_NAME = "vikify_spotify"
         // PKCE flow: only client_id needed, no secret required
         val CLIENT_ID = BuildConfig.SPOTIFY_CLIENT_ID
-        private const val REDIRECT_URI = "vikify://spotify-callback"
+        private const val REDIRECT_URI = "vikify://spotify/callback"  // Must match SpotifyAuthManager
         private const val AUTH_URL = "https://accounts.spotify.com/authorize"
         private const val TOKEN_URL = "https://accounts.spotify.com/api/token"
         private const val API_BASE = "https://api.spotify.com/v1"

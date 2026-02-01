@@ -58,6 +58,21 @@ sealed class FeedSection {
         val title: String,
         val moods: List<com.zionhuang.innertube.pages.MoodAndGenres.Item>
     ) : FeedSection()
+    
+    /**
+     * AI DJ Mix Card - A personalized mix based on user's listening patterns
+     * Shows as a large gradient card with animated visuals
+     */
+    data class DJMixCard(
+        override val id: String,
+        val title: String,
+        val subtitle: String,
+        val description: String,
+        val gradientColors: List<Long>,
+        val songCount: Int,
+        val duration: String,
+        val songIds: List<String>
+    ) : FeedSection()
 }
 
 data class QuickResumeItem(

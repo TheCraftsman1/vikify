@@ -40,6 +40,7 @@ import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.AlbumItem
 import com.vikify.app.models.FeedSection
 import com.vikify.app.models.RailItem
+import com.vikify.app.models.RailItemType
 import com.vikify.app.models.QuickResumeItem
 import com.vikify.app.models.QuickResumeType
 
@@ -162,85 +163,108 @@ class HomeViewModel @Inject constructor(
     
     /**
      * Get language-specific search queries for discovering content
-     * Used for fetching high-quality content in selected languages
+     * Returns a map of language to list of search queries
+     * Each language gets its own dedicated row
      */
-    private fun getLanguageSearchQueries(): List<String> {
-        val queries = mutableListOf<String>()
+    private fun getLanguageSearchQueriesMap(): Map<com.vikify.app.vikifyui.data.MusicLanguage, List<String>> {
+        val result = mutableMapOf<com.vikify.app.vikifyui.data.MusicLanguage, List<String>>()
         val languages = selectedLanguages.value
         
         languages.forEach { lang ->
-            when (lang) {
-                com.vikify.app.vikifyui.data.MusicLanguage.ENGLISH -> {
-                    queries.addAll(listOf(
-                        "top hits 2025",
-                        "trending music",
-                        "popular songs",
-                        "new releases"
-                    ))
-                }
-                com.vikify.app.vikifyui.data.MusicLanguage.HINDI -> {
-                    queries.addAll(listOf(
-                        "bollywood hits 2025",
-                        "latest hindi songs",
-                        "arijit singh songs",
-                        "romantic hindi songs"
-                    ))
-                }
-                com.vikify.app.vikifyui.data.MusicLanguage.TELUGU -> {
-                    queries.addAll(listOf(
-                        "telugu hit songs 2025",
-                        "latest telugu songs",
-                        "tollywood hits",
-                        "telugu melody songs"
-                    ))
-                }
-                com.vikify.app.vikifyui.data.MusicLanguage.TAMIL -> {
-                    queries.addAll(listOf(
-                        "tamil hits 2025",
-                        "latest tamil songs",
-                        "anirudh songs",
-                        "kollywood hits"
-                    ))
-                }
-                com.vikify.app.vikifyui.data.MusicLanguage.PUNJABI -> {
-                    queries.addAll(listOf(
-                        "punjabi hits 2025",
-                        "latest punjabi songs",
-                        "ap dhillon songs",
-                        "punjabi party songs"
-                    ))
-                }
-                com.vikify.app.vikifyui.data.MusicLanguage.KOREAN -> {
-                    queries.addAll(listOf(
-                        "kpop hits 2025",
-                        "bts songs",
-                        "blackpink songs",
-                        "trending kpop"
-                    ))
-                }
-                com.vikify.app.vikifyui.data.MusicLanguage.SPANISH -> {
-                    queries.addAll(listOf(
-                        "spanish hits 2025",
-                        "reggaeton hits",
-                        "bad bunny songs",
-                        "latin music"
-                    ))
-                }
-                com.vikify.app.vikifyui.data.MusicLanguage.JAPANESE -> {
-                    queries.addAll(listOf(
-                        "jpop hits 2025",
-                        "anime songs",
-                        "japanese music",
-                        "yoasobi songs"
-                    ))
-                }
-                else -> {
-                    queries.add("${lang.displayName} music 2025")
-                }
+            val queries = when (lang) {
+                com.vikify.app.vikifyui.data.MusicLanguage.ENGLISH -> listOf(
+                    "global top 50 songs 2026",
+                    "billboard hot 100",
+                    "trending worldwide songs",
+                    "top hits 2026"
+                )
+                com.vikify.app.vikifyui.data.MusicLanguage.HINDI -> listOf(
+                    "bollywood hits 2026",
+                    "latest hindi songs",
+                    "arijit singh latest",
+                    "new hindi romantic songs"
+                )
+                com.vikify.app.vikifyui.data.MusicLanguage.TELUGU -> listOf(
+                    "telugu hit songs 2026",
+                    "latest telugu songs",
+                    "tollywood new songs",
+                    "telugu melody songs"
+                )
+                com.vikify.app.vikifyui.data.MusicLanguage.TAMIL -> listOf(
+                    "tamil hits 2026",
+                    "latest tamil songs",
+                    "anirudh latest songs",
+                    "kollywood new songs"
+                )
+                com.vikify.app.vikifyui.data.MusicLanguage.PUNJABI -> listOf(
+                    "punjabi hits 2026",
+                    "ap dhillon latest",
+                    "new punjabi songs",
+                    "punjabi party songs"
+                )
+                com.vikify.app.vikifyui.data.MusicLanguage.MALAYALAM -> listOf(
+                    "malayalam hit songs 2026",
+                    "latest malayalam songs",
+                    "mollywood new songs"
+                )
+                com.vikify.app.vikifyui.data.MusicLanguage.KANNADA -> listOf(
+                    "kannada hit songs 2026",
+                    "latest kannada songs",
+                    "sandalwood new songs"
+                )
+                com.vikify.app.vikifyui.data.MusicLanguage.KOREAN -> listOf(
+                    "kpop hits 2026",
+                    "bts latest",
+                    "blackpink songs",
+                    "trending kpop 2026"
+                )
+                com.vikify.app.vikifyui.data.MusicLanguage.SPANISH -> listOf(
+                    "spanish hits 2026",
+                    "reggaeton new songs",
+                    "bad bunny latest",
+                    "latin pop hits"
+                )
+                com.vikify.app.vikifyui.data.MusicLanguage.LATIN -> listOf(
+                    "latin hits 2026",
+                    "reggaeton 2026",
+                    "latin urbano"
+                )
+                com.vikify.app.vikifyui.data.MusicLanguage.ARABIC -> listOf(
+                    "arabic hits 2026",
+                    "latest arabic songs",
+                    "khaleeji songs"
+                )
+                com.vikify.app.vikifyui.data.MusicLanguage.JAPANESE -> listOf(
+                    "jpop hits 2026",
+                    "yoasobi latest",
+                    "anime openings 2026",
+                    "japanese trending music"
+                )
             }
+            result[lang] = queries
         }
         
-        return queries.shuffled().take(4)  // Return 4 random queries
+        return result
+    }
+    
+    /**
+     * Get the display title for a language section
+     */
+    private fun getLanguageSectionTitle(lang: com.vikify.app.vikifyui.data.MusicLanguage): String {
+        return when (lang) {
+            com.vikify.app.vikifyui.data.MusicLanguage.ENGLISH -> "🌍 Global Top Charts"
+            com.vikify.app.vikifyui.data.MusicLanguage.HINDI -> "🇮🇳 Bollywood Hits"
+            com.vikify.app.vikifyui.data.MusicLanguage.TELUGU -> "🎬 Telugu Hits"
+            com.vikify.app.vikifyui.data.MusicLanguage.TAMIL -> "🎬 Tamil Hits"
+            com.vikify.app.vikifyui.data.MusicLanguage.PUNJABI -> "🎤 Punjabi Hits"
+            com.vikify.app.vikifyui.data.MusicLanguage.MALAYALAM -> "🎬 Malayalam Hits"
+            com.vikify.app.vikifyui.data.MusicLanguage.KANNADA -> "🎬 Kannada Hits"
+            com.vikify.app.vikifyui.data.MusicLanguage.KOREAN -> "🇰🇷 K-Pop Hits"
+            com.vikify.app.vikifyui.data.MusicLanguage.SPANISH -> "🇪🇸 Spanish Hits"
+            com.vikify.app.vikifyui.data.MusicLanguage.LATIN -> "🌎 Latin Hits"
+            com.vikify.app.vikifyui.data.MusicLanguage.ARABIC -> "🇸🇦 Arabic Hits"
+            com.vikify.app.vikifyui.data.MusicLanguage.JAPANESE -> "🇯🇵 J-Pop Hits"
+        }
     }
 
     private suspend fun load() {
@@ -387,6 +411,87 @@ class HomeViewModel @Inject constructor(
         }
 
         // ─────────────────────────────────────────────────────────────────
+        // SECTION 1.5: ✨ AI DJ MIX - Personalized Radio based on listening DNA
+        // This is the MAGIC FEATURE that creates a unique experience
+        // ─────────────────────────────────────────────────────────────────
+        val allListeningHistory = (quickPicks.value.orEmpty() + forgottenFavorites.value.orEmpty() + jumpBackIn.value.orEmpty())
+            .distinctBy { it.song.id }
+        
+        if (allListeningHistory.size >= 5) {
+            // Helper function to calculate total plays from play count history
+            fun getTotalPlays(song: Song): Int {
+                return song.playCount?.sumOf { it.count } ?: 0
+            }
+            
+            // Create 3 different AI-curated mixes based on listening patterns
+            
+            // Mix 1: "Your Flow" - Based on most played with similar energy
+            val yourFlowSongs = allListeningHistory
+                .sortedByDescending { getTotalPlays(it) }
+                .take(25)
+                .map { it.song.id }
+            
+            if (yourFlowSongs.size >= 5) {
+                sections.add(FeedSection.DJMixCard(
+                    id = "dj_your_flow",
+                    title = "Your Flow",
+                    subtitle = "AI-curated based on your taste",
+                    description = "A personalized mix of your favorites and songs you'll love",
+                    gradientColors = listOf(0xFF6366F1, 0xFF8B5CF6, 0xFFEC4899),
+                    songCount = yourFlowSongs.size,
+                    duration = "${yourFlowSongs.size * 3}+ min",
+                    songIds = yourFlowSongs
+                ))
+            }
+            
+            // Mix 2: "Chill Vibes" - Low energy relaxing songs
+            val chillSongs = allListeningHistory
+                .filter { song ->
+                    val dna = generateSongDNA(song.toMediaMetadata())
+                    dna.energyLevel < 0.5f
+                }
+                .shuffled()
+                .take(20)
+                .map { it.song.id }
+            
+            if (chillSongs.size >= 5) {
+                sections.add(FeedSection.DJMixCard(
+                    id = "dj_chill_vibes",
+                    title = "Chill Vibes",
+                    subtitle = "Relax and unwind",
+                    description = "Mellow tunes for focus, relaxation, or winding down",
+                    gradientColors = listOf(0xFF0EA5E9, 0xFF06B6D4, 0xFF14B8A6),
+                    songCount = chillSongs.size,
+                    duration = "${chillSongs.size * 3}+ min",
+                    songIds = chillSongs
+                ))
+            }
+            
+            // Mix 3: "Energy Boost" - High energy workout songs
+            val energySongs = allListeningHistory
+                .filter { song ->
+                    val dna = generateSongDNA(song.toMediaMetadata())
+                    dna.energyLevel >= 0.6f
+                }
+                .shuffled()
+                .take(20)
+                .map { it.song.id }
+            
+            if (energySongs.size >= 5) {
+                sections.add(FeedSection.DJMixCard(
+                    id = "dj_energy_boost",
+                    title = "Energy Boost",
+                    subtitle = "Get pumped up",
+                    description = "High-energy tracks to fuel your workout or commute",
+                    gradientColors = listOf(0xFFF59E0B, 0xFFEF4444, 0xFFEC4899),
+                    songCount = energySongs.size,
+                    duration = "${energySongs.size * 3}+ min",
+                    songIds = energySongs
+                ))
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────
         // SECTION 2: Jump Back In (Your most played recently)
         // ─────────────────────────────────────────────────────────────────
         if (jumpBackIn.value?.isNotEmpty() == true) {
@@ -411,19 +516,19 @@ class HomeViewModel @Inject constructor(
         }
 
         // ─────────────────────────────────────────────────────────────────
-        // SECTION 3.5: Language-Based Trending (For first-time & preference users)
+        // SECTION 3.5: Language-Based Content - DEDICATED ROW FOR EACH LANGUAGE
         // ─────────────────────────────────────────────────────────────────
-        val languageQueries = getLanguageSearchQueries()
-        if (languageQueries.isNotEmpty()) {
-            // Fetch trending content for user's languages
-            val languageTrendingSongs = mutableListOf<RailItem>()
-            val primaryLang = selectedLanguages.value.firstOrNull() ?: com.vikify.app.vikifyui.data.MusicLanguage.ENGLISH
+        val languageQueriesMap = getLanguageSearchQueriesMap()
+        
+        // Create a dedicated section for EACH selected language
+        for ((language, queries) in languageQueriesMap) {
+            val languageSongs = mutableListOf<RailItem>()
             
-            // Search for language-specific content
-            languageQueries.take(2).forEach { query ->
+            // Search for this language's songs
+            queries.take(2).forEach { query ->
                 YouTube.search(query, YouTube.SearchFilter.FILTER_SONG).onSuccess { result ->
-                    result.items.filterIsInstance<com.zionhuang.innertube.models.SongItem>().take(6).forEach { song ->
-                        languageTrendingSongs.add(RailItem(
+                    result.items.filterIsInstance<com.zionhuang.innertube.models.SongItem>().take(8).forEach { song ->
+                        languageSongs.add(RailItem(
                             id = song.id,
                             title = song.title,
                             subtitle = song.artists.joinToString { it.name },
@@ -433,13 +538,38 @@ class HomeViewModel @Inject constructor(
                 }
             }
             
-            if (languageTrendingSongs.isNotEmpty()) {
+            // Add this language's section if we got results
+            if (languageSongs.isNotEmpty()) {
                 sections.add(FeedSection.HorizontalRail(
-                    id = "trending_${primaryLang.name.lowercase()}",
-                    title = "Trending in ${primaryLang.displayName}",
-                    subtitle = "Popular ${primaryLang.displayName} music right now",
-                    items = languageTrendingSongs.shuffled().distinctBy { it.id }.take(12)
+                    id = "lang_${language.name.lowercase()}",
+                    title = getLanguageSectionTitle(language),
+                    subtitle = "Top ${language.displayName} songs right now",
+                    items = languageSongs.shuffled().distinctBy { it.id }.take(15)
                 ))
+            }
+            
+            // For English, also add a "Global Albums" section with chart-toppers
+            if (language == com.vikify.app.vikifyui.data.MusicLanguage.ENGLISH) {
+                val globalAlbums = mutableListOf<RailItem>()
+                YouTube.search("billboard top albums 2026", YouTube.SearchFilter.FILTER_ALBUM).onSuccess { result ->
+                    result.items.filterIsInstance<com.zionhuang.innertube.models.AlbumItem>().take(12).forEach { album ->
+                        globalAlbums.add(RailItem(
+                            id = album.browseId,
+                            title = album.title,
+                            subtitle = album.artists?.joinToString { it.name } ?: "Album",
+                            imageUrl = album.thumbnail,
+                            itemType = RailItemType.ALBUM
+                        ))
+                    }
+                }
+                if (globalAlbums.isNotEmpty()) {
+                    sections.add(FeedSection.LargeSquareRail(
+                        id = "global_albums",
+                        title = "🏆 Chart-Topping Albums",
+                        subtitle = "Worldwide best sellers",
+                        items = globalAlbums.distinctBy { it.id }.take(10)
+                    ))
+                }
             }
         }
 
@@ -539,20 +669,6 @@ class HomeViewModel @Inject constructor(
                             imageUrl = album.thumbnail
                         )
                     }
-                ))
-            }
-        }
-        
-        // Mood discovery chips
-        YouTube.moodAndGenres().onSuccess { moods ->
-            val flatMoods = moods.flatMap { it.items }
-            if (flatMoods.isNotEmpty()) {
-                val randomThree = flatMoods.shuffled().take(3)
-                randomMoods.value = randomThree
-                sections.add(FeedSection.MoodChipRow(
-                    id = "discover_moods",
-                    title = "Explore Moods",
-                    moods = randomThree
                 ))
             }
         }
