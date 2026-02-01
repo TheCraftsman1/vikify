@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.vikify.app.vikifyui.theme.VikifyTheme
 
 /**
  * Confirmation dialog shown when user attempts to leave a Jam session.

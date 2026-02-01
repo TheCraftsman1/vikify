@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
+import com.vikify.app.vikifyui.theme.VikifyTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.*
@@ -1033,19 +1034,21 @@ private fun TopSongSlide(
             contentAlignment = Alignment.Center
         ) {
             // Vinyl record
+            val vinylSurfaceColor = VikifyTheme.colors.surface
+            val vinylGrooveColor = VikifyTheme.colors.surfaceElevated
             Box(
                 modifier = Modifier
                     .size(220.dp)
                     .offset(x = 40.dp)
                     .rotate(vinylRotation)
                     .clip(CircleShape)
-                    .background(VikifyTheme.colors.surface)
+                    .background(vinylSurfaceColor)
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val center = Offset(size.width / 2, size.height / 2)
                     for (i in 1..8) {
                         drawCircle(
-                            color = VikifyTheme.colors.surfaceElevated,
+                            color = vinylGrooveColor,
                             radius = size.width / 2 - (i * 12f),
                             center = center,
                             style = Stroke(width = 1f)

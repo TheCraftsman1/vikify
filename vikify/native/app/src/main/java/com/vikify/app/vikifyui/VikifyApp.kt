@@ -397,6 +397,12 @@ fun VikifyApp(
                     prefs.edit().putBoolean("onboarding_complete", true).apply()
                     hasCompletedOnboarding = true
                 }
+            },
+            userName = currentUser?.displayName ?: "",
+            onSaveName = { name ->
+                scope.launch {
+                    homeViewModel.authManager.updateDisplayName(name)
+                }
             }
         )
         return
@@ -853,7 +859,20 @@ fun VikifyApp(
                 // Bottom navigation - always visible (no ambient mode fade)
                 BottomNavigation(
                     currentScreen = currentScreen,
-                    onScreenSelected = { currentScreen = it }
+                    onScreenSelected = { currentScreen = it },
+                    onClearOverlays = {
+                        // Clear all overlay states when switching tabs
+                        showLikedSongs = false
+                        showDownloads = false
+                        showMoodAndGenres = false
+                        showTimeCapsule = false
+                        selectedBrowseId = null
+                        activePlaylistId = null
+                        activePlaylistInfo = null
+                        selectedArtistName = null
+                        selectedArtistId = null
+                        selectedAlbumId = null
+                    }
                 )
             }
         }
@@ -1256,6 +1275,7 @@ private fun SwipeableMiniPlayer(
 private fun BottomNavigation(
     currentScreen: NavScreen,
     onScreenSelected: (NavScreen) -> Unit,
+    onClearOverlays: () -> Unit = {},  // Clear any open overlays when switching tabs
     modifier: Modifier = Modifier
 ) {
     // Spotify-style semi-transparent nav bar with readable labels
@@ -1279,7 +1299,10 @@ private fun BottomNavigation(
             Column(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
-                    .clickable { onScreenSelected(screen) }
+                    .clickable { 
+                        onClearOverlays()  // Clear overlays first
+                        onScreenSelected(screen) 
+                    }
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {

@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.vikify.app.vikifyui.theme.VikifyTheme
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 

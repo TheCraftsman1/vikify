@@ -421,8 +421,8 @@ class HomeViewModel @Inject constructor(
             
             // Search for language-specific content
             languageQueries.take(2).forEach { query ->
-                YouTube.searchSongs(query).onSuccess { result ->
-                    result.items.take(6).forEach { song ->
+                YouTube.search(query, YouTube.SearchFilter.FILTER_SONG).onSuccess { result ->
+                    result.items.filterIsInstance<com.zionhuang.innertube.models.SongItem>().take(6).forEach { song ->
                         languageTrendingSongs.add(RailItem(
                             id = song.id,
                             title = song.title,

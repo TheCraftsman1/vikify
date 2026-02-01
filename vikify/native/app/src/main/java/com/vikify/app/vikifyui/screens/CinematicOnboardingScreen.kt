@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import com.vikify.app.R
+import com.vikify.app.vikifyui.data.MusicLanguage
 import com.vikify.app.vikifyui.data.MusicPreferences
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -98,7 +99,9 @@ private enum class OnboardingStep {
     WELCOME,
     FEATURES,
     SIGN_IN,
+    NAME_SETUP,         // Added: Set up your name after sign-in
     SPOTIFY_CONNECT,
+    LANGUAGE_SETUP,     // Added: Language preferences before full music prefs
     MUSIC_PREFERENCES,
     READY
 }
@@ -114,7 +117,9 @@ fun CinematicOnboardingScreen(
     isLoggedIn: Boolean,
     isSpotifyConnected: Boolean = false,
     onSpotifyLogin: () -> Unit,
-    onOnboardingComplete: () -> Unit
+    onOnboardingComplete: () -> Unit,
+    userName: String = "",
+    onSaveName: (String) -> Unit = {}
 ) {
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -145,7 +150,7 @@ fun CinematicOnboardingScreen(
     LaunchedEffect(isLoggedIn, currentStep, userInitiatedLogin) {
         if (isLoggedIn && currentStep == OnboardingStep.SIGN_IN && userInitiatedLogin) {
             delay(600)
-            currentStep = OnboardingStep.SPOTIFY_CONNECT
+            currentStep = OnboardingStep.NAME_SETUP  // Go to name setup after login
         }
     }
     
@@ -153,7 +158,7 @@ fun CinematicOnboardingScreen(
     LaunchedEffect(isSpotifyConnected) {
         if (isSpotifyConnected && currentStep == OnboardingStep.SPOTIFY_CONNECT) {
              delay(600)
-             currentStep = OnboardingStep.MUSIC_PREFERENCES  // Go to music preferences
+             currentStep = OnboardingStep.LANGUAGE_SETUP  // Go to language setup
         }
     }
     
@@ -222,13 +227,25 @@ fun CinematicOnboardingScreen(
                         onGuestLogin()
                         scope.launch {
                             delay(400)
-                            goToStep(OnboardingStep.SPOTIFY_CONNECT)
+                            goToStep(OnboardingStep.NAME_SETUP)  // Go to name setup after guest login
                         }
                     }
                 )
+                OnboardingStep.NAME_SETUP -> NameSetupStep(
+                    initialName = userName,
+                    onSaveName = { name ->
+                        onSaveName(name)
+                        goToStep(OnboardingStep.SPOTIFY_CONNECT)
+                    },
+                    onSkip = { goToStep(OnboardingStep.SPOTIFY_CONNECT) }
+                )
                 OnboardingStep.SPOTIFY_CONNECT -> SpotifyConnectStep(
                     onConnect = onSpotifyLogin,
-                    onSkip = { goToStep(OnboardingStep.MUSIC_PREFERENCES) }  // Skip to preferences
+                    onSkip = { goToStep(OnboardingStep.LANGUAGE_SETUP) }  // Skip to language setup
+                )
+                OnboardingStep.LANGUAGE_SETUP -> LanguageSetupStep(
+                    onContinue = { goToStep(OnboardingStep.MUSIC_PREFERENCES) },
+                    onSkip = { goToStep(OnboardingStep.MUSIC_PREFERENCES) }
                 )
                 OnboardingStep.MUSIC_PREFERENCES -> MusicPreferenceScreen(
                     onComplete = { finishOnboarding() }
@@ -253,11 +270,13 @@ fun CinematicOnboardingScreen(
                 currentStep = when (currentStep) {
                     OnboardingStep.FEATURES -> 0
                     OnboardingStep.SIGN_IN -> 1
-                    OnboardingStep.SPOTIFY_CONNECT -> 2
-                    OnboardingStep.MUSIC_PREFERENCES -> 3
+                    OnboardingStep.NAME_SETUP -> 2
+                    OnboardingStep.SPOTIFY_CONNECT -> 3
+                    OnboardingStep.LANGUAGE_SETUP -> 4
+                    OnboardingStep.MUSIC_PREFERENCES -> 5
                     else -> 0
                 },
-                totalSteps = 4
+                totalSteps = 6
             )
         }
     }
@@ -966,6 +985,161 @@ private fun SignInStep(
 // STEP 4: SPOTIFY CONNECT
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEP 3.5: NAME SETUP - Right after sign-in
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun NameSetupStep(
+    initialName: String,
+    onSaveName: (String) -> Unit,
+    onSkip: () -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf(initialName) }
+    val view = LocalView.current
+    
+    LaunchedEffect(Unit) {
+        delay(100)
+        visible = true
+    }
+    
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(600),
+        label = "alpha"
+    )
+    
+    val contentOffset by animateFloatAsState(
+        targetValue = if (visible) 0f else 40f,
+        animationSpec = tween(600, easing = FastOutSlowInEasing),
+        label = "offset"
+    )
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 32.dp)
+            .graphicsLayer {
+                alpha = contentAlpha
+                translationY = contentOffset
+            },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Greeting emoji
+        Text(
+            text = "👋",
+            fontSize = 64.sp,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
+        
+        // Title
+        Text(
+            text = "Hello there!",
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Bold,
+            color = AppColors.TextPrimary,
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(Modifier.height(12.dp))
+        
+        Text(
+            text = "What should we call you?",
+            fontSize = 18.sp,
+            color = AppColors.TextSecondary,
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(Modifier.height(40.dp))
+        
+        // Name input field with glassmorphism style
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(AppColors.CardSurface.copy(alpha = 0.6f))
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            AppColors.Cyan.copy(alpha = 0.3f),
+                            AppColors.Purple.copy(alpha = 0.3f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                )
+        ) {
+            androidx.compose.foundation.text.BasicTextField(
+                value = name,
+                onValueChange = { name = it },
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    fontSize = 18.sp,
+                    color = AppColors.TextPrimary,
+                    textAlign = TextAlign.Center
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                singleLine = true,
+                decorationBox = { innerTextField ->
+                    Box(
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (name.isEmpty()) {
+                            Text(
+                                text = "Your name",
+                                color = AppColors.TextMuted,
+                                fontSize = 18.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
+            )
+        }
+        
+        Spacer(Modifier.height(40.dp))
+        
+        // Continue button
+        PrimaryButton(
+            text = "Continue",
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                onSaveName(name.ifEmpty { "Music Lover" })
+            },
+            modifier = Modifier.fillMaxWidth(0.8f)
+        )
+        
+        Spacer(Modifier.height(16.dp))
+        
+        // Skip option
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onSkip() }
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Skip for now",
+                color = AppColors.TextMuted,
+                fontSize = 15.sp
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                contentDescription = null,
+                tint = AppColors.TextMuted,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
 @Composable
 private fun SpotifyConnectStep(
     onConnect: () -> Unit,
@@ -1089,6 +1263,225 @@ private fun SpotifyConnectStep(
         }
         
         Spacer(Modifier.height(48.dp))
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEP 5: LANGUAGE SETUP - Pick your music language preferences
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun LanguageSetupStep(
+    onContinue: () -> Unit,
+    onSkip: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val view = LocalView.current
+    
+    var visible by remember { mutableStateOf(false) }
+    var selectedLanguages by remember { mutableStateOf(setOf<MusicLanguage>()) }
+    
+    // Available languages with emojis
+    val languages = MusicLanguage.values().toList()
+    
+    LaunchedEffect(Unit) {
+        delay(100)
+        visible = true
+    }
+    
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(600),
+        label = "alpha"
+    )
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 24.dp)
+            .graphicsLayer { alpha = contentAlpha },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(Modifier.height(60.dp))
+        
+        // Title with music note emoji
+        Text(
+            text = "🎵",
+            fontSize = 48.sp,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        
+        Text(
+            text = "What languages do you\nlisten to?",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = AppColors.TextPrimary,
+            textAlign = TextAlign.Center,
+            lineHeight = 36.sp
+        )
+        
+        Spacer(Modifier.height(8.dp))
+        
+        Text(
+            text = "We'll personalize your feed",
+            fontSize = 16.sp,
+            color = AppColors.TextSecondary,
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(Modifier.height(32.dp))
+        
+        // Language grid
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            androidx.compose.foundation.lazy.grid.items(
+                items = languages,
+                key = { it.name }
+            ) { language ->
+                val isSelected = language in selectedLanguages
+                
+                OnboardingLanguageCard(
+                    language = language,
+                    isSelected = isSelected,
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        selectedLanguages = if (isSelected) {
+                            selectedLanguages - language
+                        } else {
+                            selectedLanguages + language
+                        }
+                    }
+                )
+            }
+        }
+        
+        Spacer(Modifier.height(24.dp))
+        
+        // Save and continue button
+        PrimaryButton(
+            text = if (selectedLanguages.isEmpty()) "Continue" else "Continue (${selectedLanguages.size} selected)",
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                // Save language preferences
+                scope.launch {
+                    MusicPreferences.getInstance(context).setMusicLanguages(selectedLanguages.toList())
+                }
+                onContinue()
+            },
+            modifier = Modifier.fillMaxWidth(0.8f)
+        )
+        
+        Spacer(Modifier.height(16.dp))
+        
+        // Skip option
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onSkip() }
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Skip for now",
+                color = AppColors.TextMuted,
+                fontSize = 15.sp
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                contentDescription = null,
+                tint = AppColors.TextMuted,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun OnboardingLanguageCard(
+    language: MusicLanguage,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 1.02f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "scale"
+    )
+    
+    val glowAlpha by animateFloatAsState(
+        targetValue = if (isSelected) 0.4f else 0f,
+        animationSpec = tween(200),
+        label = "glow"
+    )
+    
+    Box(
+        modifier = Modifier
+            .scale(scale)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                if (isSelected) {
+                    Brush.linearGradient(
+                        colors = listOf(
+                            AppColors.Cyan.copy(alpha = 0.15f),
+                            AppColors.Purple.copy(alpha = 0.1f)
+                        )
+                    )
+                } else {
+                    Brush.linearGradient(
+                        colors = listOf(
+                            AppColors.CardSurface,
+                            AppColors.CardSurface
+                        )
+                    )
+                }
+            )
+            .border(
+                width = if (isSelected) 1.5.dp else 0.5.dp,
+                brush = if (isSelected) {
+                    Brush.linearGradient(
+                        colors = listOf(AppColors.Cyan, AppColors.Purple)
+                    )
+                } else {
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.1f),
+                            Color.White.copy(alpha = 0.05f)
+                        )
+                    )
+                },
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable { onClick() }
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = language.emoji,
+                fontSize = 28.sp
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = language.displayName,
+                fontSize = 14.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (isSelected) AppColors.Cyan else AppColors.TextPrimary,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 

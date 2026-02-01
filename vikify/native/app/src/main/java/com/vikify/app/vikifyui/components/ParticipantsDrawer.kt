@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.vikify.app.vikifyui.data.JamParticipant
+import com.vikify.app.vikifyui.theme.VikifyTheme
 
 /**
  * Modal bottom sheet showing all participants in a Jam session

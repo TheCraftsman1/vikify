@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.vikify.app.vikifyui.data.Track
 import com.vikify.app.vikifyui.theme.Spacing
+import com.vikify.app.vikifyui.theme.VikifyTheme
 import kotlinx.coroutines.launch
 
 /**

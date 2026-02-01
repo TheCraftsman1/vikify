@@ -526,7 +526,8 @@ class DownloadUtil @Inject constructor(
                                         SongEntity(
                                             id = download.request.id,
                                             title = title,
-                                            isLocal = false
+                                            isLocal = false,
+                                            localPath = null
                                         )
                                     )
                                 }
