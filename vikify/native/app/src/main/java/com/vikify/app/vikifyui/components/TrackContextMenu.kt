@@ -57,7 +57,7 @@ fun TrackContextMenu(
     // Modal Bottom Sheet
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFFF8F8F8),
+        containerColor = VikifyTheme.colors.surfaceSheet,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         dragHandle = {
             Box(
@@ -66,7 +66,7 @@ fun TrackContextMenu(
                     .width(40.dp)
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(Color.LightGray)
+                    .background(VikifyTheme.colors.divider)
             )
         }
     ) {
@@ -87,7 +87,7 @@ fun TrackContextMenu(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Color.LightGray)
+                        .background(VikifyTheme.colors.surfaceElevated)
                 ) {
                     AsyncImage(
                         model = track.remoteArtworkUrl,

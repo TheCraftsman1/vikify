@@ -12,7 +12,6 @@ import com.vikify.app.db.entities.Artist
 import com.vikify.app.db.entities.LocalItem
 import com.vikify.app.db.entities.Song
 import com.vikify.app.models.SimilarRecommendation
-import com.vikify.app.models.RailItemType
 import com.vikify.app.models.toMediaMetadata
 import com.vikify.app.playback.generateSongDNA
 import com.vikify.app.playback.getTimeBasedEnergyRange
@@ -35,9 +34,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import java.util.Calendar
 import javax.inject.Inject
 import com.zionhuang.innertube.models.SongItem
@@ -46,8 +42,6 @@ import com.vikify.app.models.FeedSection
 import com.vikify.app.models.RailItem
 import com.vikify.app.models.QuickResumeItem
 import com.vikify.app.models.QuickResumeType
-import com.vikify.app.vikifyui.data.MusicPreferences
-import com.vikify.app.vikifyui.data.MusicLanguage
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HOME VIEW MODEL
@@ -60,15 +54,24 @@ class HomeViewModel @Inject constructor(
     val syncUtils: SyncUtils,
     val authManager: AuthManager
 ) : ViewModel() {
-    // Music language preferences (for personalized feed)
-    val selectedLanguages = MusicPreferences.getSelectedLanguages(context)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, setOf(MusicLanguage.ENGLISH))
-    
     // Auth State (Exposed for UI)
     val currentUser = authManager.currentUser
 
     val isRefreshing = MutableStateFlow(false)
     val isLoading = MutableStateFlow(false)
+    
+    // ═══════════════════════════════════════════════════════════════
+    // LANGUAGE PREFERENCES - For content personalization
+    // ═══════════════════════════════════════════════════════════════
+    
+    /** User's selected music languages */
+    val selectedLanguages = com.vikify.app.vikifyui.data.MusicPreferences.getSelectedLanguages(context)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, setOf(com.vikify.app.vikifyui.data.MusicLanguage.ENGLISH))
+    
+    /** Get the primary YouTube locale based on language preferences */
+    private fun getPrimaryLocale(): String {
+        return com.vikify.app.vikifyui.data.MusicPreferences.getPrimaryLocale(selectedLanguages.value)
+    }
     
     // === SPOTIFY SYNC STATUS ===
     val syncProgress = androidx.work.WorkManager.getInstance(context)
@@ -141,6 +144,103 @@ class HomeViewModel @Inject constructor(
             in 12..17 -> "Good Afternoon"
             else -> "Good Evening"
         }
+    }
+    
+    /**
+     * Build YouTubeLocale based on user's language preferences
+     * Maps MusicLanguage to YouTube gl (geolocation) and hl (host language)
+     */
+    private fun buildYouTubeLocale(): com.zionhuang.innertube.models.YouTubeLocale {
+        val languages = selectedLanguages.value
+        val primaryLanguage = languages.firstOrNull() ?: com.vikify.app.vikifyui.data.MusicLanguage.ENGLISH
+        
+        return com.zionhuang.innertube.models.YouTubeLocale(
+            gl = primaryLanguage.youtubeLocale,  // Geolocation (e.g., "IN", "US", "KR")
+            hl = primaryLanguage.languageCode     // Host language (e.g., "hi", "en", "ko")
+        )
+    }
+    
+    /**
+     * Get language-specific search queries for discovering content
+     * Used for fetching high-quality content in selected languages
+     */
+    private fun getLanguageSearchQueries(): List<String> {
+        val queries = mutableListOf<String>()
+        val languages = selectedLanguages.value
+        
+        languages.forEach { lang ->
+            when (lang) {
+                com.vikify.app.vikifyui.data.MusicLanguage.ENGLISH -> {
+                    queries.addAll(listOf(
+                        "top hits 2025",
+                        "trending music",
+                        "popular songs",
+                        "new releases"
+                    ))
+                }
+                com.vikify.app.vikifyui.data.MusicLanguage.HINDI -> {
+                    queries.addAll(listOf(
+                        "bollywood hits 2025",
+                        "latest hindi songs",
+                        "arijit singh songs",
+                        "romantic hindi songs"
+                    ))
+                }
+                com.vikify.app.vikifyui.data.MusicLanguage.TELUGU -> {
+                    queries.addAll(listOf(
+                        "telugu hit songs 2025",
+                        "latest telugu songs",
+                        "tollywood hits",
+                        "telugu melody songs"
+                    ))
+                }
+                com.vikify.app.vikifyui.data.MusicLanguage.TAMIL -> {
+                    queries.addAll(listOf(
+                        "tamil hits 2025",
+                        "latest tamil songs",
+                        "anirudh songs",
+                        "kollywood hits"
+                    ))
+                }
+                com.vikify.app.vikifyui.data.MusicLanguage.PUNJABI -> {
+                    queries.addAll(listOf(
+                        "punjabi hits 2025",
+                        "latest punjabi songs",
+                        "ap dhillon songs",
+                        "punjabi party songs"
+                    ))
+                }
+                com.vikify.app.vikifyui.data.MusicLanguage.KOREAN -> {
+                    queries.addAll(listOf(
+                        "kpop hits 2025",
+                        "bts songs",
+                        "blackpink songs",
+                        "trending kpop"
+                    ))
+                }
+                com.vikify.app.vikifyui.data.MusicLanguage.SPANISH -> {
+                    queries.addAll(listOf(
+                        "spanish hits 2025",
+                        "reggaeton hits",
+                        "bad bunny songs",
+                        "latin music"
+                    ))
+                }
+                com.vikify.app.vikifyui.data.MusicLanguage.JAPANESE -> {
+                    queries.addAll(listOf(
+                        "jpop hits 2025",
+                        "anime songs",
+                        "japanese music",
+                        "yoasobi songs"
+                    ))
+                }
+                else -> {
+                    queries.add("${lang.displayName} music 2025")
+                }
+            }
+        }
+        
+        return queries.shuffled().take(4)  // Return 4 random queries
     }
 
     private suspend fun load() {
@@ -236,56 +336,14 @@ class HomeViewModel @Inject constructor(
                 }
         similarRecommendations.value = (artistRecommendations + songRecommendations).shuffled()
 
-        // ═══════════════════════════════════════════════════════════════
-        // YOUTUBE CONTENT - PERSONALIZED FETCH
-        // ═══════════════════════════════════════════════════════════════
-        
-        val languages = selectedLanguages.value
-        val targetLocales = MusicPreferences.getYouTubeLocales(languages)
-            // If no preference or just English, include US and maybe one other global
-            .ifEmpty { listOf("US", "GB") }
-            .take(4) // Limit parallel requests
-
-        val fetchedHomePages = java.util.Collections.synchronizedList(mutableListOf<HomePage>())
-        
-        try {
-            kotlinx.coroutines.coroutineScope {
-                val deferreds = targetLocales.map { localeCode ->
-                    async(Dispatchers.IO) {
-                        try {
-                            // Fetch specific locale
-                            YouTube.home(locale = com.zionhuang.innertube.models.YouTubeLocale(localeCode, "en")).getOrNull()
-                                ?.also { fetchedHomePages.add(it) }
-                        } catch (e: Exception) {
-                            null
-                        }
-                    }
-                }
-                
-                // Also fetch default "Local" if not explicitly covered, or as a backup
-                val localDeferred = async(Dispatchers.IO) {
-                    try {
-                        val local = YouTube.home().getOrNull()
-                        if (local != null) fetchedHomePages.add(local)
-                    } catch (e: Exception) { null }
-                }
-
-                deferreds.awaitAll()
-                localDeferred.await()
-            }
-        } catch (e: Exception) {
-            reportException(e)
-            // Fallback
-            if (fetchedHomePages.isEmpty()) {
-                YouTube.home().getOrNull()?.let { fetchedHomePages.add(it) }
-            }
+        // Fetch YouTube home with user's language preference
+        val userLocale = buildYouTubeLocale()
+        YouTube.home(locale = userLocale).onSuccess { page ->
+            homePage.value = page
+        }.onFailure {
+            reportException(it)
         }
 
-        // Update primary state with the first successful result
-        fetchedHomePages.firstOrNull()?.let { 
-            homePage.value = it 
-        }
-        
         YouTube.explore().onSuccess { page ->
             explorePage.value = page
         }.onFailure {
@@ -295,7 +353,7 @@ class HomeViewModel @Inject constructor(
         syncUtils.syncRecentActivity()
 
         allYtItems.value = similarRecommendations.value?.flatMap { it.items }.orEmpty() +
-                fetchedHomePages.flatMap { it.sections }.flatMap { it.items }
+                homePage.value?.sections?.flatMap { it.items }.orEmpty()
 
         // ═══════════════════════════════════════════════════════════════
         // BUILD UNIFIED SECTIONS - LOCAL/PERSONAL CONTENT FIRST
@@ -350,6 +408,39 @@ class HomeViewModel @Inject constructor(
                 subtitle = "Energy-matched for your vibe",
                 items = dailyMix.value!!.map { it.toRailItem() }
             ))
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // SECTION 3.5: Language-Based Trending (For first-time & preference users)
+        // ─────────────────────────────────────────────────────────────────
+        val languageQueries = getLanguageSearchQueries()
+        if (languageQueries.isNotEmpty()) {
+            // Fetch trending content for user's languages
+            val languageTrendingSongs = mutableListOf<RailItem>()
+            val primaryLang = selectedLanguages.value.firstOrNull() ?: com.vikify.app.vikifyui.data.MusicLanguage.ENGLISH
+            
+            // Search for language-specific content
+            languageQueries.take(2).forEach { query ->
+                YouTube.searchSongs(query).onSuccess { result ->
+                    result.items.take(6).forEach { song ->
+                        languageTrendingSongs.add(RailItem(
+                            id = song.id,
+                            title = song.title,
+                            subtitle = song.artists.joinToString { it.name },
+                            imageUrl = song.thumbnail
+                        ))
+                    }
+                }
+            }
+            
+            if (languageTrendingSongs.isNotEmpty()) {
+                sections.add(FeedSection.HorizontalRail(
+                    id = "trending_${primaryLang.name.lowercase()}",
+                    title = "Trending in ${primaryLang.displayName}",
+                    subtitle = "Popular ${primaryLang.displayName} music right now",
+                    items = languageTrendingSongs.shuffled().distinctBy { it.id }.take(12)
+                ))
+            }
         }
 
         // ─────────────────────────────────────────────────────────────────
@@ -452,94 +543,26 @@ class HomeViewModel @Inject constructor(
             }
         }
         
-        // Mood discovery chips removed per user request
-        
-        // ═══════════════════════════════════════════════════════════════
-        // MERGE & INTERLEAVE FEEDS (Local + International)
-        // ═══════════════════════════════════════════════════════════════
-        
-        // ═══════════════════════════════════════════════════════════════
-        // MERGE & FILTER FEEDS
-        // ═══════════════════════════════════════════════════════════════
-        
-        // Flatten all sections from all fetched pages
-        val rawSections = fetchedHomePages.flatMap { it.sections }
-        
-        // Interleave strategy: distinct by title to avoid duplicates
-        // Randomize slightly to keep it fresh, but respect general order
-        val interleavedSections = rawSections
-            .distinctBy { it.title }
-            .shuffled()
-
-        // Filter out video/performance AND low quality content
-        val excludedSectionPatterns = listOf(
-            "video",
-            "live performance",
-            "live session",
-            "concert",
-            "performance",
-            "shorts"
-        )
-        
-        val filteredSections = interleavedSections
-            .filter { section -> 
-                excludedSectionPatterns.none { pattern -> 
-                    section.title.contains(pattern, ignoreCase = true) 
-                }
-            }
-            .map { section ->
-                // Also filter items within the section
-                section.copy(
-                    items = section.items.filter { isQualityContent(it) }
-                )
-            }
-            .filter { it.items.isNotEmpty() } // Remove empty sections
-            .take(15) // Limit total sections
-        
-        // Extract songs from YouTube sections for a "Songs for You" rail
-        val ytSongsForYou = filteredSections
-            .flatMap { it.items }
-            .filterIsInstance<SongItem>()
-            .distinctBy { it.id }
-            .take(15)
-        
-        if (ytSongsForYou.isNotEmpty()) {
-            sections.add(FeedSection.HorizontalRail(
-                id = "yt_songs_for_you",
-                title = "Songs for You",
-                subtitle = "Handpicked tracks",
-                items = ytSongsForYou.map { it.toRailItem() }
-            ))
-        }
-        
-        // Add mixed playlist/album-focused sections
-        filteredSections
-            .filter { section -> 
-                section.items.any { it is PlaylistItem || it is AlbumItem }
-            }
-            .take(4) // Increased from 2 to 4 to show more variety
-            .forEach { ytSection ->
-                sections.add(FeedSection.HorizontalRail(
-                    id = "yt_${ytSection.title.hashCode()}",
-                    title = ytSection.title,
-                    items = ytSection.items.map { it.toRailItem() }
+        // Mood discovery chips
+        YouTube.moodAndGenres().onSuccess { moods ->
+            val flatMoods = moods.flatMap { it.items }
+            if (flatMoods.isNotEmpty()) {
+                val randomThree = flatMoods.shuffled().take(3)
+                randomMoods.value = randomThree
+                sections.add(FeedSection.MoodChipRow(
+                    id = "discover_moods",
+                    title = "Explore Moods",
+                    moods = randomThree
                 ))
             }
+        }
         
-        // Add another song section for variety ("International Hits" / "More Songs")
-        val moreSongs = filteredSections
-            .flatMap { it.items }
-            .filterIsInstance<SongItem>()
-            .distinctBy { it.id }
-            .drop(15)  // Skip the ones already used
-            .take(12)
-        
-        if (moreSongs.isNotEmpty()) {
+        // YouTube Home sections (generic content at the end)
+        homePage.value?.sections?.forEach { ytSection ->
             sections.add(FeedSection.HorizontalRail(
-                id = "yt_more_songs",
-                title = "Discover More",
-                subtitle = "Global hits & Local favorites",
-                items = moreSongs.map { it.toRailItem() }
+                id = "yt_${ytSection.title.hashCode()}",
+                title = ytSection.title,
+                items = ytSection.items.map { it.toRailItem() }
             ))
         }
         
@@ -549,79 +572,21 @@ class HomeViewModel @Inject constructor(
 
     private fun Song.toRailItem() = RailItem(
         id = song.id,
-        title = cleanSongTitle(song.title),
+        title = song.title,
         subtitle = artists.joinToString { it.name },
         imageUrl = song.thumbnailUrl
     )
 
     private fun YTItem.toRailItem() = RailItem(
         id = id,
-        title = cleanSongTitle(title),
+        title = title,
         subtitle = when (this) {
             is SongItem -> artists.joinToString { it.name }
             is AlbumItem -> artists?.joinToString { it.name } ?: "Album"
-            is PlaylistItem -> "Playlist"
             else -> ""
         },
-        imageUrl = thumbnail,
-        itemType = when (this) {
-            is SongItem -> RailItemType.SONG
-            is AlbumItem -> RailItemType.ALBUM
-            is PlaylistItem -> RailItemType.PLAYLIST
-            else -> RailItemType.SONG
-        }
+        imageUrl = thumbnail
     )
-
-    /**
-     * Cleans YouTube-style titles to show only the song name.
-     * Removes common suffixes like (Official Video), [Music Video], etc.
-     */
-    private fun cleanSongTitle(title: String): String {
-        val patterns = listOf(
-            // Parentheses variations
-            "\\s*\\(Official Video\\)\\s*",
-            "\\s*\\(Official Music Video\\)\\s*",
-            "\\s*\\(Music Video\\)\\s*",
-            "\\s*\\(Official Audio\\)\\s*",
-            "\\s*\\(Audio\\)\\s*",
-            "\\s*\\(Lyric Video\\)\\s*",
-            "\\s*\\(Lyrics\\)\\s*",
-            "\\s*\\(Official Lyric Video\\)\\s*",
-            "\\s*\\(Official Visualizer\\)\\s*",
-            "\\s*\\(Visualizer\\)\\s*",
-            "\\s*\\(Official\\)\\s*",
-            "\\s*\\(HD\\)\\s*",
-            "\\s*\\(HQ\\)\\s*",
-            "\\s*\\(4K\\)\\s*",
-            "\\s*\\(Full Video\\)\\s*",
-            "\\s*\\(Video\\)\\s*",
-            // Bracket variations
-            "\\s*\\[Official Video\\]\\s*",
-            "\\s*\\[Official Music Video\\]\\s*",
-            "\\s*\\[Music Video\\]\\s*",
-            "\\s*\\[Official Audio\\]\\s*",
-            "\\s*\\[Audio\\]\\s*",
-            "\\s*\\[Lyric Video\\]\\s*",
-            "\\s*\\[Lyrics\\]\\s*",
-            "\\s*\\[Official\\]\\s*",
-            "\\s*\\[HD\\]\\s*",
-            "\\s*\\[HQ\\]\\s*",
-            "\\s*\\[4K\\]\\s*",
-            "\\s*\\[Video\\]\\s*",
-            // Common text suffixes
-            "\\s*-\\s*Official Video\\s*$",
-            "\\s*-\\s*Official Music Video\\s*$",
-            "\\s*-\\s*Music Video\\s*$",
-            "\\s*\\|\\s*Official Video\\s*$",
-            "\\s*\\|\\s*Official Music Video\\s*$"
-        )
-        
-        var cleaned = title
-        patterns.forEach { pattern ->
-            cleaned = cleaned.replace(Regex(pattern, RegexOption.IGNORE_CASE), "")
-        }
-        return cleaned.trim()
-    }
 
     private val _isLoadingMore = MutableStateFlow(false)
     
@@ -649,21 +614,13 @@ class HomeViewModel @Inject constructor(
             )
             
             // Append to unified homeSections for infinite scroll
-            // Filter out video/performance sections
-            val excludedPatterns = listOf("video", "live performance", "live session", "concert", "performance")
-            val newSections = nextSections.sections
-                .filter { section -> 
-                    excludedPatterns.none { pattern -> 
-                        section.title.contains(pattern, ignoreCase = true) 
-                    }
-                }
-                .map { ytSection ->
-                    FeedSection.HorizontalRail(
-                        id = "yt_${ytSection.title.hashCode()}_${System.currentTimeMillis()}",
-                        title = ytSection.title,
-                        items = ytSection.items.map { it.toRailItem() }
-                    )
-                }
+            val newSections = nextSections.sections.map { ytSection ->
+                FeedSection.HorizontalRail(
+                    id = "yt_${ytSection.title.hashCode()}_${System.currentTimeMillis()}",
+                    title = ytSection.title,
+                    items = ytSection.items.map { it.toRailItem() }
+                )
+            }
             homeSections.value = homeSections.value + newSections
             
             _isLoadingMore.value = false
@@ -722,44 +679,17 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             authManager.ensureUser()
         }
-    }
-    
-    /**
-     * Filter out low quality or inappropriate content
-     */
-    private fun isQualityContent(item: YTItem): Boolean {
-        // 1. Basic Title Filtering for "Item Songs", "DJ Remixes", etc.
-        val title = item.title.lowercase()
-        val subtitle = when(item) {
-            is SongItem -> item.artists.joinToString { it.name }
-            is AlbumItem -> item.artists?.joinToString { it.name } ?: ""
-            else -> ""
-        }.lowercase()
         
-        val lowQualityKeywords = listOf(
-            "item song",
-            "item number",
-            "hot song",
-            "sexy",
-            "dj remix",
-            "mashup",
-            "chipmunks",
-            "bass boosted",
-            "8d audio",
-            "slowed + reverb",
-            "reaction",
-            "review",
-            "lyric video", // Prefer official audio/video
-            "whatsapp status"
-        )
-        
-        if (lowQualityKeywords.any { title.contains(it) || subtitle.contains(it) }) {
-            return false
+        // Listen for language preference changes and refresh content
+        viewModelScope.launch {
+            selectedLanguages.collect { languages ->
+                // Refresh home content when language preferences change
+                // Use a small delay to avoid rapid refreshes
+                kotlinx.coroutines.delay(500)
+                if (!isRefreshing.value && !isLoading.value) {
+                    refresh()
+                }
+            }
         }
-        
-        // 2. Prefer Songs/Albums over Videos
-        // (Handled mostly by section filtering, but double check item type if needed)
-        
-        return true
     }
 }

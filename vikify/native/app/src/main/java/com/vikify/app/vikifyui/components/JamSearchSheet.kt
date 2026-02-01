@@ -49,7 +49,7 @@ fun JamSearchSheet(
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
-        containerColor = Color(0xFF1E1E1E), // Dark background
+        containerColor = VikifyTheme.colors.surfaceSheet,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
         Column(
@@ -68,7 +68,7 @@ fun JamSearchSheet(
                     text = "Add to Queue",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = VikifyTheme.colors.textPrimary,
                     modifier = Modifier.padding(bottom = Spacing.MD)
                 )
                 

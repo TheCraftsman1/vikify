@@ -159,27 +159,66 @@ class DownloadUtil @Inject constructor(
 
     fun getDownload(songId: String): Flow<LocalDateTime?> = downloads.map { it[songId] }
 
+    /**
+     * Download multiple songs (batch download)
+     * Each song is inserted into database before download to ensure it appears in Downloads screen
+     */
     fun download(songs: List<MediaMetadata>) {
-        songs.forEach { song -> downloadSong(song.id, song.title) }
+        CoroutineScope(Dispatchers.IO).launch {
+            songs.forEach { song ->
+                try {
+                    // Ensure song exists in database BEFORE downloading
+                    val existingSong = database.song(song.id).first()
+                    if (existingSong == null) {
+                        database.insert(song)
+                        Log.d(TAG, "Batch download: Inserted song ${song.id} into database")
+                    }
+                    downloadSong(song.id, song.title)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to queue download for ${song.id}: ${e.message}")
+                }
+            }
+        }
     }
 
+    /**
+     * Download a single song
+     * Inserts song into database first to ensure it appears in Downloads screen after completion
+     */
     fun download(song: MediaMetadata) {
         // CRITICAL: Ensure song exists in database BEFORE downloading
         // Otherwise updateDownloadStatus won't find it and song won't appear in Downloads
         CoroutineScope(Dispatchers.IO).launch {
-            val existingSong = database.song(song.id).first()
-            if (existingSong == null) {
-                // Insert song into database (upsert-safe insert)
-                database.insert(song)
-                Log.d(TAG, "Inserted song ${song.id} into database before download")
+            try {
+                val existingSong = database.song(song.id).first()
+                if (existingSong == null) {
+                    // Insert song into database (upsert-safe insert)
+                    database.insert(song)
+                    Log.d(TAG, "Inserted song ${song.id} into database before download")
+                }
+                downloadSong(song.id, song.title)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start download for ${song.id}: ${e.message}")
             }
-            downloadSong(song.id, song.title)
         }
     }
 
     fun download(song: SongEntity) {
         downloadSong(song.id, song.title)
     }
+    
+    /**
+     * Download with metadata caching for later use
+     * Used when we want to ensure the song metadata is preserved even if download starts before DB insert
+     */
+    private val pendingDownloadMetadata = mutableMapOf<String, MediaMetadata>()
+    
+    fun downloadWithMetadata(song: MediaMetadata) {
+        pendingDownloadMetadata[song.id] = song
+        download(song)
+    }
+    
+    fun getPendingMetadata(songId: String): MediaMetadata? = pendingDownloadMetadata.remove(songId)
 
     private fun downloadSong(id: String, title: String) {
         if (downloads.value[id] != null) return
@@ -473,11 +512,32 @@ class DownloadUtil @Inject constructor(
                             val existingSong = database.song(download.request.id).first()
                             if (existingSong == null) {
                                 Log.e(TAG, "DOWNLOAD COMPLETE but song NOT in database: ${download.request.id}")
+                                // Try to get from pending metadata cache
+                                val pendingMeta = getPendingMetadata(download.request.id)
+                                if (pendingMeta != null) {
+                                    Log.d(TAG, "Found pending metadata, inserting song: ${download.request.id}")
+                                    database.insert(pendingMeta)
+                                } else {
+                                    // Last resort: create minimal entry so download status can be set
+                                    // The title is stored in download.request.data
+                                    val title = download.request.data?.let { String(it) } ?: "Unknown"
+                                    Log.w(TAG, "Creating minimal song entry for download: ${download.request.id}")
+                                    database.insert(
+                                        SongEntity(
+                                            id = download.request.id,
+                                            title = title,
+                                            isLocal = false
+                                        )
+                                    )
+                                }
                             } else {
                                 Log.d(TAG, "DOWNLOAD COMPLETE - updating status for: ${download.request.id}")
                             }
                             
                             database.updateDownloadStatus(download.request.id, updateTime)
+                        } else if (download.state == Download.STATE_QUEUED || download.state == Download.STATE_DOWNLOADING) {
+                            // Set dateDownload to a special value to indicate downloading
+                            database.updateDownloadStatus(download.request.id, STATE_DOWNLOADING)
                         } else {
                             database.updateDownloadStatus(download.request.id, null)
                         }

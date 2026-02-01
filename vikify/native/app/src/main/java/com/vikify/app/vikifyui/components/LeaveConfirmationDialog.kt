@@ -50,7 +50,7 @@ fun LeaveConfirmationDialog(
         Card(
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF1A1A1A)
+                containerColor = VikifyTheme.colors.surfaceCard
             ),
             modifier = Modifier
                 .fillMaxWidth()
@@ -67,7 +67,7 @@ fun LeaveConfirmationDialog(
                     modifier = Modifier
                         .size(56.dp)
                         .background(
-                            Color(0xFFFF6B6B).copy(alpha = 0.15f),
+                            VikifyTheme.colors.error.copy(alpha = 0.15f),
                             RoundedCornerShape(16.dp)
                         ),
                     contentAlignment = Alignment.Center
@@ -75,7 +75,7 @@ fun LeaveConfirmationDialog(
                     Icon(
                         imageVector = Icons.Rounded.Warning,
                         contentDescription = null,
-                        tint = Color(0xFFFF6B6B),
+                        tint = VikifyTheme.colors.error,
                         modifier = Modifier.size(28.dp)
                     )
                 }

@@ -56,8 +56,8 @@ fun ParticipantsDrawer(
         ModalBottomSheet(
             onDismissRequest = onDismiss,
             sheetState = sheetState,
-            containerColor = Color(0xFF121212),
-            contentColor = Color.White,
+            containerColor = VikifyTheme.colors.surfaceSheet,
+            contentColor = VikifyTheme.colors.textPrimary,
             dragHandle = {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -68,7 +68,7 @@ fun ParticipantsDrawer(
                             .width(40.dp)
                             .height(4.dp)
                             .clip(RoundedCornerShape(2.dp))
-                            .background(Color.White.copy(alpha = 0.3f))
+                            .background(VikifyTheme.colors.divider)
                     )
                 }
             },

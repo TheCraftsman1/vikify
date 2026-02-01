@@ -133,6 +133,24 @@ class AuthManager @Inject constructor() {
     }
 
     /**
+     * Update user display name
+     */
+    suspend fun updateDisplayName(name: String) {
+        try {
+            val user = auth.currentUser ?: return
+            val profileUpdates = com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                .setDisplayName(name)
+                .build()
+            user.updateProfile(profileUpdates).await()
+            // Refresh the user state
+            _currentUser.value = auth.currentUser
+            Log.d(TAG, "Display name updated to: $name")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update display name", e)
+        }
+    }
+
+    /**
      * Sign Out
      */
     fun signOut(context: Context) {

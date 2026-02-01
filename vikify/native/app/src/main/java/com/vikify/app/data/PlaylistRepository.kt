@@ -138,7 +138,10 @@ class PlaylistRepository @Inject constructor(
             isLocal = true,
             remoteSongCount = 0
         )
-        database.insert(playlist)
+        // Use transaction to ensure proper database write
+        database.transaction {
+            insert(playlist)
+        }
         return@withContext playlist.id
     }
 

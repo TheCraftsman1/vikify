@@ -196,8 +196,8 @@ fun Modifier.staggeredEntrance(
 
 @Composable
 fun Modifier.shimmerEffect(
-    baseColor: Color = Color(0xFF1A1A1A),
-    highlightColor: Color = Color(0xFF2D2D2D)
+    baseColor: Color = VikifyTheme.colors.shimmerBase,
+    highlightColor: Color = VikifyTheme.colors.shimmerHighlight
 ): Modifier {
     val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
     

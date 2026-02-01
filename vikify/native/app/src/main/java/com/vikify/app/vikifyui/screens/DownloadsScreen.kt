@@ -998,8 +998,8 @@ fun PremiumSongRow(
                 onCheckedChange = null, // Handled by row click
                 colors = CheckboxDefaults.colors(
                     checkedColor = accentColor,
-                    uncheckedColor = Color.White.copy(alpha = 0.6f),
-                    checkmarkColor = Color.White
+                    uncheckedColor = VikifyTheme.colors.textSecondary.copy(alpha = 0.6f),
+                    checkmarkColor = if (VikifyTheme.isDark) Color.White else Color.Black
                 ),
                 modifier = Modifier.padding(end = 16.dp)
             )
@@ -1011,7 +1011,7 @@ fun PremiumSongRow(
                 text = index.toString().padStart(2, '0'),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = if (isPlaying) accentColor else Color.White.copy(alpha = 0.4f),
+                color = if (isPlaying) accentColor else VikifyTheme.colors.textSecondary.copy(alpha = 0.6f),
                 modifier = Modifier.width(28.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -1022,7 +1022,7 @@ fun PremiumSongRow(
             modifier = Modifier
                 .size(52.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(VikifyCard)
+                .background(VikifyTheme.colors.surface)
         ) {
             AsyncImage(
                 model = artworkUrl,
@@ -1056,14 +1056,14 @@ fun PremiumSongRow(
                 text = title,
                 fontSize = 15.sp,
                 fontWeight = if (isPlaying) FontWeight.SemiBold else FontWeight.Medium,
-                color = if (isPlaying) accentColor else Color.White,
+                color = if (isPlaying) accentColor else VikifyTheme.colors.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = artist,
                 fontSize = 13.sp,
-                color = Color.White.copy(alpha = 0.5f),
+                color = VikifyTheme.colors.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1075,7 +1075,7 @@ fun PremiumSongRow(
                 Icon(
                     imageVector = Icons.Rounded.OfflinePin,
                     contentDescription = "Downloaded",
-                    tint = DownloadColors.Primary,
+                    tint = VikifyTheme.colors.accent,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -1083,7 +1083,7 @@ fun PremiumSongRow(
                 Icon(
                     imageVector = Icons.Rounded.Favorite,
                     contentDescription = "Liked",
-                    tint = Color(0xFFFF6B9D),
+                    tint = VikifyTheme.colors.accent,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -1095,7 +1095,7 @@ fun PremiumSongRow(
                 Icon(
                     imageVector = Icons.Rounded.MoreVert,
                     contentDescription = "More",
-                    tint = Color.White.copy(alpha = 0.5f),
+                    tint = VikifyTheme.colors.textSecondary,
                     modifier = Modifier.size(18.dp)
                 )
             }

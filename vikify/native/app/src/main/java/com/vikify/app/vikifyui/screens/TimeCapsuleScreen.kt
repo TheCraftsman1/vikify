@@ -1039,13 +1039,13 @@ private fun TopSongSlide(
                     .offset(x = 40.dp)
                     .rotate(vinylRotation)
                     .clip(CircleShape)
-                    .background(Color(0xFF1A1A1A))
+                    .background(VikifyTheme.colors.surface)
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val center = Offset(size.width / 2, size.height / 2)
                     for (i in 1..8) {
                         drawCircle(
-                            color = Color(0xFF333333),
+                            color = VikifyTheme.colors.surfaceElevated,
                             radius = size.width / 2 - (i * 12f),
                             center = center,
                             style = Stroke(width = 1f)
