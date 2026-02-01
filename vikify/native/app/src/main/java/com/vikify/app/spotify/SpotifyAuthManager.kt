@@ -9,10 +9,14 @@ import com.vikify.app.BuildConfig
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import android.util.Log
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -31,6 +35,10 @@ object SpotifyAuthManager {
     private const val TAG = "SpotifyAuthManager"
     private const val PREFS_NAME = "vikify_spotify"
     private const val SPOTIFY_API_BASE = "https://api.spotify.com/v1"
+    
+    // Private coroutine scope for background operations
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    
     private const val KEY_ACCESS_TOKEN = "access_token"
     private const val KEY_REFRESH_TOKEN = "refresh_token"
     private const val KEY_TOKEN_EXPIRY = "token_expiry"
@@ -46,11 +54,34 @@ object SpotifyAuthManager {
         .build()
     
     /**
+     * Get encrypted SharedPreferences for secure token storage
+     */
+    private fun getSecurePrefs(context: Context): SharedPreferences {
+        return try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            
+            EncryptedSharedPreferences.create(
+                context,
+                PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            // Fallback to regular SharedPreferences if encryption fails
+            Log.w(TAG, "Failed to create encrypted prefs, falling back to regular", e)
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
+    }
+    
+    /**
      * Check if user is connected to Spotify
      * Returns true if we have a valid token OR a refresh token (can get new token)
      */
     fun isConnected(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSecurePrefs(context)
         val token = prefs.getString(KEY_ACCESS_TOKEN, null)
         val refreshToken = prefs.getString(KEY_REFRESH_TOKEN, null)
         val expiry = prefs.getLong(KEY_TOKEN_EXPIRY, 0)
@@ -63,7 +94,7 @@ object SpotifyAuthManager {
      * Check if current access token is expired
      */
     private fun isTokenExpired(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSecurePrefs(context)
         val expiry = prefs.getLong(KEY_TOKEN_EXPIRY, 0)
         // Add buffer to refresh before actual expiry
         return System.currentTimeMillis() >= (expiry - EXPIRY_BUFFER_MS)
@@ -73,7 +104,7 @@ object SpotifyAuthManager {
      * Get stored access token (raw, without refresh check)
      */
     fun getAccessToken(context: Context): String? {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSecurePrefs(context)
         return prefs.getString(KEY_ACCESS_TOKEN, null)
     }
     
@@ -82,7 +113,7 @@ object SpotifyAuthManager {
      * This should be used for API calls
      */
     suspend fun getValidAccessToken(context: Context): String? = withContext(Dispatchers.IO) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSecurePrefs(context)
         val token = prefs.getString(KEY_ACCESS_TOKEN, null)
         val refreshToken = prefs.getString(KEY_REFRESH_TOKEN, null)
         
@@ -108,7 +139,7 @@ object SpotifyAuthManager {
      * Get stored refresh token
      */
     fun getRefreshToken(context: Context): String? {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSecurePrefs(context)
         return prefs.getString(KEY_REFRESH_TOKEN, null)
     }
     
@@ -116,7 +147,7 @@ object SpotifyAuthManager {
      * Get stored user name
      */
     fun getUserName(context: Context): String? {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSecurePrefs(context)
         return prefs.getString(KEY_USER_NAME, null)
     }
     
@@ -124,7 +155,7 @@ object SpotifyAuthManager {
      * Get stored user image URL
      */
     fun getUserImage(context: Context): String? {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSecurePrefs(context)
         return prefs.getString(KEY_USER_IMAGE, null)
     }
     
@@ -171,7 +202,7 @@ object SpotifyAuthManager {
         val codeChallenge = generateCodeChallenge(codeVerifier)
         
         // Store code verifier for later use in token exchange
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSecurePrefs(context)
         prefs.edit().putString(KEY_CODE_VERIFIER, codeVerifier).apply()
         
         // Build authorization URL
@@ -207,7 +238,7 @@ object SpotifyAuthManager {
         if (code != null) {
             Log.d(TAG, "Received auth code, exchanging for token...")
             // Exchange code for token in background
-            kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            scope.launch {
                 exchangeCodeForToken(context, code)
             }
             return true
@@ -219,7 +250,7 @@ object SpotifyAuthManager {
         val expiresIn = uri.getQueryParameter("expires_in")?.toLongOrNull() ?: 3600L
         
         if (accessToken != null) {
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val prefs = getSecurePrefs(context)
             prefs.edit().apply {
                 putString(KEY_ACCESS_TOKEN, accessToken)
                 refreshToken?.let { putString(KEY_REFRESH_TOKEN, it) }
@@ -236,7 +267,7 @@ object SpotifyAuthManager {
      * Exchange authorization code for access token using PKCE
      */
     private suspend fun exchangeCodeForToken(context: Context, code: String): Boolean = withContext(Dispatchers.IO) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSecurePrefs(context)
         val codeVerifier = prefs.getString(KEY_CODE_VERIFIER, null) ?: return@withContext false
         val clientId = BuildConfig.SPOTIFY_CLIENT_ID
         
@@ -288,39 +319,35 @@ object SpotifyAuthManager {
     /**
      * Refresh the access token using the stored refresh token
      * Returns true if refresh was successful
+     * 
+     * Uses PKCE-compatible refresh (no client_secret required)
+     * This allows unlimited users without exposing secrets
      */
-    // Security: Credentials loaded from BuildConfig (set via local.properties)
     private val CLIENT_ID = BuildConfig.SPOTIFY_CLIENT_ID
-    private val CLIENT_SECRET = BuildConfig.SPOTIFY_CLIENT_SECRET
     private const val TOKEN_URL = "https://accounts.spotify.com/api/token"
     
     /**
-     * Refresh the access token using the stored refresh token
-     * Returns true if refresh was successful
+     * Refresh the access token using the stored refresh token (PKCE flow)
+     * No client_secret required - safe for mobile apps with unlimited users
      */
     suspend fun refreshAccessToken(context: Context): Boolean = withContext(Dispatchers.IO) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSecurePrefs(context)
         val refreshToken = prefs.getString(KEY_REFRESH_TOKEN, null) 
             ?: return@withContext false
         
         try {
-            Log.d(TAG, "Refreshing Spotify access token (Direct)...")
+            Log.d(TAG, "Refreshing Spotify access token (PKCE)...")
             
+            // PKCE refresh: use client_id instead of client_secret
             val requestBody = FormBody.Builder()
                 .add("grant_type", "refresh_token")
                 .add("refresh_token", refreshToken)
+                .add("client_id", CLIENT_ID)  // PKCE: only client_id needed, no secret
                 .build()
-            
-            val authString = "$CLIENT_ID:$CLIENT_SECRET"
-            val authHeader = "Basic " + android.util.Base64.encodeToString(
-                authString.toByteArray(), 
-                android.util.Base64.NO_WRAP
-            )
             
             val request = Request.Builder()
                 .url(TOKEN_URL)
                 .post(requestBody)
-                .addHeader("Authorization", authHeader)
                 .addHeader("Content-Type", "application/x-www-form-urlencoded")
                 .build()
             
@@ -363,7 +390,7 @@ object SpotifyAuthManager {
      * Save user profile data
      */
     fun saveUserProfile(context: Context, name: String, imageUrl: String?) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSecurePrefs(context)
         prefs.edit().apply {
             putString(KEY_USER_NAME, name)
             imageUrl?.let { putString(KEY_USER_IMAGE, it) }
@@ -375,7 +402,7 @@ object SpotifyAuthManager {
      * Disconnect from Spotify (clear tokens)
      */
     fun disconnect(context: Context) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSecurePrefs(context)
         prefs.edit().clear().apply()
         Log.d(TAG, "Spotify disconnected - all tokens cleared")
     }

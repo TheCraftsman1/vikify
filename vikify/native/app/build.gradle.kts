@@ -277,6 +277,9 @@ dependencies {
     implementation(libs.work.runtime.ktx)
 
     coreLibraryDesugaring(libs.desugaring)
+    
+    // Security - Encrypted SharedPreferences for token storage
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.serialization.json)

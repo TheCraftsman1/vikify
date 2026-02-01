@@ -6,6 +6,9 @@ import com.vikify.app.constants.AudioQuality
 import com.vikify.app.db.MusicDatabase
 import com.vikify.app.db.entities.SongEntity
 import com.vikify.app.utils.YTPlayerUtils
+import com.vikify.app.utils.isValidYouTubeId
+import com.vikify.app.utils.getMediaIdType
+import com.vikify.app.utils.MediaIdType
 import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.models.SongItem
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,27 +48,27 @@ class StreamResolver @Inject constructor(
                 }
                 android.util.Log.d("StreamResolver", "Cache MISS for ${song.title}. Resolving...")
 
-                // 2. Find YouTube Video ID
+                // 2. Find YouTube Video ID using unified MediaIdType detection
                 android.util.Log.d("StreamResolver", "=== RESOLVING: ${song.title} ===")
                 android.util.Log.d("StreamResolver", "  DB Song ID: ${song.id}")
-                android.util.Log.d("StreamResolver", "  ID Length: ${song.id.length}")
                 
-                // YouTube video IDs are typically 11 characters but can vary slightly
-                // Valid YouTube ID: alphanumeric + _ and -
-                val isValidYouTubeId = song.id.length in 10..12 && 
-                    song.id.all { it.isLetterOrDigit() || it == '_' || it == '-' } &&
-                    !song.id.startsWith("LS") && 
-                    !song.id.startsWith("UNRESOLVED")
+                val idType = song.id.getMediaIdType()
+                android.util.Log.d("StreamResolver", "  ID Type: $idType")
                 
-                android.util.Log.d("StreamResolver", "  Is valid YouTube ID: $isValidYouTubeId")
-                
-                val videoId = if (isValidYouTubeId) {
-                    android.util.Log.d("StreamResolver", "  Using ORIGINAL ID: ${song.id}")
-                    song.id
-                } else {
-                    android.util.Log.w("StreamResolver", "  ID looks invalid, searching for match...")
-                    findBestMatch(song)
-                } 
+                val videoId = when (idType) {
+                    MediaIdType.YOUTUBE -> {
+                        android.util.Log.d("StreamResolver", "  Using ORIGINAL YouTube ID: ${song.id}")
+                        song.id
+                    }
+                    MediaIdType.UNRESOLVED, MediaIdType.SPOTIFY, MediaIdType.UNKNOWN -> {
+                        android.util.Log.w("StreamResolver", "  Needs resolution, searching for match...")
+                        findBestMatch(song)
+                    }
+                    MediaIdType.LOCAL -> {
+                        android.util.Log.d("StreamResolver", "  Local file, no stream resolution needed")
+                        return@withContext null  // Local files don't need stream URL
+                    }
+                }
                 
                 if (videoId == null) {
                     android.util.Log.e("StreamResolver", "Video ID NOT FOUND for ${song.title}")
@@ -142,7 +145,7 @@ class StreamResolver @Inject constructor(
             
             if (items.isNullOrEmpty()) return null
             
-            // Use smart matching to find the best song - not just the first one!
+            // IMPROVED MATCHING: Use strict title matching to prevent playing wrong songs from same album
             val normalizedTitle = normalizeForMatch(targetTitle)
             val normalizedArtist = normalizeForMatch(targetArtist)
             
@@ -150,17 +153,22 @@ class StreamResolver @Inject constructor(
                 val songTitle = normalizeForMatch(songItem.title)
                 val songArtist = normalizeForMatch(songItem.artists.joinToString { it.name })
                 
-                val titleScore = calculateSimilarity(normalizedTitle, songTitle)
+                // CRITICAL: Calculate title similarity with stricter algorithm
+                val titleScore = calculateTitleSimilarity(normalizedTitle, songTitle)
                 val artistScore = calculateSimilarity(normalizedArtist, songArtist)
                 
-                // Combined score: title is more important (70%) than artist (30%)
-                val totalScore = (titleScore * 0.7) + (artistScore * 0.3)
+                // IMPORTANT: Title must match strongly (80% weight) - artist is secondary (20%)
+                // This prevents playing "Kadalani" when searching for "Nuvve Nuvve" from same movie
+                val totalScore = (titleScore * 0.80) + (artistScore * 0.20)
                 
                 android.util.Log.d("StreamResolver", 
-                    "Song: '${songItem.title}' | Title Score: ${"%.2f".format(titleScore)} | Artist Score: ${"%.2f".format(artistScore)} | Total: ${"%.2f".format(totalScore)}")
+                    "Song: '${songItem.title}' | Title: ${"%.2f".format(titleScore)} | Artist: ${"%.2f".format(artistScore)} | Total: ${"%.2f".format(totalScore)}")
                 
-                // Require at least 40% match to avoid completely wrong songs
-                if (totalScore >= 0.4) {
+                // RAISED THRESHOLD: Require at least 65% match (up from 40%)
+                // Lower threshold only if title is a strong match
+                val threshold = if (titleScore >= 0.85) 0.50 else 0.65
+                
+                if (totalScore >= threshold) {
                     songItem to totalScore
                 } else {
                     null
@@ -171,12 +179,12 @@ class StreamResolver @Inject constructor(
             val bestMatch = scoredSongs.maxByOrNull { it.second }?.first
             
             if (bestMatch != null) {
-                android.util.Log.d("StreamResolver", "Best match: '${bestMatch.title}' by ${bestMatch.artists.joinToString { it.name }}")
+                android.util.Log.d("StreamResolver", "✓ Best match: '${bestMatch.title}' by ${bestMatch.artists.joinToString { it.name }}")
                 bestMatch.id
             } else {
-                // Fallback to first result if no good match (but log warning)
-                android.util.Log.w("StreamResolver", "No good match found for '$targetTitle', using first result as fallback")
-                items.firstOrNull()?.id
+                // REMOVED DANGEROUS FALLBACK: Do NOT use first result - return null instead
+                android.util.Log.e("StreamResolver", "✗ No reliable match for '$targetTitle'. Refusing to guess.")
+                null  // Let UI handle the error gracefully
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -192,6 +200,89 @@ class StreamResolver @Inject constructor(
             .replace(Regex("[^a-z0-9\\s]"), "") // Remove special chars
             .replace(Regex("\\s+"), " ")        // Normalize spaces
             .trim()
+    }
+    
+    /**
+     * IMPROVED: Calculate title similarity using multiple strategies
+     * This prevents songs from same album/movie from being confused
+     */
+    private fun calculateTitleSimilarity(target: String, candidate: String): Double {
+        if (target.isEmpty() || candidate.isEmpty()) return 0.0
+        if (target == candidate) return 1.0
+        
+        // Strategy 1: Exact containment (one title fully contains the other)
+        if (target == candidate.take(target.length) || candidate == target.take(candidate.length)) {
+            return 0.95  // Near-exact prefix match
+        }
+        
+        // Strategy 2: Levenshtein-based similarity for short titles
+        if (target.length <= 20 && candidate.length <= 20) {
+            val editDistance = levenshteinDistance(target, candidate)
+            val maxLen = maxOf(target.length, candidate.length)
+            val levenshteinScore = 1.0 - (editDistance.toDouble() / maxLen)
+            if (levenshteinScore >= 0.7) return levenshteinScore
+        }
+        
+        // Strategy 3: Word-order-aware matching (prevents "Nuvve Nuvve" matching "Kadalani")
+        val targetWords = target.split(" ").filter { it.length > 1 }
+        val candidateWords = candidate.split(" ").filter { it.length > 1 }
+        
+        if (targetWords.isEmpty() || candidateWords.isEmpty()) return 0.0
+        
+        // Check if first significant word matches (critical for song identification)
+        val firstWordMatch = targetWords.firstOrNull()?.let { firstTarget ->
+            candidateWords.any { it.startsWith(firstTarget.take(3)) || firstTarget.startsWith(it.take(3)) }
+        } ?: false
+        
+        // Word intersection with position weighting
+        var matchScore = 0.0
+        var totalWeight = 0.0
+        
+        targetWords.forEachIndexed { index, word ->
+            val weight = 1.0 / (index + 1)  // First words are more important
+            totalWeight += weight
+            
+            if (candidateWords.any { candidateWord ->
+                candidateWord == word || 
+                candidateWord.startsWith(word) || 
+                word.startsWith(candidateWord) ||
+                levenshteinDistance(word, candidateWord) <= 1
+            }) {
+                matchScore += weight
+            }
+        }
+        
+        val positionScore = if (totalWeight > 0) matchScore / totalWeight else 0.0
+        
+        // Boost score if first word matches
+        return if (firstWordMatch) {
+            minOf(positionScore + 0.15, 1.0)
+        } else {
+            positionScore * 0.8  // Penalize if first word doesn't match
+        }
+    }
+    
+    /**
+     * Levenshtein distance for precise string comparison
+     */
+    private fun levenshteinDistance(s1: String, s2: String): Int {
+        val m = s1.length
+        val n = s2.length
+        val dp = Array(m + 1) { IntArray(n + 1) }
+        
+        for (i in 0..m) dp[i][0] = i
+        for (j in 0..n) dp[0][j] = j
+        
+        for (i in 1..m) {
+            for (j in 1..n) {
+                dp[i][j] = if (s1[i - 1] == s2[j - 1]) {
+                    dp[i - 1][j - 1]
+                } else {
+                    1 + minOf(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+                }
+            }
+        }
+        return dp[m][n]
     }
     
     /**

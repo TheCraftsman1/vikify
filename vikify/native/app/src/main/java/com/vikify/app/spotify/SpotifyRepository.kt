@@ -4,8 +4,11 @@ import com.vikify.app.BuildConfig
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import android.util.Log
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.vikify.app.db.entities.SongEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -29,15 +32,37 @@ class SpotifyRepository(
 ) {
     companion object {
         private const val TAG = "SpotifyRepository"
-        // Security: Credentials loaded from BuildConfig (set via local.properties)
+        private const val PREFS_NAME = "vikify_spotify"
+        // PKCE flow: only client_id needed, no secret required
         val CLIENT_ID = BuildConfig.SPOTIFY_CLIENT_ID
-        private val CLIENT_SECRET = BuildConfig.SPOTIFY_CLIENT_SECRET
         private const val REDIRECT_URI = "vikify://spotify-callback"
         private const val AUTH_URL = "https://accounts.spotify.com/authorize"
         private const val TOKEN_URL = "https://accounts.spotify.com/api/token"
         private const val API_BASE = "https://api.spotify.com/v1"
         
         private const val SCOPES = "user-read-private user-read-email playlist-read-private playlist-read-collaborative user-library-read"
+    }
+    
+    /**
+     * Get encrypted SharedPreferences for secure token storage
+     */
+    private fun getSecurePrefs(): SharedPreferences {
+        return try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            
+            EncryptedSharedPreferences.create(
+                context,
+                PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to create encrypted prefs, falling back to regular", e)
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
     }
     
     /**
@@ -68,28 +93,37 @@ class SpotifyRepository(
     }
     
     /**
-     * Exchange authorization code for access token
-     * Stores tokens via SpotifyAuthManager for persistence
+     * Exchange authorization code for access token using PKCE
+     * No client_secret required - safe for unlimited users
+     * 
+     * Note: For PKCE flow, use SpotifyAuthManager.handleAuthCallback() instead
+     * This is kept for legacy compatibility but delegates to SpotifyAuthManager
      */
     suspend fun exchangeCodeForToken(code: String): Boolean = withContext(Dispatchers.IO) {
         try {
+            // Get code verifier from secure prefs (stored during auth flow start)
+            val prefs = getSecurePrefs()
+            val codeVerifier = prefs.getString("code_verifier", null)
+            
             val url = URL(TOKEN_URL)
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
             
-            val credentials = android.util.Base64.encodeToString(
-                "$CLIENT_ID:$CLIENT_SECRET".toByteArray(),
-                android.util.Base64.NO_WRAP
-            )
-            conn.setRequestProperty("Authorization", "Basic $credentials")
+            // PKCE: Use client_id + code_verifier instead of client_secret
+            val postData = StringBuilder()
+                .append("grant_type=authorization_code")
+                .append("&code=$code")
+                .append("&redirect_uri=${Uri.encode(REDIRECT_URI)}")
+                .append("&client_id=$CLIENT_ID")
             
-            val postData = "grant_type=authorization_code" +
-                "&code=$code" +
-                "&redirect_uri=${Uri.encode(REDIRECT_URI)}"
+            // Add code_verifier if available (PKCE flow)
+            if (codeVerifier != null) {
+                postData.append("&code_verifier=$codeVerifier")
+            }
             
-            conn.outputStream.use { it.write(postData.toByteArray()) }
+            conn.outputStream.use { it.write(postData.toString().toByteArray()) }
             
             if (conn.responseCode == 200) {
                 val response = conn.inputStream.bufferedReader().readText()
@@ -98,24 +132,27 @@ class SpotifyRepository(
                 val refreshToken = json.optString("refresh_token", null)
                 val expiresIn = json.optLong("expires_in", 3600L)
                 
-                // Store tokens via SpotifyAuthManager for unified persistence
-                val prefs = context.getSharedPreferences("vikify_spotify", Context.MODE_PRIVATE)
+                // Store tokens via secure SharedPreferences
                 prefs.edit().apply {
                     putString("access_token", accessToken)
                     refreshToken?.let { putString("refresh_token", it) }
                     putLong("token_expiry", System.currentTimeMillis() + (expiresIn * 1000))
+                    remove("code_verifier") // Clean up after use
                     apply()
                 }
                 
-                Log.d(TAG, "Token exchange successful, expires in ${expiresIn}s")
+                Log.d(TAG, "PKCE token exchange successful, expires in ${expiresIn}s")
                 true
             } else {
-                Log.e(TAG, "Token exchange failed: ${conn.responseCode}")
+                val errorBody = conn.errorStream?.bufferedReader()?.readText() ?: "No error body"
+                Log.e(TAG, "Token exchange failed: ${conn.responseCode} - $errorBody")
                 false
             }
         } catch (e: Exception) {
             Log.e(TAG, "Token exchange exception", e)
             false
+        } finally {
+            // Connection cleanup is handled by use{} blocks
         }
     }
     

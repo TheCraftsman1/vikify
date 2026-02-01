@@ -225,7 +225,8 @@ class DownloadUtil @Inject constructor(
             }
         }
 
-        runBlocking {
+        // Use IO dispatcher instead of runBlocking to avoid blocking main thread
+        CoroutineScope(Dispatchers.IO).launch {
             database.song(id).first()?.song?.copy(localPath = null)
             database.updateDownloadStatus(id, null)
         }
