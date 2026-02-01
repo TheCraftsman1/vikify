@@ -99,6 +99,7 @@ fabric.properties
 proguard/
 
 # Video files (too large for git)
+# Video files (too large for git)
 *.mp4
 *.mov
 *.avi
