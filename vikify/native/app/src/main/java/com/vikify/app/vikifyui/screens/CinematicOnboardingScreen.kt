@@ -1355,10 +1355,11 @@ private fun LanguageSetupStep(
                 contentPadding = PaddingValues(bottom = 16.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                androidx.compose.foundation.lazy.grid.items(
-                    items = languages,
-                    key = { it.name }
-                ) { language ->
+                items(
+                    count = languages.size,
+                    key = { languages[it].name }
+                ) { index ->
+                    val language = languages[index]
                     val isSelected = language in selectedLanguages
                     
                     OnboardingLanguageCard(
@@ -1388,7 +1389,7 @@ private fun LanguageSetupStep(
                         view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
                         // Save language preferences
                         scope.launch {
-                            MusicPreferences.getInstance(context).setMusicLanguages(selectedLanguages.toList())
+                            MusicPreferences.setSelectedLanguages(context, selectedLanguages)
                         }
                         onContinue()
                     },
