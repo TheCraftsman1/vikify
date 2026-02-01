@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Background circle -->
+    <path
+        android:fillColor="#0EA5E9"
+        android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0"/>
+    
+    <!-- Dynamic Waveform Bars (Reflecting the iridescent logo) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M25,45 L25,63 C25,65.76 27.24,68 30,68 C32.76,68 35,65.76 35,63 L35,45 C35,42.24 32.76,40 30,40 C27.24,40 25,42.24 25,45 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,30 L38,78 C38,80.76 40.24,83 43,83 C45.76,83 48,80.76 48,78 L48,30 C48,27.24 45.76,25 43,25 C40.24,25 38,27.24 38,30 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M51,38 L51,70 C51,72.76 53.24,75 56,75 C58.76,75 61,72.76 61,70 L61,38 C61,35.24 58.76,33 56,33 C53.24,33 51,35.24 51,38 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,32 L64,76 C64,78.76 66.24,81 69,81 C71.76,81 74,78.76 74,76 L74,32 C74,29.24 71.76,27 69,27 C66.24,27 64,29.24 64,32 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M77,48 L77,60 C77,62.76 79.24,65 82,65 C84.76,65 87,62.76 87,60 L87,48 C87,45.24 84.76,43 82,43 C79.24,43 77,45.24 77,48 Z"/>
+</vector>

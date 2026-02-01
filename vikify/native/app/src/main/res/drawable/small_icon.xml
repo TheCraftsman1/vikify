@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:height="108dp" android:viewportHeight="180" android:viewportWidth="180" android:width="108dp">
+      
+    <!-- Silhouette of the 5-bar waveform -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,65 L40,115 C40,119.42 43.58,123 48,123 C52.42,123 56,119.42 56,115 L56,65 C56,60.58 52.42,57 48,57 C43.58,57 40,60.58 40,65 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,30 L64,150 C64,154.42 67.58,158 72,158 C76.42,158 80,154.42 80,150 L80,30 C80,25.58 76.42,22 72,22 C67.58,22 64,25.58 64,30 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M88,50 L88,130 C88,134.42 91.58,138 96,138 C100.42,138 104,134.42 104,130 L104,50 C104,45.58 100.42,42 96,42 C91.58,42 88,45.58 88,50 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M112,35 L112,145 C112,149.42 115.58,153 120,153 C124.42,153 128,149.42 128,145 L128,35 C128,30.58 124.42,27 120,27 C115.58,27 112,30.58 112,35 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M136,75 L136,105 C136,109.42 139.58,113 144,113 C148.42,113 152,109.42 152,105 L152,75 C152,70.58 148.42,67 144,67 C139.58,67 136,70.58 136,75 Z"/>
+    
+</vector>
