@@ -55,12 +55,19 @@ object LrcLib {
     ) = runCatching {
         val tracks = queryLyrics(artist, title, album)
 
-        val res = tracks.bestMatchingFor(duration)?.syncedLyrics?.let(LrcLib::Lyrics)
-        if (res != null) {
-            return@runCatching res.text
-        } else {
-            throw IllegalStateException("Lyrics unavailable")
+        // Try exact duration match first
+        val exactMatch = tracks.bestMatchingFor(duration)?.syncedLyrics?.let(LrcLib::Lyrics)
+        if (exactMatch != null) {
+            return@runCatching exactMatch.text
         }
+        
+        // Fallback: use first synced result if available (better than nothing)
+        val firstSynced = tracks.firstOrNull()?.syncedLyrics?.let(LrcLib::Lyrics)
+        if (firstSynced != null) {
+            return@runCatching firstSynced.text
+        }
+        
+        throw IllegalStateException("Lyrics unavailable")
     }
 
     suspend fun getAllLyrics(

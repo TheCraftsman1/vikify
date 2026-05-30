@@ -7,18 +7,18 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Local configuration (contains SDK paths and API keys)
-# local.properties
-# **/local.properties
+local.properties
+**/local.properties
 
 # Firebase/Google Services (contains API keys and OAuth client IDs)
-# google-services.json
-# **/google-services.json
+google-services.json
+**/google-services.json
 
 # Keystore files (signing keys)
-# *.jks
-# *.keystore
-# keystore.properties
-# **/keystore.properties
+*.jks
+*.keystore
+keystore.properties
+**/keystore.properties
 
 # Environment files
 .env
@@ -32,9 +32,10 @@
 .gradle/
 **/build/
 !**/src/**/build/
-
-# Gradle wrapper (optional - some prefer to commit this)
-# gradle/wrapper/gradle-wrapper.jar
+**/bin/
+**/.kotlin/
+**/.cxx/
+**/buildout/
 
 # ─────────────────────────────────────────────────────────────────────────────
 # IDE & EDITOR
@@ -42,6 +43,7 @@
 
 # Android Studio / IntelliJ IDEA
 .idea/
+**/.idea/
 *.iml
 *.ipr
 *.iws
@@ -50,6 +52,7 @@ captures/
 
 # Visual Studio Code
 .vscode/
+**/.vscode/
 
 # ─────────────────────────────────────────────────────────────────────────────
 # OS ARTIFACTS
@@ -83,9 +86,18 @@ Desktop.ini
 # ─────────────────────────────────────────────────────────────────────────────
 
 *.log
+build_log*.txt
+build_out.txt
 crash-*.txt
 hs_err_pid*
 fabric.properties
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AI AGENT & TOOL ARTIFACTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+.agent/
+**/.agent/
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MISC
@@ -98,7 +110,6 @@ fabric.properties
 # Proguard
 proguard/
 
-# Video files (too large for git)
 # Video files (too large for git)
 *.mp4
 *.mov

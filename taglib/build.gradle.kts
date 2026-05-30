@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.kyant.taglib"
     compileSdk = 36
-    buildToolsVersion = "36.0.0"
+    buildToolsVersion = "35.0.0"
     ndkVersion = "29.0.13113456"
 
     defaultConfig {

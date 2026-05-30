@@ -87,10 +87,10 @@ Download the latest APK from the [Releases](https://github.com/TheCraftsman1/vik
 
 2. **Configure API keys**
    
-   Copy the example configuration files:
+   Copy the example configuration file:
    ```bash
    cp local.properties.example local.properties
-   cp vikify/native/app/google-services.json.example vikify/native/app/google-services.json
+   cp app/google-services.json.example app/google-services.json
    ```
    
    Edit `local.properties` with your API keys:
@@ -105,11 +105,11 @@ Download the latest APK from the [Releases](https://github.com/TheCraftsman1/vik
    
    - Create a Firebase project at [Firebase Console](https://console.firebase.google.com/)
    - Add an Android app with package name `com.vikify.app`
-   - Download `google-services.json` and place it in `vikify/native/app/`
+   - Download `google-services.json` and place it in `app/`
 
 4. **Build the project**
    ```bash
-   ./gradlew :vikify:native:app:assembleFullDebug
+   ./gradlew :app:assembleFullDebug
    ```
 
 ### Build Variants
@@ -124,7 +124,7 @@ Download the latest APK from the [Releases](https://github.com/TheCraftsman1/vik
 ### Required API Keys
 
 | Key | Purpose | Where to get |
-|-----|---------|--------------|
+|-----|---------|--------------| 
 | `GOOGLE_API_KEY` | YouTube playback | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) |
 | `SPOTIFY_CLIENT_ID` | Spotify integration | [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) |
 | `SPOTIFY_CLIENT_SECRET` | Spotify integration | [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) |
@@ -139,15 +139,26 @@ Required for user authentication and cloud features:
 
 ```
 vikify/
-├── native/
-│   └── app/           # Main Android application
-├── innertube/         # YouTube Music API client
-├── kugou/             # Kugou lyrics provider
-├── lrclib/            # LrcLib lyrics provider  
+├── app/                       # Main Android application
+├── innertube/                 # YouTube Music API client
+├── kugou/                     # Kugou lyrics provider
+├── lrclib/                    # LrcLib lyrics provider
 ├── material-color-utilities/  # Dynamic theming
-├── taglib/            # Audio metadata library
-└── ffMetadataEx/      # FFmpeg metadata extraction
+├── taglib/                    # Audio metadata library
+├── ffMetadataEx/              # FFmpeg metadata extraction
+├── docs/                      # Architecture & design docs
+├── screenshots/               # App screenshots
+└── Marketing_Assets/          # Marketing images
 ```
+
+## 🛠️ Tech Stack
+
+- **Language**: Kotlin
+- **UI**: Jetpack Compose
+- **Architecture**: MVVM with Hilt DI
+- **Music API**: YouTube Music (InnerTube)
+- **Lyrics**: LrcLib, Kugou
+- **Audio**: Media3 ExoPlayer
 
 ## 📄 License
 
@@ -155,13 +166,14 @@ This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE) 
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## ⭐ Acknowledgments
 
 - Built with [Jetpack Compose](https://developer.android.com/jetpack/compose)
 - Media playback by [Media3/ExoPlayer](https://developer.android.com/media/media3)
 - YouTube integration via [Innertube](https://github.com/z-huang/InnerTune)
+- Originally forked from [OuterTune](https://github.com/DD3Boh/OuterTune) / [InnerTune](https://github.com/z-huang/InnerTune)
 
 ---
 
