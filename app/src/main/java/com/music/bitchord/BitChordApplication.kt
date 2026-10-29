@@ -69,10 +69,11 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         SpotifyLibrary.auth = SpotifyLibrary.Auth {
             SpotifyToken.accessToken()?.let { SpotifyLibrary.Tokens(it, SpotifyToken.clientToken()) }
         }
-        // The per-app language picker, which YouTube Music's `hl` follows.
-        // Full tag (zh-Hant / zh-Hans preserved); Innertube maps to hl/gl.
-        Innertube.appLanguage = { AppCompatDelegate.getApplicationLocales().get(0)?.toLanguageTag() }
-        migrateScriptOnlyAppLocale()
+        // App language kept strictly to English
+        Innertube.appLanguage = { "en" }
+        AppCompatDelegate.setApplicationLocales(
+            androidx.core.os.LocaleListCompat.forLanguageTags("en"),
+        )
         LyricsTranslation.cacheDir = cacheDir
         // PlaybackService shares this process, so seeding the cookie here means
         // stream resolution is authenticated from the first play onwards.

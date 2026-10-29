@@ -253,14 +253,6 @@ fun TvSettingsScreen(
                     onClick = { TvSettings.setTvLyricsCanvasEnabled(!lyricsCanvas) },
                 )
             }
-            item {
-                TvListRow(
-                    title = "Stats for Nerds",
-                    value = onOff(nerdStats),
-                    onFocused = { blurb = "Shows the codec, bitrate and sample rate of what's playing." },
-                    onClick = { AppSettings.setShowNerdStats(!nerdStats) },
-                )
-            }
 
             item { TvListHeader("Display") }
             item {
