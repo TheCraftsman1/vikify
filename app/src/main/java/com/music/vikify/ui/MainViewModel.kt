@@ -695,6 +695,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val previous = likeStatusOf(videoId)
         if (previous == status) return
         LikeState.set(videoId, status)
+        com.music.vikify.data.firebase.FirebaseSyncManager.syncFavorite(videoId, status == LikeStatus.LIKE)
         viewModelScope.launch {
             YtMusicRepository.rate(videoId, status).fold(
                 onSuccess = {
@@ -3634,6 +3635,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 AndroidLocalMixes.evidenceStore.setPreference(scope, trackId, preference)
+                com.music.vikify.data.firebase.FirebaseSyncManager.syncTrackFeedback(trackId, preference == com.music.vikify.data.personalization.TrackPreference.MORE, preference == com.music.vikify.data.personalization.TrackPreference.HIDE)
                 if (scope == LocalMixPlatform.listenerScope() && preference == TrackPreference.HIDE) {
                     _detailStack.update { pages -> pages.map { page ->
                         val songs = (page.songs as? UiState.Success)?.data

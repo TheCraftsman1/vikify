@@ -302,6 +302,13 @@ val newPipeExtractorStripped = tasks.register<org.gradle.api.tasks.bundling.Jar>
 }
 
 dependencies {
+    // Firebase
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore") {
+        exclude(group = "com.google.firebase", module = "protolite-well-known-types")
+    }
+
     implementation(project(":shared"))
     implementation(project(":sharedUi"))
 

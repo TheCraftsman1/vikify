@@ -2,6 +2,7 @@ package com.music.vikify.data.spotify
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.music.vikify.data.firebase.FirebaseSyncManager
 import com.music.vikify.data.model.Song
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +18,8 @@ data class LocalPlaylist(
 }
 
 object LocalPlaylistStore {
-    private const val PREF_NAME = "bitchord_local_playlists"
+    private const val PREF_NAME = "vikify_local_playlists"
+    private const val LEGACY_PREF_NAME = "bitchord_local_playlists"
     private const val KEY_PLAYLISTS = "playlists_json"
 
     private lateinit var prefs: SharedPreferences
@@ -27,6 +29,14 @@ object LocalPlaylistStore {
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        // Check for legacy data migration
+        if (!prefs.contains(KEY_PLAYLISTS)) {
+            val legacy = context.getSharedPreferences(LEGACY_PREF_NAME, Context.MODE_PRIVATE)
+            val legacyData = legacy.getString(KEY_PLAYLISTS, null)
+            if (legacyData != null) {
+                prefs.edit().putString(KEY_PLAYLISTS, legacyData).apply()
+            }
+        }
         load()
     }
 
@@ -73,9 +83,11 @@ object LocalPlaylistStore {
     }
 
     fun deletePlaylist(id: String) {
-        val updated = _playlists.value.filterNot { it.id == id || it.browseId == id || it.id == id.removePrefix("local:playlist:") }
+        val cleanId = id.removePrefix("local:playlist:").removePrefix("VL")
+        val updated = _playlists.value.filterNot { it.id == cleanId || it.id == id || it.browseId == id }
         _playlists.value = updated
         persist(updated)
+        FirebaseSyncManager.deleteRemotePlaylist(cleanId)
     }
 
     fun renamePlaylist(id: String, newTitle: String) {
@@ -94,7 +106,27 @@ object LocalPlaylistStore {
         return _playlists.value.firstOrNull { it.id == cleanId || it.id == id || it.browseId == id }
     }
 
+    fun mergeRemote(remoteList: List<LocalPlaylist>) {
+        val current = _playlists.value.toMutableList()
+        var changed = false
+        for (remote in remoteList) {
+            val exists = current.any { it.id == remote.id }
+            if (!exists) {
+                current.add(remote)
+                changed = true
+            }
+        }
+        if (changed) {
+            _playlists.value = current
+            persistInternal(current, syncToCloud = false)
+        }
+    }
+
     private fun persist(list: List<LocalPlaylist>) {
+        persistInternal(list, syncToCloud = true)
+    }
+
+    private fun persistInternal(list: List<LocalPlaylist>, syncToCloud: Boolean) {
         if (!this::prefs.isInitialized) return
         runCatching {
             val jsonArray = JSONArray()
@@ -120,6 +152,9 @@ object LocalPlaylistStore {
                 jsonArray.put(pObj)
             }
             prefs.edit().putString(KEY_PLAYLISTS, jsonArray.toString()).apply()
+            if (syncToCloud) {
+                FirebaseSyncManager.syncPlaylists(list)
+            }
         }
     }
 }
