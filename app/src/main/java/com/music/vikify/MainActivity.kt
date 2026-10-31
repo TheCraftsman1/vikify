@@ -4742,6 +4742,7 @@ private fun BitChordApp(
                 },
                 onNameChosen = ListenTogether::setNickname,
                 onSignIn = { webSession = WebSessionMode.SIGN_IN },
+                onSpotifySignIn = { showSpotifyLogin = true },
                 onFinish = AppSettings::setOnboardingComplete,
             )
         }

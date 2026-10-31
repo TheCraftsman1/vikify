@@ -28,9 +28,11 @@ object GoogleAuthHelper {
 
     fun getSignInIntent(activity: Activity): Intent {
         val client = getGoogleSignInClient(activity)
-        // Clear cached account selection so the account picker always shows the list of emails on device
-        client.signOut()
         return client.signInIntent
+    }
+
+    fun signOut(activity: Activity, onComplete: () -> Unit = {}) {
+        getGoogleSignInClient(activity).signOut().addOnCompleteListener { onComplete() }
     }
 
     fun parseSignInResult(data: Intent?): Result<GoogleSignInAccount> {
