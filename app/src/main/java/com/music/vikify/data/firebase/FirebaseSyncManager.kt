@@ -5,6 +5,7 @@ import android.os.Build
 import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -33,6 +34,12 @@ object FirebaseSyncManager {
     private val _isAnonymous = MutableStateFlow(true)
     val isAnonymous = _isAnonymous.asStateFlow()
 
+    private val _userEmail = MutableStateFlow<String?>(null)
+    val userEmail = _userEmail.asStateFlow()
+
+    private val _userDisplayName = MutableStateFlow<String?>(null)
+    val userDisplayName = _userDisplayName.asStateFlow()
+
     private val _syncState = MutableStateFlow("Idle")
     val syncState = _syncState.asStateFlow()
 
@@ -57,10 +64,12 @@ object FirebaseSyncManager {
                 val current = fbAuth.currentUser
                 _userId.value = current?.uid
                 _isAnonymous.value = current?.isAnonymous ?: true
+                _userEmail.value = current?.email
+                _userDisplayName.value = current?.displayName
                 Log.d(TAG, "Firebase authenticated. UID: ${current?.uid}, isAnonymous: ${current?.isAnonymous}")
 
                 // Record user device session metadata
-                updateUserDeviceMetadata(current?.uid)
+                updateUserDeviceMetadata(current?.uid, current?.email, current?.displayName)
 
                 // Initial pull: restore remote playlists and sync with local
                 pullRemotePlaylists()
@@ -70,7 +79,11 @@ object FirebaseSyncManager {
         }
     }
 
-    private suspend fun updateUserDeviceMetadata(uid: String?) {
+    private suspend fun updateUserDeviceMetadata(
+        uid: String?,
+        email: String? = null,
+        displayName: String? = null
+    ) {
         if (uid.isNullOrBlank()) return
         val db = firestore ?: return
         runCatching {
@@ -82,7 +95,38 @@ object FirebaseSyncManager {
                 "appVersion" to BuildConfig.VERSION_NAME,
                 "isAnonymous" to (auth?.currentUser?.isAnonymous ?: true)
             )
+            email?.let { metadata["email"] = it }
+            displayName?.let { metadata["displayName"] = it }
             userDoc.set(metadata, SetOptions.merge()).await()
+        }
+    }
+
+    /**
+     * Authenticates with Firebase using a Google ID token from device account selection.
+     * Links device email, updates profile, and pulls cloud playlists.
+     */
+    suspend fun signInWithGoogleCredential(
+        idToken: String,
+        email: String? = null,
+        displayName: String? = null
+    ): Result<String> {
+        val fbAuth = auth ?: FirebaseAuth.getInstance()
+        return runCatching {
+            val credential = GoogleAuthProvider.getCredential(idToken, null)
+            val result = fbAuth.signInWithCredential(credential).await()
+            val user = result.user ?: error("No user returned from Firebase sign-in")
+
+            _userId.value = user.uid
+            _isAnonymous.value = false
+            _userEmail.value = user.email ?: email
+            _userDisplayName.value = user.displayName ?: displayName
+
+            Log.d(TAG, "Google Sign-In successful. UID: ${user.uid}, email: ${user.email}")
+            updateUserDeviceMetadata(user.uid, user.email, user.displayName)
+            pullRemotePlaylists()
+            user.uid
+        }.onFailure { e ->
+            Log.e(TAG, "signInWithGoogleCredential failed: ${e.message}", e)
         }
     }
 

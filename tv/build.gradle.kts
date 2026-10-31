@@ -308,6 +308,7 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore") {
         exclude(group = "com.google.firebase", module = "protolite-well-known-types")
     }
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
 
     implementation(project(":shared"))
     implementation(project(":sharedUi"))

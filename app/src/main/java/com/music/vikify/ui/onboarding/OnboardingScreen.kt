@@ -1,20 +1,15 @@
 package com.music.vikify.ui.onboarding
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
+import android.app.Activity
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -22,350 +17,303 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource as androidPainterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.music.vikify.R
+import com.music.vikify.auth.GoogleAuthHelper
+import com.music.vikify.data.firebase.FirebaseSyncManager
 import com.music.vikify.sharedui.resources.Res
 import com.music.vikify.sharedui.resources.ic_google_g
 import com.music.vikify.sharedui.resources.ic_logo
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
-import com.music.vikify.ui.icons.VikifyIcons
-import com.music.vikify.ui.player.MeshGradientBackground
-import com.music.vikify.ui.player.MESH_CYCLE_MILLIS
-import com.music.vikify.ui.player.MeshPalette
-import com.music.vikify.ui.player.WelcomeMeshPalettes
-import com.music.vikify.ui.player.cyclingMeshPalette
+
+private const val TAG = "OnboardingScreen"
+private const val NAME_LIMIT = 40
 
 /**
- * The two welcome pages: a name for Listen Together, then the YouTube sign-in.
- *
- * Shown once — to new installs and, because the flag it sets is new, to anyone
- * updating from a build without it. The second page is skipped for an account
- * that is already signed in; asking somebody to connect what is connected
- * reads as the app having forgotten them.
- *
- * Always drawn dark, whatever the theme, for the same reason Replay is: the
- * mesh is colour, and white type is what sits on colour.
+ * Redesigned Onboarding Screen matching the reference mockup:
+ * - Solid black minimalist aesthetic
+ * - Top-left brand: Vikify wave logo mark + bold "Vikify" title
+ * - Angled 3D glossy wave hero graphic emerging from the top right
+ * - Bold headline: "What should we call you?"
+ * - Pill text field: "Enter your name"
+ * - Primary solid white pill button: "Continue"
+ * - 1-Tap Google Sign-In with native device account discovery
  */
 @Composable
 fun OnboardingScreen(
     signedIn: Boolean,
     initialName: String,
-    /** Saves the party name. Called on Next, before the second page. */
     onNameChosen: (String) -> Unit,
-    /** Opens the Google sign-in. The caller finishes onboarding once it lands. */
     onSignIn: () -> Unit,
     onFinish: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var page by rememberSaveable { mutableIntStateOf(PAGE_NAME) }
     var name by rememberSaveable { mutableStateOf(initialName) }
-    val focusManager = LocalFocusManager.current
+    var isSigningInGoogle by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = page == PAGE_CONNECT) { page = PAGE_NAME }
-    // "Sign in with Google" goes through the app's own sign-in WebView, raised
-    // over this page; the account landing is what ends the welcome.
-    LaunchedEffect(signedIn, page) {
-        if (signedIn && page == PAGE_CONNECT) onFinish()
+    val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val activity = context as? Activity
+
+    // Native Google Account Picker launcher (discovers existing Google accounts on device)
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val parsed = GoogleAuthHelper.parseSignInResult(result.data)
+        parsed.onSuccess { account ->
+            val idToken = account.idToken
+            val email = account.email
+            val displayName = account.displayName
+
+            if (idToken != null) {
+                coroutineScope.launch {
+                    isSigningInGoogle = true
+                    try {
+                        FirebaseSyncManager.signInWithGoogleCredential(
+                            idToken = idToken,
+                            email = email,
+                            displayName = displayName
+                        )
+                        val chosenName = displayName?.takeIf { it.isNotBlank() } ?: name.trim()
+                        if (chosenName.isNotBlank()) {
+                            onNameChosen(chosenName)
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Firebase credential sync error: ${e.message}")
+                    } finally {
+                        isSigningInGoogle = false
+                        onFinish()
+                    }
+                }
+            } else {
+                Log.w(TAG, "No ID token received from Google Sign-In")
+            }
+        }.onFailure { e ->
+            Log.w(TAG, "Google Account picker cancelled or failed: ${e.message}")
+            isSigningInGoogle = false
+        }
     }
 
-    // The mesh never settles on one palette: each crossfade is as long as the
-    // hold, so one runs straight into the next.
-    val palette = cyclingMeshPalette(if (page == PAGE_NAME) WelcomeMeshPalettes else ConnectPalettes)
+    val submitContinue = {
+        val chosen = name.trim().ifBlank { "Listener" }
+        focusManager.clearFocus()
+        onNameChosen(chosen)
+        onFinish()
+    }
 
     Box(
-        modifier
+        modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
-            // Swallows every touch the pages don't, so nothing reaches the app
-            // laid out underneath — and a tap on the backdrop puts the keyboard
-            // away, which is where a thumb goes to dismiss one.
-            .pointerInput(Unit) { detectTapGestures { focusManager.clearFocus() } },
+            .pointerInput(Unit) {
+                detectTapGestures { focusManager.clearFocus() }
+            }
     ) {
-        MeshGradientBackground(
-            palette = palette,
-            trackKey = page,
-            continuous = true,
-            driftMillis = 6_000,
-            colorFadeMillis = MESH_CYCLE_MILLIS,
-        )
-        // The mesh carries its own light scrim for a player's controls; two
-        // full-width buttons and a paragraph want the foot of it a shade deeper.
+        // --- 1. Top-Right Angled 3D Wave Graphic ---
         Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = 0.05f),
-                        0.55f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.45f),
-                    ),
-                ),
-        )
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(440.dp),
+            contentAlignment = Alignment.TopEnd
+        ) {
+            Image(
+                painter = androidPainterResource(R.drawable.onboarding_hero_wave),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .width(300.dp)
+                    .height(300.dp)
+                    .offset(x = 24.dp, y = 60.dp)
+            )
+        }
 
-        AnimatedContent(
-            targetState = page,
-            transitionSpec = {
-                val forward = targetState > initialState
-                val slide = tween<IntOffset>(420)
-                (slideInHorizontally(slide) { if (forward) it / 3 else -it / 3 } + fadeIn(tween(320, 100)))
-                    .togetherWith(
-                        slideOutHorizontally(slide) { if (forward) -it / 3 else it / 3 } + fadeOut(tween(200)),
-                    )
-            },
-            label = "onboardingPage",
+        // --- 2. Main Content Column ---
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .systemBarsPadding()
-                .imePadding(),
-        ) { shown ->
-            OnboardingPage {
-                when (shown) {
-                    PAGE_NAME -> NamePage(
-                        name = name,
-                        onNameChange = { name = it.take(NAME_LIMIT) },
-                        onNext = next@{
-                            val chosen = name.trim()
-                            if (chosen.isEmpty()) return@next
-                            focusManager.clearFocus()
-                            onNameChosen(chosen)
-                            if (signedIn) onFinish() else page = PAGE_CONNECT
-                        },
-                    )
-                    else -> ConnectPage(
-                        onBack = { page = PAGE_NAME },
-                        onSignIn = onSignIn,
-                        onSkip = onFinish,
+                .statusBarsPadding()
+                .imePadding()
+                .padding(horizontal = 28.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Top Header: [Icon] Vikify
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 16.dp)
+            ) {
+                Icon(
+                    painter = painterResource(Res.drawable.ic_logo),
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "Vikify",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.5).sp
+                )
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            // Lower Section: Title + Input Field + Buttons
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 500.dp)
+                    .padding(bottom = 36.dp)
+            ) {
+                // Headline: "What should we call you?"
+                Text(
+                    text = "What should\nwe call you?",
+                    style = TextStyle(
+                        fontSize = 38.sp,
+                        lineHeight = 44.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-1.2).sp,
+                        color = Color.White
+                    ),
+                    modifier = Modifier.padding(bottom = 32.dp)
+                )
+
+                // Input Field: "Enter your name" inside a pill outline
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.07f))
+                        .border(
+                            BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                            shape = CircleShape
+                        )
+                        .padding(horizontal = 24.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (name.isEmpty()) {
+                        Text(
+                            text = "Enter your name",
+                            style = TextStyle(
+                                fontSize = 18.sp,
+                                color = Color.White.copy(alpha = 0.45f),
+                                letterSpacing = (-0.2).sp
+                            )
+                        )
+                    }
+                    BasicTextField(
+                        value = name,
+                        onValueChange = { name = it.take(NAME_LIMIT) },
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White,
+                            letterSpacing = (-0.2).sp
+                        ),
+                        cursorBrush = SolidColor(Color.White),
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Words,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { submitContinue() }),
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
+
+                Spacer(Modifier.height(18.dp))
+
+                // Primary Button: Solid White "Continue" Pill
+                PillAction(
+                    label = "Continue",
+                    primary = true,
+                    onClick = submitContinue
+                )
+
+                Spacer(Modifier.height(14.dp))
+
+                // Secondary Button: Google Sign-In with device account picker
+                PillAction(
+                    label = if (isSigningInGoogle) "Connecting..." else "Continue with Google",
+                    primary = false,
+                    enabled = !isSigningInGoogle,
+                    leading = {
+                        if (isSigningInGoogle) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Image(
+                                painter = painterResource(Res.drawable.ic_google_g),
+                                contentDescription = "Google",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    },
+                    onClick = {
+                        if (activity != null) {
+                            val intent = GoogleAuthHelper.getSignInIntent(activity)
+                            googleSignInLauncher.launch(intent)
+                        }
+                    }
+                )
             }
         }
     }
 }
 
-/** The column every page is laid out in, capped so a tablet doesn't stretch it. */
 @Composable
-private fun OnboardingPage(content: @Composable ColumnScope.() -> Unit) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .widthIn(max = 520.dp)
-                .padding(horizontal = 28.dp),
-            content = content,
-        )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ColumnScope.NamePage(
-    name: String,
-    onNameChange: (String) -> Unit,
-    onNext: () -> Unit,
-) {
-    // With the keyboard up there is room for the title or the logo, not both;
-    // the title is the one that says where you are.
-    val keyboardUp = WindowInsets.isImeVisible
-    AnimatedVisibility(
-        visible = !keyboardUp,
-        enter = fadeIn() + expandVertically(),
-        exit = fadeOut() + shrinkVertically(),
-    ) {
-        Column {
-            Spacer(Modifier.height(56.dp))
-            Image(
-                painter = painterResource(Res.drawable.ic_logo),
-                contentDescription = null,
-                modifier = Modifier.size(width = 46.dp, height = 30.dp),
-            )
-        }
-    }
-    Spacer(Modifier.height(24.dp))
-    Title(stringResource(R.string.onboarding_title))
-
-    Spacer(Modifier.weight(1f))
-
-    Text(
-        text = stringResource(R.string.onboarding_name_prompt),
-        style = MaterialTheme.typography.titleMedium,
-        fontSize = 17.sp,
-        color = Color.White.copy(alpha = 0.78f),
-        modifier = Modifier.padding(start = 4.dp),
-    )
-    Spacer(Modifier.height(12.dp))
-    NameField(value = name, onValueChange = onNameChange, onDone = onNext)
-    Spacer(Modifier.height(10.dp))
-    Text(
-        text = stringResource(R.string.onboarding_name_footer),
-        style = MaterialTheme.typography.bodyMedium,
-        color = Color.White.copy(alpha = 0.55f),
-        modifier = Modifier.padding(horizontal = 4.dp),
-    )
-    Spacer(Modifier.height(28.dp))
-    PillButton(
-        label = stringResource(R.string.onboarding_next),
-        onClick = onNext,
-        enabled = name.isNotBlank(),
-        primary = true,
-    )
-    Spacer(Modifier.height(16.dp))
-}
-
-@Composable
-private fun ColumnScope.ConnectPage(
-    onBack: () -> Unit,
-    onSignIn: () -> Unit,
-    onSkip: () -> Unit,
-) {
-    Spacer(Modifier.height(16.dp))
-    BackButton(onBack)
-    Spacer(Modifier.height(20.dp))
-    Title(stringResource(R.string.onboarding_connect_title))
-    Spacer(Modifier.height(14.dp))
-    Text(
-        text = stringResource(R.string.onboarding_connect_body),
-        style = MaterialTheme.typography.bodyLarge,
-        fontSize = 17.sp,
-        lineHeight = 23.sp,
-        color = Color.White.copy(alpha = 0.72f),
-    )
-
-    Spacer(Modifier.weight(1f))
-
-    PillButton(
-        label = stringResource(R.string.onboarding_sign_in_google),
-        onClick = onSignIn,
-        primary = true,
-        leading = {
-            Image(
-                painter = painterResource(Res.drawable.ic_google_g),
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-            )
-        },
-    )
-    Spacer(Modifier.height(12.dp))
-    PillButton(
-        label = stringResource(R.string.onboarding_skip_sign_in),
-        onClick = onSkip,
-        primary = false,
-    )
-    Spacer(Modifier.height(16.dp))
-}
-
-/** Replay's heading, scaled up: the one line each page exists to say. */
-@Composable
-private fun Title(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.displayLarge.copy(
-            fontSize = 40.sp,
-            lineHeight = 44.sp,
-            letterSpacing = (-1.2).sp,
-        ),
-        color = Color.White,
-    )
-}
-
-/**
- * The name, set in the heading's own face and weight so what you type reads
- * as part of the page rather than a form on top of it.
- */
-@Composable
-private fun NameField(value: String, onValueChange: (String) -> Unit, onDone: () -> Unit) {
-    val style = MaterialTheme.typography.displayLarge.copy(
-        fontSize = 26.sp,
-        lineHeight = 30.sp,
-        letterSpacing = (-0.6).sp,
-        color = Color.White,
-    )
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(64.dp)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.14f))
-            .padding(horizontal = 24.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        if (value.isEmpty()) {
-            Text(
-                text = stringResource(R.string.onboarding_name_hint),
-                style = style,
-                color = Color.White.copy(alpha = 0.38f),
-                maxLines = 1,
-            )
-        }
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = true,
-            textStyle = style,
-            cursorBrush = SolidColor(Color.White),
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Words,
-                autoCorrectEnabled = false,
-                imeAction = ImeAction.Next,
-            ),
-            keyboardActions = KeyboardActions(onNext = { onDone() }),
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
-}
-
-/**
- * A full-width capsule. Primary is white on the mesh, the way Apple Music's
- * own welcome sheet does it; secondary is the same shape in frosted white, so
- * the pair reads as a choice rather than a button and an afterthought.
- */
-@Composable
-private fun PillButton(
+private fun PillAction(
     label: String,
     onClick: () -> Unit,
     primary: Boolean,
@@ -374,27 +322,45 @@ private fun PillButton(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, spring(stiffness = 900f), label = "pillScale")
-    val alpha by animateFloatAsState(if (enabled) 1f else 0.4f, tween(180), label = "pillAlpha")
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = 900f),
+        label = "pillScale"
+    )
+    val alpha by animateFloatAsState(
+        targetValue = if (enabled) 1f else 0.5f,
+        label = "pillAlpha"
+    )
+
     Row(
-        Modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(58.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
                 this.alpha = alpha
             }
             .clip(CircleShape)
-            .background(if (primary) Color.White else Color.White.copy(alpha = 0.16f))
+            .background(if (primary) Color.White else Color.White.copy(alpha = 0.10f))
+            .then(
+                if (!primary) {
+                    Modifier.border(
+                        BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
+                        shape = CircleShape
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .clickable(
                 interactionSource = interaction,
                 indication = null,
                 enabled = enabled,
-                onClick = onClick,
+                onClick = onClick
             ),
         horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         if (leading != null) {
             leading()
@@ -402,47 +368,11 @@ private fun PillButton(
         }
         Text(
             text = label,
-            style = MaterialTheme.typography.titleMedium,
             fontSize = 17.sp,
-            fontWeight = FontWeight.W700,
+            fontWeight = FontWeight.Bold,
             color = if (primary) Color.Black else Color.White,
             textAlign = TextAlign.Center,
-            maxLines = 1,
+            maxLines = 1
         )
     }
 }
-
-@Composable
-private fun BackButton(onClick: () -> Unit) {
-    Box(
-        Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.16f))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = VikifyIcons.ChevronRight,
-            contentDescription = stringResource(R.string.onboarding_back),
-            tint = Color.White,
-            modifier = Modifier
-                .size(18.dp)
-                .graphicsLayer { scaleX = -1f },
-        )
-    }
-}
-
-private const val PAGE_NAME = 0
-private const val PAGE_CONNECT = 1
-
-/** Long enough for a full name; the party server keeps the first 80. */
-private const val NAME_LIMIT = 40
-
-/** The account page keeps leaning into YouTube's red while it moves. */
-private val ConnectPalettes = listOf(
-    MeshPalette(listOf(Color(0xFFFF1E3C), Color(0xFFC2185B), Color(0xFFFF8F3D), Color(0xFF4A1C8C))),
-    MeshPalette(listOf(Color(0xFFE53935), Color(0xFFFF6E40), Color(0xFFAD1457), Color(0xFF311B92))),
-    MeshPalette(listOf(Color(0xFFFF3D00), Color(0xFFD81B60), Color(0xFF8E24AA), Color(0xFFB71C1C))),
-    MeshPalette(listOf(Color(0xFFF50057), Color(0xFFFF9100), Color(0xFFC51162), Color(0xFF4527A0))),
-)

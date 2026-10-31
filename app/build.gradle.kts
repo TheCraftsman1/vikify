@@ -262,6 +262,7 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore") {
         exclude(group = "com.google.firebase", module = "protolite-well-known-types")
     }
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
 
     newPipeExtractorRaw("com.github.TeamNewPipe:NewPipeExtractor:v0.26.3")
 }
