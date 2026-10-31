@@ -31,39 +31,3 @@ interface FloatAudioProcessor {
     fun reset()
 }
 
-/** Adapts [com.music.bitchord.playback.SpatialAudioProcessor] to [FloatAudioProcessor]. */
-fun com.music.bitchord.playback.SpatialAudioProcessor.asFloatAudioProcessor(): FloatAudioProcessor =
-    object : FloatAudioProcessor {
-        override fun configure(sampleRate: Int, channelCount: Int) =
-            this@asFloatAudioProcessor.configure(sampleRate, channelCount)
-        override fun process(block: AudioBlock) =
-            this@asFloatAudioProcessor.process(block)
-        @Suppress("DEPRECATION")
-        override fun flush() = this@asFloatAudioProcessor.flush()
-        override fun reset() = this@asFloatAudioProcessor.reset()
-    }
-
-/** Adapts [com.music.bitchord.playback.EqualizerProcessor] to [FloatAudioProcessor]. */
-fun com.music.bitchord.playback.EqualizerProcessor.asFloatAudioProcessor(): FloatAudioProcessor =
-    object : FloatAudioProcessor {
-        override fun configure(sampleRate: Int, channelCount: Int) =
-            this@asFloatAudioProcessor.configure(sampleRate, channelCount)
-        override fun process(block: AudioBlock) =
-            this@asFloatAudioProcessor.process(block)
-        @Suppress("DEPRECATION")
-        override fun flush() = this@asFloatAudioProcessor.flush()
-        override fun reset() = this@asFloatAudioProcessor.reset()
-    }
-
-/** Adapts [com.music.bitchord.playback.TransitionFilterProcessor] to [FloatAudioProcessor]. */
-fun com.music.bitchord.playback.TransitionFilterProcessor.asFloatAudioProcessor(): FloatAudioProcessor =
-    object : FloatAudioProcessor {
-        override fun configure(sampleRate: Int, channelCount: Int) =
-            this@asFloatAudioProcessor.configure(sampleRate, channelCount)
-        override fun process(block: AudioBlock) =
-            this@asFloatAudioProcessor.process(block)
-        @Suppress("DEPRECATION")
-        override fun flush() = this@asFloatAudioProcessor.flush()
-        override fun reset() = this@asFloatAudioProcessor.reset()
-    }
-

@@ -12,10 +12,7 @@ import com.music.bitchord.auth.AuthStore
 import com.music.bitchord.data.canvas.SpotifyToken
 import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.sources.SourceKind
-import com.music.bitchord.playback.EqLayout
-import com.music.bitchord.playback.EqualizerPreset
 import kotlinx.coroutines.flow.MutableStateFlow
-
 
 /**
  * Whether a stream started under this ceiling may be served by [kind].
@@ -106,13 +103,6 @@ enum class ThemeMode(val label: String) {
  * same curve, and summing them would mean a tone pad sitting at dead centre
  * still quietly altering whatever the sliders said.
  */
-enum class EqualizerMode {
-    /** The tone pad: tilt, contour, and how wide each is. */
-    DYNAMIC,
-
-    /** Seven sliders and a preset list. */
-    MANUAL,
-}
 
 /** Stable persisted ordering for each on-device music library. */
 enum class LocalMusicSort {
@@ -221,22 +211,6 @@ object AppSettings {
 
     val crossfadeSeconds = MutableStateFlow(0)
 
-    /**
-     * Lets Automix's analyzer decide the transition's timing and length
-     * from each track's tempo, energy and structure, replacing the fixed
-     * [crossfadeSeconds] window rather than needing it set to anything first
-     * — [crossfadeSeconds] only matters here as a fallback while a pair is
-     * still being analysed. Off by default: analysis costs a background
-     * decode per track.
-     *
-     * See [com.music.bitchord.playback.smart.TransitionPlanner].
-     */
-    val smartFadeEnabled = MutableStateFlow(false)
-
-    /** The CPU budget used by Beat This! and vocal analysis for Automix. */
-    val automixPerformanceMode = MutableStateFlow(AutomixPerformanceMode.BALANCED)
-    val skipSilence = MutableStateFlow(false)
-
     /** Requested PCM representation at the Android AudioTrack boundary. */
     val outputPcmMode = MutableStateFlow(OutputPcmMode.PCM_16)
 
@@ -291,52 +265,6 @@ object AppSettings {
      * quietly rewriting itself.
      */
     val dolbyAtmos = MutableStateFlow(true)
-
-    /**
-     * Widens stereo output via [com.music.bitchord.playback.SpatialAudioProcessor],
-     * a stereo widening + cross-feed effect running inside ExoPlayer's own
-     * pipeline. Not true object-based spatial audio — YouTube only ever hands
-     * us a stereo stream, so there's no Atmos-style source to render.
-     */
-    val spatialAudio = MutableStateFlow(false)
-
-    /**
-     * The app's own equaliser, master switch.
-     *
-     * Separate from the system equaliser row beside it, which is still there and
-     * still opens the device's panel. The two stack rather than compete — this
-     * one runs inside ExoPlayer before the sink, that one hangs off the audio
-     * session after it — so someone who prefers their OEM's can leave this off
-     * and lose nothing.
-     */
-    val equalizerEnabled = MutableStateFlow(false)
-
-    /** Which tab is driving it. */
-    val equalizerMode = MutableStateFlow(EqualizerMode.DYNAMIC)
-
-    /** Tone pad, horizontal: warm at -5, bright at +5. */
-    val equalizerToneX = MutableStateFlow(0)
-
-    /** Tone pad, vertical: scooped at -5, mid-forward at +5. */
-    val equalizerToneY = MutableStateFlow(0)
-
-    /** Tone pad bandwidth: Broad when false, Focused when true. */
-    val equalizerFocused = MutableStateFlow(false)
-
-    /** Left/right trim, -1 hard left to +1 hard right. Applies to both tabs. */
-    val equalizerBalance = MutableStateFlow(0f)
-
-    /** The manual tab's seven gains, in decibels, low to high. */
-    val equalizerBands = MutableStateFlow(EqualizerPreset.FLAT.bands)
-
-    /**
-     * Which preset the bands currently are, or [EqualizerPreset.CUSTOM].
-     *
-     * Derived from [equalizerBands] rather than independent of it — see
-     * [setEqualizerBands] — so a slider dragged back to where a preset left it
-     * makes the row say that preset's name again instead of "Custom" forever.
-     */
-    val equalizerPreset = MutableStateFlow(EqualizerPreset.FLAT)
 
     val playbackSpeed = MutableStateFlow(1.0f)
     val themeMode = MutableStateFlow(ThemeMode.DARK)
@@ -396,17 +324,8 @@ object AppSettings {
      */
     val preferMusicOnly = MutableStateFlow(false)
 
-    /** Analyzes audio waveform/envelope to align matching playback moment between versions. */
-    val smartVersionAlignment = MutableStateFlow(true)
-
     /** Drops haze blur (status bar, mini player, bottom fade, lyrics focus) for a solid-fill look. */
     val reduceDynamicBlur = MutableStateFlow(false)
-
-    /** Real backdrop-sampled glass (blur, lens refraction) on the floating nav bar, Android 12+ only. */
-    val liquidGlass = MutableStateFlow(false)
-
-    /** Blurs unfocused lyric lines, keeping the active line sharp. */
-    val lyricsBlur = MutableStateFlow(true)
 
     /** Positive values delay synced lyrics; negative values bring them forward. */
     val lyricsOffsetMs = MutableStateFlow(0)
@@ -454,14 +373,6 @@ object AppSettings {
 
     /** Tries Spotify before Apple Music and the other animated-art providers. */
     val prioritizeSpotifyCanvas = MutableStateFlow(false)
-
-    /**
-     * Secondary artist art: a user-hosted artist-signature API used only when
-     * Apple Music has no title logo. Blank URL means unconfigured and the
-     * lookup is skipped entirely — there is no hosted default.
-     */
-    val signatureApiEnabled = MutableStateFlow(false)
-    val signatureApiUrl = MutableStateFlow("")
 
     /**
      * Blows the player's cover art out to a full-bleed banner running off the
@@ -693,56 +604,6 @@ object AppSettings {
     /** The notice about what connecting an account actually does has been read. */
     val discordInfoDismissed = MutableStateFlow(false)
 
-    /** Published by PlaybackService so the UI can open the system equalizer. */
-    val audioSessionId = MutableStateFlow(0)
-
-    /**
-     * True only while a Automix transition that is actually *mixing* is
-     * audible — one that beat-matched, cued the incoming track into its
-     * arrangement, or rode a filter.
-     *
-     * Deliberately not "a crossfade is running". The fallback case, where
-     * neither track was analysed in time and the incoming one starts from 0:00
-     * under a plain equal-power fade, is exactly what this must stay dark for:
-     * the whole point is that seeing it means the analysis landed and did
-     * something a plain crossfade could not.
-     */
-    val smartMixInProgress = MutableStateFlow(false)
-
-    /**
-     * The Automix blend in flight — its progress and the beat it runs on — or
-     * null between blends. Published by the crossfade controller every fade
-     * tick; read it in draw, not in composition.
-     */
-    val smartMixBlend = MutableStateFlow<MixBlend?>(null)
-
-    /**
-     * True while a version switch is fetching and analysing the other cut
-     * before playback actually moves. Drains into the loading bar drawn along
-     * the scrubber itself — `ThinSlider.loading` — so the wait reads as work
-     * in progress rather than as a player frozen on a version that is about to
-     * change, and lights the toggle button's spinner through the half of the
-     * switch that has nothing else showing.
-     */
-    val versionAlignmentInProgress = MutableStateFlow(false)
-
-    /**
-     * How much of the *upcoming* transition has been analysed, for stats for
-     * nerds. Published by the crossfade controller, which is the only thing
-     * that knows which two tracks the next transition is between.
-     */
-    val smartAnalysis = MutableStateFlow(SmartAnalysis())
-
-    /**
-     * Where on the *playing* track the next transition is planned to happen, as
-     * fractions of its duration, or null when there is nothing worth drawing.
-     *
-     * Only published once both tracks are measured. Before that the planner is
-     * still working from a fallback window that moves as evidence arrives, and
-     * a marker that slides around the bar would be worse than no marker.
-     */
-    val smartTransitionWindow = MutableStateFlow<TransitionWindow?>(null)
-
     /**
      * A temporary cap on [effectiveAudioQuality], for as long as something other
      * than this phone's own speaker is playing — the BitChord watch app, whose
@@ -817,13 +678,6 @@ object AppSettings {
         wifiOnlyDownloads.value = prefs.getBoolean(KEY_WIFI_ONLY_DOWNLOADS, true)
         exportDownloads.value = prefs.getBoolean(KEY_EXPORT_DOWNLOADS, false)
         crossfadeSeconds.value = prefs.getInt(KEY_CROSSFADE, 0)
-        smartFadeEnabled.value = prefs.getBoolean(KEY_SMART_FADE, false)
-        automixPerformanceMode.value = runCatching {
-            AutomixPerformanceMode.valueOf(
-                prefs.getString(KEY_AUTOMIX_PERFORMANCE_MODE, null) ?: AutomixPerformanceMode.BALANCED.name,
-            )
-        }.getOrDefault(AutomixPerformanceMode.BALANCED)
-        skipSilence.value = prefs.getBoolean(KEY_SKIP_SILENCE, false)
         outputPcmMode.value = runCatching {
             OutputPcmMode.valueOf(
                 prefs.getString(KEY_OUTPUT_PCM_MODE, OutputPcmMode.PCM_16.name)
@@ -834,17 +688,6 @@ object AppSettings {
         loudnessNormalization.value = prefs.getBoolean(KEY_LOUDNESS_NORMALIZATION, true)
         loudnessOffOnSpeaker.value = prefs.getBoolean(KEY_LOUDNESS_OFF_ON_SPEAKER, true)
         dolbyAtmos.value = prefs.getBoolean(KEY_DOLBY_ATMOS, true)
-        spatialAudio.value = prefs.getBoolean(KEY_SPATIAL_AUDIO, false)
-        equalizerEnabled.value = prefs.getBoolean(KEY_EQ_ENABLED, false)
-        equalizerMode.value = runCatching {
-            EqualizerMode.valueOf(prefs.getString(KEY_EQ_MODE, null) ?: EqualizerMode.DYNAMIC.name)
-        }.getOrDefault(EqualizerMode.DYNAMIC)
-        equalizerToneX.value = prefs.getInt(KEY_EQ_TONE_X, 0).coerceIn(-EqLayout.TONE_STEPS, EqLayout.TONE_STEPS)
-        equalizerToneY.value = prefs.getInt(KEY_EQ_TONE_Y, 0).coerceIn(-EqLayout.TONE_STEPS, EqLayout.TONE_STEPS)
-        equalizerFocused.value = prefs.getBoolean(KEY_EQ_FOCUSED, false)
-        equalizerBalance.value = prefs.getFloat(KEY_EQ_BALANCE, 0f).coerceIn(-1f, 1f)
-        equalizerBands.value = readEqualizerBands()
-        equalizerPreset.value = EqualizerPreset.matching(equalizerBands.value)
         playbackSpeed.value = prefs.getFloat(KEY_SPEED, 1.0f)
         themeMode.value = runCatching {
             ThemeMode.valueOf(prefs.getString(KEY_THEME, null) ?: "DARK")
@@ -867,10 +710,7 @@ object AppSettings {
         swipeToPlayNext.value = prefs.getBoolean(KEY_SWIPE_TO_PLAY_NEXT, false)
         dontRepeatSuggestions.value = prefs.getBoolean(KEY_DONT_REPEAT_SUGGESTIONS, false)
         preferMusicOnly.value = prefs.getBoolean(KEY_PREFER_MUSIC_ONLY, false)
-        smartVersionAlignment.value = prefs.getBoolean(KEY_SMART_VERSION_ALIGNMENT, true)
         reduceDynamicBlur.value = prefs.getBoolean(KEY_REDUCE_BLUR, false)
-        liquidGlass.value = prefs.getBoolean(KEY_LIQUID_GLASS, false)
-        lyricsBlur.value = prefs.getBoolean(KEY_LYRICS_BLUR, true)
         lyricsOffsetMs.value = prefs.getInt(KEY_LYRICS_OFFSET_MS, 0)
             .coerceIn(MIN_LYRICS_OFFSET_MS, MAX_LYRICS_OFFSET_MS)
         translationLanguage.value = prefs.getString(KEY_TRANSLATION_LANGUAGE, "").orEmpty()
@@ -882,8 +722,6 @@ object AppSettings {
         canvasOverCellular.value = prefs.getBoolean(KEY_CANVAS_OVER_CELLULAR, false)
         spotifyCanvasAutoHide.value = prefs.getBoolean(KEY_SPOTIFY_CANVAS_AUTO_HIDE, true)
         prioritizeSpotifyCanvas.value = prefs.getBoolean(KEY_PRIORITIZE_SPOTIFY_CANVAS, false)
-        signatureApiEnabled.value = prefs.getBoolean(KEY_SIGNATURE_API_ENABLED, false)
-        signatureApiUrl.value = normalizeSignatureApiUrl(prefs.getString(KEY_SIGNATURE_API_URL, "").orEmpty())
         fullBleedArtwork.value = prefs.getBoolean(KEY_FULL_BLEED_ARTWORK, true)
         legacyMeshGradient.value = prefs.getBoolean(KEY_LEGACY_MESH_GRADIENT, false)
         lastPlayerScreen.value = runCatching {
@@ -1111,93 +949,9 @@ object AppSettings {
         prefs.edit().putInt(KEY_CROSSFADE, value).apply()
     }
 
-    fun setSmartFadeEnabled(value: Boolean) {
-        smartFadeEnabled.value = value
-        prefs.edit().putBoolean(KEY_SMART_FADE, value).apply()
-    }
-
-    fun setAutomixPerformanceMode(value: AutomixPerformanceMode) {
-        automixPerformanceMode.value = value
-        prefs.edit().putString(KEY_AUTOMIX_PERFORMANCE_MODE, value.name).apply()
-    }
-
-    fun setSkipSilence(value: Boolean) {
-        skipSilence.value = value
-        prefs.edit().putBoolean(KEY_SKIP_SILENCE, value).apply()
-    }
-
     fun setDolbyAtmos(value: Boolean) {
         dolbyAtmos.value = value
         prefs.edit().putBoolean(KEY_DOLBY_ATMOS, value).apply()
-    }
-
-    fun setSpatialAudio(value: Boolean) {
-        spatialAudio.value = value
-        prefs.edit().putBoolean(KEY_SPATIAL_AUDIO, value).apply()
-    }
-
-    fun setEqualizerEnabled(value: Boolean) {
-        equalizerEnabled.value = value
-        prefs.edit().putBoolean(KEY_EQ_ENABLED, value).apply()
-    }
-
-    fun setEqualizerMode(value: EqualizerMode) {
-        equalizerMode.value = value
-        prefs.edit().putString(KEY_EQ_MODE, value.name).apply()
-    }
-
-    fun setEqualizerTone(x: Int, y: Int) {
-        val steps = EqLayout.TONE_STEPS
-        val clampedX = x.coerceIn(-steps, steps)
-        val clampedY = y.coerceIn(-steps, steps)
-        equalizerToneX.value = clampedX
-        equalizerToneY.value = clampedY
-        prefs.edit().putInt(KEY_EQ_TONE_X, clampedX).putInt(KEY_EQ_TONE_Y, clampedY).apply()
-    }
-
-    fun setEqualizerFocused(value: Boolean) {
-        equalizerFocused.value = value
-        prefs.edit().putBoolean(KEY_EQ_FOCUSED, value).apply()
-    }
-
-    fun setEqualizerBalance(value: Float) {
-        val clamped = value.coerceIn(-1f, 1f)
-        equalizerBalance.value = clamped
-        prefs.edit().putFloat(KEY_EQ_BALANCE, clamped).apply()
-    }
-
-    /**
-     * Writes the manual tab's seven gains, and renames the preset row to suit.
-     *
-     * Stored as text rather than seven keys of their own so that a backup
-     * carries them: [exportPrefs] copies the preference file as it stands, and
-     * one string is one thing to keep in step rather than seven.
-     */
-    fun setEqualizerBands(values: List<Float>) {
-        val clamped = List(EqLayout.MANUAL_COUNT) {
-            values.getOrElse(it) { 0f }.coerceIn(-EqLayout.MANUAL_RANGE_DB, EqLayout.MANUAL_RANGE_DB)
-        }
-        equalizerBands.value = clamped
-        equalizerPreset.value = EqualizerPreset.matching(clamped)
-        prefs.edit().putString(KEY_EQ_BANDS, clamped.joinToString(",")).apply()
-    }
-
-    /** Applies a preset's curve. [EqualizerPreset.CUSTOM] carries none, so it does nothing. */
-    fun setEqualizerPreset(preset: EqualizerPreset) {
-        if (preset == EqualizerPreset.CUSTOM) return
-        setEqualizerBands(preset.bands)
-    }
-
-    private fun readEqualizerBands(): List<Float> {
-        val stored = prefs.getString(KEY_EQ_BANDS, null)
-            ?.split(",")
-            ?.mapNotNull { it.trim().toFloatOrNull() }
-            .orEmpty()
-        // Padded rather than rejected: a backup written by a build with a
-        // different number of bands should restore the ones it does have.
-        return List(EqLayout.MANUAL_COUNT) {
-            stored.getOrElse(it) { 0f }.coerceIn(-EqLayout.MANUAL_RANGE_DB, EqLayout.MANUAL_RANGE_DB)
-        }
     }
 
     fun setPlaybackSpeed(value: Float) {
@@ -1268,22 +1022,12 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_PREFER_MUSIC_ONLY, value).apply()
     }
 
-    fun setSmartVersionAlignment(value: Boolean) {
-        smartVersionAlignment.value = value
-        prefs.edit().putBoolean(KEY_SMART_VERSION_ALIGNMENT, value).apply()
-    }
-
     fun setReduceDynamicBlur(value: Boolean) {
         reduceDynamicBlur.value = value
         if (value) highPerformanceMode.value = false
         val editor = prefs.edit().putBoolean(KEY_REDUCE_BLUR, value)
         if (value) editor.putBoolean(KEY_HIGH_PERFORMANCE_MODE, false)
         editor.apply()
-    }
-
-    fun setLiquidGlass(value: Boolean) {
-        liquidGlass.value = value
-        prefs.edit().putBoolean(KEY_LIQUID_GLASS, value).apply()
     }
 
     fun setHighPerformanceMode(value: Boolean) {
@@ -1304,11 +1048,6 @@ object AppSettings {
         val normalized = normalizePerformanceRefreshRate(value)
         performanceRefreshRate.value = normalized
         prefs.edit().putInt(KEY_PERFORMANCE_REFRESH_RATE, normalized).apply()
-    }
-
-    fun setLyricsBlur(value: Boolean) {
-        lyricsBlur.value = value
-        prefs.edit().putBoolean(KEY_LYRICS_BLUR, value).apply()
     }
 
     fun setLyricsOffsetMs(value: Int) {
@@ -1445,18 +1184,6 @@ object AppSettings {
     fun setPrioritizeSpotifyCanvas(value: Boolean) {
         prioritizeSpotifyCanvas.value = value
         prefs.edit().putBoolean(KEY_PRIORITIZE_SPOTIFY_CANVAS, value).apply()
-    }
-
-    fun setSignatureApiEnabled(value: Boolean) {
-        signatureApiEnabled.value = value
-        prefs.edit().putBoolean(KEY_SIGNATURE_API_ENABLED, value).apply()
-    }
-
-    /** Normalizes (trim + strip trailing slash); blank forgets the provider. */
-    fun setSignatureApiUrl(value: String) {
-        val normalized = normalizeSignatureApiUrl(value)
-        signatureApiUrl.value = normalized
-        prefs.edit().putString(KEY_SIGNATURE_API_URL, normalized).apply()
     }
 
     fun setFullBleedArtwork(value: Boolean) {
@@ -1982,9 +1709,6 @@ object AppSettings {
     private fun normalizePerformanceRefreshRate(value: Int): Int =
         value.takeIf { it in 50..240 } ?: DEFAULT_PERFORMANCE_REFRESH_RATE
 
-    fun normalizeSignatureApiUrl(raw: String): String =
-        raw.trim().trimEnd('/').take(500)
-
     private const val KEY_QUALITY_LEGACY = "audio_quality"
     private const val KEY_QUALITY_WIFI = "audio_quality_wifi"
     private const val KEY_QUALITY_CELLULAR = "audio_quality_cellular"
@@ -1994,22 +1718,11 @@ object AppSettings {
     private const val KEY_EXPORT_DOWNLOADS = "export_downloads"
     private const val KEY_LOSSLESS = "lossless_audio"
     private const val KEY_CROSSFADE = "crossfade_seconds"
-    private const val KEY_SMART_FADE = "smart_fade_enabled"
-    private const val KEY_AUTOMIX_PERFORMANCE_MODE = "automix_performance_mode"
-    private const val KEY_SKIP_SILENCE = "skip_silence"
     private const val KEY_OUTPUT_PCM_MODE = "output_pcm_mode"
     private const val KEY_PREFER_USB_DAC = "prefer_usb_dac"
     private const val KEY_LOUDNESS_NORMALIZATION = "loudness_normalization"
     private const val KEY_LOUDNESS_OFF_ON_SPEAKER = "loudness_off_on_speaker"
     private const val KEY_DOLBY_ATMOS = "dolby_atmos"
-    private const val KEY_SPATIAL_AUDIO = "spatial_audio"
-    private const val KEY_EQ_ENABLED = "equalizer_enabled"
-    private const val KEY_EQ_MODE = "equalizer_mode"
-    private const val KEY_EQ_TONE_X = "equalizer_tone_x"
-    private const val KEY_EQ_TONE_Y = "equalizer_tone_y"
-    private const val KEY_EQ_FOCUSED = "equalizer_focused"
-    private const val KEY_EQ_BALANCE = "equalizer_balance"
-    private const val KEY_EQ_BANDS = "equalizer_bands"
     private const val KEY_SPEED = "playback_speed"
     private const val KEY_THEME = "theme_mode"
     private const val KEY_AUTOPLAY = "autoplay"
@@ -2029,18 +1742,13 @@ object AppSettings {
     private const val KEY_SWIPE_TO_PLAY_NEXT = "swipe_to_play_next"
     private const val KEY_DONT_REPEAT_SUGGESTIONS = "dont_repeat_suggestions"
     private const val KEY_PREFER_MUSIC_ONLY = "prefer_music_only"
-    private const val KEY_SMART_VERSION_ALIGNMENT = "smart_version_alignment"
     private const val KEY_REDUCE_BLUR = "reduce_dynamic_blur"
-    private const val KEY_LIQUID_GLASS = "liquid_glass"
-    private const val KEY_LYRICS_BLUR = "lyrics_blur"
     private const val KEY_LYRICS_OFFSET_MS = "lyrics_offset_ms"
     private const val KEY_TRANSLATION_LANGUAGE = "translation_language"
     private const val KEY_ANIMATED_CANVAS = "animated_canvas"
     private const val KEY_CANVAS_OVER_CELLULAR = "canvas_over_cellular"
     private const val KEY_SPOTIFY_CANVAS_AUTO_HIDE = "spotify_canvas_auto_hide"
     private const val KEY_PRIORITIZE_SPOTIFY_CANVAS = "prioritize_spotify_canvas"
-    private const val KEY_SIGNATURE_API_ENABLED = "signature_api_enabled"
-    private const val KEY_SIGNATURE_API_URL = "signature_api_url"
     private const val KEY_FULL_BLEED_ARTWORK = "full_bleed_artwork"
     private const val KEY_LEGACY_MESH_GRADIENT = "legacy_mesh_gradient"
     private const val KEY_LAST_PLAYER_SCREEN = "last_player_screen"
@@ -2103,6 +1811,3 @@ object AppSettings {
     private const val KEY_DISCORD_INFO_DISMISSED = "discord_info_dismissed"
     private const val KEY_LAST_VERSION_CODE = "last_version_code"
 }
-
-
-

@@ -32,12 +32,10 @@ import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.TvSettings
 import com.music.bitchord.ui.MainViewModel
 import com.music.bitchord.ui.tv.TvAppMark
-import com.music.bitchord.ui.tv.audio.TvSpatialAudioEngine
 import com.music.bitchord.ui.tv.components.TvChromePinned
 import com.music.bitchord.ui.tv.components.TvListHeader
 import com.music.bitchord.ui.tv.components.TvListRow
 import com.music.bitchord.ui.tv.dialogs.TvAboutDialog
-import com.music.bitchord.ui.tv.dialogs.TvEqualizerDialog
 import com.music.bitchord.ui.tv.dialogs.TvLyricsSourcesDialog
 import com.music.bitchord.ui.tv.dialogs.TvRefreshRateDialog
 import com.music.bitchord.ui.tv.dialogs.TvScrobbleDialog
@@ -50,9 +48,9 @@ import com.music.bitchord.ui.tv.theme.TvGlass
 import com.music.bitchord.ui.tv.theme.TvType
 
 // Discord Rich Presence is hidden on TV for now; TvDiscordDialog is kept for when it returns.
-private enum class SettingsSheet { Theme, RefreshRate, Equalizer, Scrobbling, LyricsSources, Update, About }
+private enum class SettingsSheet { Theme, RefreshRate, Scrobbling, LyricsSources, Update, About }
 
-private const val DefaultBlurb = "Playback, sound and display preferences for BitChord on this TV."
+private const val DefaultBlurb = "Playback, sound and display preferences for Vikify on this TV."
 
 /**
  * Settings, as tvOS lays it out: the app on the left with a plain description of
@@ -70,12 +68,8 @@ fun TvSettingsScreen(
     val signedIn by viewModel.signedIn.collectAsState()
     val account by viewModel.account.collectAsState()
 
-    val automix by AppSettings.smartFadeEnabled.collectAsState()
     val crossfade by AppSettings.crossfadeSeconds.collectAsState()
     val autoplay by AppSettings.autoplay.collectAsState()
-    val skipSilence by AppSettings.skipSilence.collectAsState()
-    val eqEnabled by AppSettings.equalizerEnabled.collectAsState()
-    val spatial by TvSettings.spatialAudioEnabled.collectAsState()
     val loudness by AppSettings.loudnessNormalization.collectAsState()
     val usbDac by AppSettings.preferUsbDac.collectAsState()
     val syncedLyrics by AppSettings.syncedLyrics.collectAsState()
@@ -141,14 +135,7 @@ fun TvSettingsScreen(
             }
 
             item { TvListHeader("Playback") }
-            item {
-                TvListRow(
-                    title = "Automix",
-                    value = onOff(automix),
-                    onFocused = { blurb = "Blends one song into the next, matched to their tempo." },
-                    onClick = { AppSettings.setSmartFadeEnabled(!automix) },
-                )
-            }
+
             item {
                 TvListRow(
                     title = "Crossfade",
@@ -174,35 +161,11 @@ fun TvSettingsScreen(
                     onClick = { AppSettings.setAutoplay(!autoplay) },
                 )
             }
-            item {
-                TvListRow(
-                    title = "Skip Silence",
-                    value = onOff(skipSilence),
-                    onFocused = { blurb = "Skips over silent stretches at the start and end of songs." },
-                    onClick = { AppSettings.setSkipSilence(!skipSilence) },
-                )
-            }
+
 
             item { TvListHeader("Sound") }
-            item {
-                TvListRow(
-                    title = "Equalizer",
-                    value = onOff(eqEnabled),
-                    onFocused = { blurb = "Shape the sound with presets or seven bands of your own." },
-                    onClick = { sheet = SettingsSheet.Equalizer },
-                )
-            }
-            item {
-                TvListRow(
-                    title = "Spatial Audio",
-                    value = onOff(spatial),
-                    onFocused = { blurb = "Widens stereo music using the TV's audio virtualizer, where it has one." },
-                    onClick = {
-                        TvSettings.setSpatialAudioEnabled(!spatial)
-                        TvSpatialAudioEngine.setEnabled(!spatial)
-                    },
-                )
-            }
+
+
             item {
                 TvListRow(
                     title = "Sound Check",
@@ -259,7 +222,7 @@ fun TvSettingsScreen(
                 TvListRow(
                     title = "Appearance",
                     value = AppThemeOption.fromId(themeId).title,
-                    onFocused = { blurb = "The background behind BitChord's pages." },
+                    onFocused = { blurb = "The background behind Vikify's pages." },
                     onClick = { sheet = SettingsSheet.Theme },
                 )
             }
@@ -315,7 +278,7 @@ fun TvSettingsScreen(
                     TvListRow(
                         title = "Software Update",
                         value = "${update?.version.orEmpty()} Available",
-                        onFocused = { blurb = "Download and install the new version of BitChord for TV." },
+                        onFocused = { blurb = "Download and install the new version of Vikify for TV." },
                         onClick = { sheet = SettingsSheet.Update },
                     )
                 }
@@ -341,7 +304,6 @@ fun TvSettingsScreen(
     when (sheet) {
         SettingsSheet.Theme -> TvThemeDialog(onDismiss = { sheet = null })
         SettingsSheet.RefreshRate -> TvRefreshRateDialog(onDismiss = { sheet = null })
-        SettingsSheet.Equalizer -> TvEqualizerDialog(onDismiss = { sheet = null })
         SettingsSheet.Scrobbling -> TvScrobbleDialog(onDismiss = { sheet = null })
         SettingsSheet.LyricsSources -> TvLyricsSourcesDialog(onDismiss = { sheet = null })
         SettingsSheet.Update -> update?.let { TvUpdateDialog(update = it, onDismiss = { sheet = null }) }

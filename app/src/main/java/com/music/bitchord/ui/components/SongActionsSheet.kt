@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.components
 
 import com.music.bitchord.R
+import com.music.bitchord.data.personalization.TrackPreference
 
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -201,6 +202,9 @@ fun SongActionsSheet(
      * held row itself above them.
      */
     presentation: SongActionsPresentation = SongActionsPresentation.Sheet,
+    recommendationPreference: TrackPreference? = null,
+    onRecommendationPreference: ((TrackPreference?) -> Unit)? = null,
+    recommendationFeedbackEnabled: Boolean = true,
 ) {
     var showingSongInfo by remember(song.videoId) { mutableStateOf(false) }
     var pickingSleepTimer by remember { mutableStateOf(false) }
@@ -301,6 +305,27 @@ fun SongActionsSheet(
                     onClick = it,
                 )
             }
+            GroupSeparator(palette)
+        }
+
+        onRecommendationPreference?.let { submit ->
+            ActionRow(
+                icon = Icons.Rounded.Tune,
+                label = stringResource(if (recommendationPreference == TrackPreference.MORE)
+                    R.string.mix_undo_boost else R.string.mix_recommend_more),
+                accent = palette.accent,
+                enabled = recommendationFeedbackEnabled,
+                onClick = { submit(if (recommendationPreference == TrackPreference.MORE) null else TrackPreference.MORE) },
+            )
+            ActionRow(
+                icon = if (recommendationPreference == TrackPreference.HIDE) Icons.AutoMirrored.Rounded.Undo
+                    else Icons.Rounded.ThumbDownOffAlt,
+                label = stringResource(if (recommendationPreference == TrackPreference.HIDE)
+                    R.string.mix_allow_again else R.string.mix_hide_song),
+                accent = palette.accent,
+                enabled = recommendationFeedbackEnabled,
+                onClick = { submit(if (recommendationPreference == TrackPreference.HIDE) null else TrackPreference.HIDE) },
+            )
             GroupSeparator(palette)
         }
 

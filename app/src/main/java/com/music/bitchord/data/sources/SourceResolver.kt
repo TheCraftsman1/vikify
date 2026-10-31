@@ -111,40 +111,9 @@ object SourceResolver {
             configId = configId,
             trackId = trackId,
             target = targetIn(uri),
-            pickedMix = uri.getQueryParameter(MIX_PARAM),
         )
     }
 
-    /**
-     * `&mix=` on an addon row's playback URI: which mix the row itself was,
-     * [MIX_ATMOS] or [MIX_STEREO] as its search answer tagged it, or [MIX_ANY]
-     * when it said neither.
-     *
-     * Present on every addon row and nothing else. Those reach the queue one
-     * way — picked by hand from the Addons search, then replayed from history
-     * or a playlist — and the marker makes that play strict: the row the
-     * listener chose, never its Atmos sibling, another source's better copy,
-     * or YouTube's Opus. That last covers Automix too, which would otherwise
-     * fetch a YouTube match just to measure the track — see
-     * [isPickedAddonRow]. Absent, nothing changes.
-     */
-    const val MIX_PARAM = "mix"
-    const val MIX_STEREO = "stereo"
-    const val MIX_ATMOS = "atmos"
-    const val MIX_ANY = "any"
-
-    /** Whether [uri] is an addon row played as itself — see [MIX_PARAM]. */
-    fun isPickedAddonRow(uri: Uri): Boolean =
-        uri.authority == "source" && uri.getQueryParameter(MIX_PARAM) != null
-
-    /**
-     * The recording a playback URI describes, for matching it elsewhere.
-     *
-     * Title, artist and runtime ride in the URI because they are what a
-     * cross-source match is made on, and the resolver runs on ExoPlayer's
-     * loader thread with nothing but a DataSpec in hand — see
-     * [toMediaItem][com.music.bitchord.playback.toMediaItem].
-     */
     fun targetIn(uri: Uri) = TrackMatcher.Target(
         title = uri.getQueryParameter("n").orEmpty(),
         artist = uri.getQueryParameter("a").orEmpty(),
@@ -163,7 +132,6 @@ object SourceResolver {
         configId: String,
         trackId: String,
         target: TrackMatcher.Target,
-        pickedMix: String? = null,
     ): SourceStream? {
         val request = requestForNow()
         val active = SourceRegistry.activeForPlayback()
@@ -180,8 +148,7 @@ object SourceResolver {
         // what makes "my own FLAC of this, if I have one, else stream it"
         // expressible.
         // A row picked by hand is not up for substitution — see [MIX_PARAM].
-        val picked = pickedMix != null && pinned is AddonSource
-        if (!picked && request is StreamRequest.Lossless && pinned?.kind?.canServeLossless != true) {
+        if (request is StreamRequest.Lossless && pinned?.kind?.canServeLossless != true) {
             for (source in rankedAbove(configId, active)) {
                 if (!source.kind.canServeLossless) continue
                 val upgraded = matchAndStream(source, target, request) ?: continue
@@ -200,11 +167,7 @@ object SourceResolver {
 
         if (pinned != null) {
             attempt(pinned) {
-                if (picked) {
-                    (pinned as AddonSource).stream(trackId, request, stereoOnly = pickedMix == MIX_STEREO)
-                } else {
-                    pinned.stream(trackId, request)
-                }
+                pinned.stream(trackId, request)
             }
                 ?.let { return it.copy(sourceConfigId = pinned.configId) }
         }
@@ -218,7 +181,7 @@ object SourceResolver {
         // Opus is a lesser copy of a different upload, and the listener chose
         // this addon's precisely to not be hearing it — see [MIX_PARAM].
         val fallbacks = active.filterNot {
-            it.configId == configId || (pickedMix != null && it.kind == SourceKind.YOUTUBE)
+            it.configId == configId
         }
         val (fallbackSource, stream) = bestAcross(fallbacks, target, request) ?: return null
         TrackLog.d(TAG, "fallback: '${target.title}' served by ${fallbackSource.displayName}")
@@ -1000,13 +963,13 @@ object SourceResolver {
         // answer on a device that cannot play it was already refused upstream
         // by [ModuleSource.unplayable].
         if (atmosWanted()) {
-            val immersiveFirst = eligible.sortedByDescending { it.sourceQuality == ModuleSource.DOLBY }
-            if (immersiveFirst.firstOrNull()?.sourceQuality == ModuleSource.DOLBY) return immersiveFirst
+            val immersiveFirst = eligible.sortedByDescending { it.sourceQuality == "DOLBY_ATMOS" }
+            if (immersiveFirst.firstOrNull()?.sourceQuality == "DOLBY_ATMOS") return immersiveFirst
         }
         if (!wantsLossless) return eligible
         // Stable, so the confidence order [TrackMatcher.ranked] produced
         // survives inside each tier.
-        return eligible.sortedByDescending { it.sourceQuality == ModuleSource.LOSSLESS }
+        return eligible.sortedByDescending { it.sourceQuality == "LOSSLESS" }
     }
 
     /**

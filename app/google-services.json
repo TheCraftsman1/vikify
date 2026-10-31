@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "794653884734",
+    "project_id": "vikify-95144",
+    "storage_bucket": "vikify-95144.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:794653884734:android:dc696604dcf581876aec6f",
+        "android_client_info": {
+          "package_name": "com.music.vikify"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "794653884734-a6rc2ij1n85pqkg8ga7830cdtton5835.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNJ0J16v6haoTUreXdd1PBT0DmTAe3P0A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "794653884734-a6rc2ij1n85pqkg8ga7830cdtton5835.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

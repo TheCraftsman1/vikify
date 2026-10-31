@@ -115,7 +115,6 @@ import com.music.bitchord.ui.icons.BitChordIcons
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.listentogether.PartyMember
-import com.music.bitchord.data.settings.TrackAnalysisState
 import com.music.bitchord.data.settings.AudioQuality
 import com.music.bitchord.data.model.Song
 import java.util.Locale
@@ -201,30 +200,17 @@ internal fun PlayerScrubber(
     /** A version switch's wait, drawn along the bar — see [ThinSlider.loading]. */
     loading: Boolean,
     /** An analysed Automix handoff, drawn as a travelling sheen. */
-    mixing: Boolean,
-    transitionWindow: ClosedFloatingPointRange<Float>?,
     onScrub: (Float) -> Unit,
     onScrubFinished: () -> Unit,
     centerLabel: @Composable BoxScope.() -> Unit = {},
 ) {
     val shown = shown()
-    // Held as a State and read only inside the bar's draw: the blend republishes
-    // every fade tick, and collecting it by value here would recompose the
-    // scrubber and its labels thirty times a second for a change only the
-    // canvas needs.
-    val mixBlend = PlayerSettings.smartMixBlend.collectAsStateWithLifecycle()
-    val reduceAnimation by PlayerSettings.reduceAnimation.collectAsStateWithLifecycle()
-    // One clock for the bar and the "Mixing" label, so they breathe on the same beat.
-    val mixPulse = rememberMixPulse({ mixBlend.value }, enabled = !reduceAnimation)
     Column(Modifier.fillMaxWidth()) {
         ThinSlider(
             value = shown,
             onValueChange = onScrub,
             onValueChangeFinished = onScrubFinished,
             loading = loading,
-            mixing = mixing,
-            mixPulse = mixPulse,
-            transitionWindow = transitionWindow,
         )
         Box(
             modifier = Modifier
@@ -248,21 +234,7 @@ internal fun PlayerScrubber(
                     color = LocalPlayerTint.current.copy(alpha = 0.55f),
                 )
             }
-            // Pinned to the box's own centre rather than squeezed into the gap
-            // between the two timestamps: that gap's width changes by a digit's
-            // worth every time a minute rolls over. Cross-faded with "Mixing"
-            // for as long as a blend holds the bar.
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .graphicsLayer { alpha = 1f - mixPulse.cover },
-            ) {
-                centerLabel()
-            }
-            val mixingShown by remember { derivedStateOf { mixPulse.cover > 0f } }
-            if (mixingShown) {
-                MixingLabel(mixPulse, Modifier.align(Alignment.Center))
-            }
+            Box(Modifier.matchParentSize()) { centerLabel() }
         }
     }
 }
@@ -273,26 +245,11 @@ internal fun PlayerScrubber(
  * label every frame without recomposing it. Plain text in the badge's own type, no icon and
  * no glow: over artwork, a white haze reads as grey fog rather than light.
  */
-@Composable
-private fun MixingLabel(pulse: MixPulse, modifier: Modifier = Modifier) {
-    Text(
-        text = stringResource(Res.string.mixing),
-        modifier = modifier.graphicsLayer { alpha = pulse.cover * pulse.alpha(1f, restShare = MIXING_LABEL_REST) },
-        style = MaterialTheme.typography.labelMedium.copy(
-            fontWeight = FontWeight.Medium,
-            fontSize = (MaterialTheme.typography.labelMedium.fontSize.value + BADGE_SIZE_BUMP).sp,
-        ),
-        color = LocalPlayerTint.current.copy(alpha = 0.85f),
-        maxLines = 1,
-    )
-}
-
 /** How far "Upgrading quality" fades between breaths, and how long each half takes. */
 private const val UPGRADING_PULSE_LOW = 0.4f
 private const val UPGRADING_PULSE_MS = 900
 
 /** The label dips only to half between beats: text fading further stops reading as a word. */
-private const val MIXING_LABEL_REST = 0.5f
 
 /**
  * Sp over labelMedium for the quality badge and what stands in for it. Was a
@@ -356,8 +313,6 @@ internal fun SleeveNerdStats(song: Song, modifier: Modifier = Modifier) {
     val showNerdStats by PlayerSettings.showNerdStats.collectAsStateWithLifecycle()
     if (!showNerdStats) return
     val nerdStats by NerdStats.current.collectAsStateWithLifecycle()
-    val smartFadeOn by PlayerSettings.smartFadeEnabled.collectAsStateWithLifecycle()
-    val smartAnalysis by PlayerSettings.smartAnalysis.collectAsStateWithLifecycle()
     // A party doesn't mix, and doesn't analyse for one either — see
     // [com.music.bitchord.playback.CrossfadeController]. So the two flows above
     // simply stop moving there, and the stats line has to say why rather than
@@ -397,35 +352,7 @@ internal fun SleeveNerdStats(song: Song, modifier: Modifier = Modifier) {
         // Only when Automix is actually switched on: otherwise this would
         // report on analysis nothing is going to use, which is noise rather
         // than a stat.
-        if (smartFadeOn) {
-            Text(
-                // Both sides always named, even when they agree, so the line
-                // reads the same way every time and the eye can find the half
-                // it wants without re-parsing the sentence.
-                text = when {
-                    // Ahead of the video case because it is the broader one:
-                    // in a party nothing is analysed for any song, video or
-                    // not, so naming the video limitation there would describe
-                    // a rule that is not the one in force.
-                    inParty -> stringResource(Res.string.automix_stopped_in_party)
-                    song.isVideoOrigin ->
-                        stringResource(Res.string.automix_not_supported_video)
-                    else -> stringResource(
-                        Res.string.automix_analysis_status,
-                        smartAnalysis.current.localizedLabel(),
-                        smartAnalysis.next.localizedLabel(),
-                    )
-                },
-                style = nerdStyle,
-                // Dimmer than the measured line above it: that one describes
-                // the audio, this one describes the app, and the ranking
-                // should show.
-                color = Color.White.copy(alpha = 0.5f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
-        }
+
     }
 }
 
@@ -1838,14 +1765,4 @@ private fun codecLabel(mimeType: String?): String? = when {
     mimeType.endsWith("flac") -> "FLAC"
     mimeType.endsWith("alac") -> "ALAC"
     else -> mimeType.substringAfter('/').uppercase(Locale.ROOT)
-}
-
-/** Wording for the stats line; see [TrackAnalysisState]. */
-@Composable
-private fun TrackAnalysisState.localizedLabel(): String = when (this) {
-    TrackAnalysisState.ANALYSED -> stringResource(Res.string.analysis_complete)
-    TrackAnalysisState.REFINING -> stringResource(Res.string.analysis_refining)
-    TrackAnalysisState.ANALYSING -> stringResource(Res.string.analysis_in_progress)
-    TrackAnalysisState.WAITING -> stringResource(Res.string.waiting)
-    TrackAnalysisState.FAILED -> stringResource(Res.string.failed)
 }

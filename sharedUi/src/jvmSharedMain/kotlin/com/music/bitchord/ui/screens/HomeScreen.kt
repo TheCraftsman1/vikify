@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import com.music.bitchord.ui.components.longPressMenuClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,12 +39,16 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -50,9 +56,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cached
@@ -70,6 +80,7 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.UiState
 import java.util.Locale
+import kotlinx.coroutines.delay
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.data.settings.LibraryViewType
 import com.music.bitchord.ui.components.HERO_CARD_RATIO
@@ -142,8 +153,14 @@ fun HomeScreen(
     leadHero: Boolean = true,
     currentSong: Song? = null,
     isPlaying: Boolean = false,
+    onManageCollections: (() -> Unit)? = null,
+    collectionVisitKey: String = "",
+    collectionImpressionsEnabled: Boolean = false,
+    onCollectionVisible: ((ShelfItem) -> Unit)? = null,
 ) {
     val recentsViewType by AppUi.host.homeRecentsViewType.collectAsStateWithLifecycle()
+    var viewport by remember { mutableStateOf(Rect.Zero) }
+    val density = LocalDensity.current
 
     PullToRefresh(
         refreshing = refreshing,
@@ -153,7 +170,12 @@ fun HomeScreen(
     ) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().onGloballyPositioned { coordinates ->
+                val bounds = coordinates.boundsInWindow()
+                viewport = Rect(bounds.left,
+                    bounds.top + with(density) { contentPadding.calculateTopPadding().toPx() },
+                    bounds.right, bounds.bottom - with(density) { contentPadding.calculateBottomPadding().toPx() })
+            },
             // The heading sits higher than the other tabs' first row: pull the
             // whole feed up by [HOME_TITLE_LIFT] with it.
             contentPadding = if (title != null) {
@@ -167,6 +189,13 @@ fun HomeScreen(
         ) {
             if (title != null) {
                 item { HomeTitle(title) }
+            }
+            if (onManageCollections != null && state is UiState.Success) {
+                item(key = "manage-home-collections") {
+                    TextButton(onClick = onManageCollections, modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
+                        Text(stringResource(Res.string.home_manage_collections))
+                    }
+                }
             }
             if (!signedIn && onSignIn != null) {
                 item {
@@ -199,6 +228,10 @@ fun HomeScreen(
                         shelves = state.data,
                         onItemClick = onItemClick,
                         onItemLongPress = onItemLongPress,
+                        collectionVisitKey = collectionVisitKey,
+                        collectionImpressionsEnabled = collectionImpressionsEnabled,
+                        onCollectionVisible = onCollectionVisible,
+                        viewport = viewport,
                         currentSong = currentSong,
                         isPlaying = isPlaying,
                         firstIsHero = leadHero && !recentlyPlayedLoading,
@@ -252,11 +285,19 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
     firstIsHero: Boolean = true,
     recentsViewType: LibraryViewType,
     onRecentsViewTypeToggle: () -> Unit,
+    collectionVisitKey: String,
+    collectionImpressionsEnabled: Boolean,
+    onCollectionVisible: ((ShelfItem) -> Unit)?,
+    viewport: Rect,
 ) {
     shelves.forEachIndexed { index, shelf ->
-        item(key = shelf.title + index) {
+        item(key = if (shelf.collectionGrid) "collection:${shelf.title}" else shelf.title + index) {
             val openItem: (ShelfItem) -> Unit = { item -> onItemClick(item, shelf.title) }
-            if (index == 0 && shelf.title.equals(RECENTS_TITLE, ignoreCase = true)) {
+            val isSongShelf = shelf.title.equals(RECENTS_TITLE, ignoreCase = true) ||
+                shelf.title.equals("Quick picks", ignoreCase = true) ||
+                shelf.title.equals("Trending songs", ignoreCase = true) ||
+                (shelf.items.isNotEmpty() && shelf.items.all { it.videoId != null })
+            if (isSongShelf) {
                 RecentShelf(
                     shelf = shelf,
                     onItemClick = openItem,
@@ -266,6 +307,22 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
                     viewType = recentsViewType,
                     onViewTypeToggle = onRecentsViewTypeToggle,
                 )
+            } else if (shelf.collectionGrid || shelf.title.equals("Made For You", ignoreCase = true)) {
+                Column {
+                    if (shelf.collectionGrid) SectionHeader(shelf.title, shelf.subtitle)
+                    SpotifyQuickGrid(
+                        items = shelf.items,
+                        onItemClick = openItem,
+                        onItemLongPress = onItemLongPress,
+                        visitKey = collectionVisitKey,
+                        impressionsEnabled = collectionImpressionsEnabled,
+                        onVisible = onCollectionVisible,
+                        viewport = viewport,
+                        showReasons = shelf.collectionGrid,
+                        currentSong = currentSong,
+                        isPlaying = isPlaying,
+                    )
+                }
             } else if (index == 0 && firstIsHero) {
                 HeroShelf(
                     shelf = shelf,
@@ -358,6 +415,8 @@ private fun RecentSectionHeader(
     viewType: LibraryViewType,
     onViewTypeToggle: () -> Unit,
 ) {
+    val displayTitle = localizeShelfTitle(title)
+    val displaySubtitle = localizeShelfSubtitle(subtitle)
     Row(
         modifier = Modifier
             .padding(horizontal = PAGE_GUTTER, vertical = 10.dp)
@@ -366,15 +425,15 @@ private fun RecentSectionHeader(
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                text = title,
+                text = displayTitle,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (subtitle.isNotBlank()) {
+            if (displaySubtitle.isNotBlank()) {
                 Text(
-                    text = subtitle,
+                    text = displaySubtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -500,6 +559,14 @@ fun CompactTrackRow(
 private fun HomeTitle(title: String, modifier: Modifier = Modifier) {
     val style = MaterialTheme.typography.displayLarge
     val logoHeight = with(LocalDensity.current) { (style.fontSize * LOGO_TO_FONT).toDp() }
+    val greeting = remember {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        when (hour) {
+            in 4..11 -> "Good morning"
+            in 12..17 -> "Good afternoon"
+            else -> "Good evening"
+        }
+    }
     Column(modifier = modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp)) {
         Icon(
             painter = painterResource(Res.drawable.ic_logo),
@@ -511,7 +578,7 @@ private fun HomeTitle(title: String, modifier: Modifier = Modifier) {
                 .aspectRatio(LOGO_ASPECT),
         )
         Text(
-            text = title,
+            text = greeting,
             style = style,
             color = MaterialTheme.colorScheme.onBackground,
         )
@@ -522,7 +589,7 @@ private fun HomeTitle(title: String, modifier: Modifier = Modifier) {
 private const val LOGO_TO_FONT = 0.9f
 
 /** ic_logo's viewport, 730 x 484. */
-private const val LOGO_ASPECT = 730f / 484f
+private const val LOGO_ASPECT = 1f
 
 /**
  * Shared by the home feed, Explore and Library so headings line up across tabs.
@@ -1078,5 +1145,92 @@ internal fun ShelfCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+@Composable
+private fun SpotifyQuickGrid(
+    items: List<ShelfItem>,
+    onItemClick: (ShelfItem) -> Unit,
+    currentSong: Song?,
+    isPlaying: Boolean,
+    onItemLongPress: ((ShelfItem) -> Unit)?,
+    visitKey: String,
+    impressionsEnabled: Boolean,
+    onVisible: ((ShelfItem) -> Unit)?,
+    viewport: Rect,
+    showReasons: Boolean,
+) {
+    val isCurrentItem = items.playingItemMatcher(currentSong)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = PAGE_GUTTER, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items.chunked(2).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowItems.forEach { item ->
+                    key(item.browseId ?: item.title) {
+                        CollectionQuickCard(item, isCurrentItem(item), isPlaying, showReasons,
+                            onItemClick, onItemLongPress, visitKey, impressionsEnabled, onVisible,
+                            viewport, Modifier.weight(1f))
+                    }
+                }
+                if (rowItems.size == 1) {
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CollectionQuickCard(
+    item: ShelfItem, isCurrent: Boolean, isPlaying: Boolean, showReasons: Boolean,
+    onClick: (ShelfItem) -> Unit, onLongPress: ((ShelfItem) -> Unit)?,
+    visitKey: String, impressionsEnabled: Boolean, onVisible: ((ShelfItem) -> Unit)?,
+    viewport: Rect, modifier: Modifier = Modifier,
+) {
+    var bounds by remember { mutableStateOf(Rect.Zero) }
+    var fullArea by remember { mutableStateOf(0f) }
+    val width = (minOf(bounds.right, viewport.right) - maxOf(bounds.left, viewport.left)).coerceAtLeast(0f)
+    val height = (minOf(bounds.bottom, viewport.bottom) - maxOf(bounds.top, viewport.top)).coerceAtLeast(0f)
+    val visible = fullArea > 0 && width * height >= fullArea * 0.5f
+    val reportVisible by rememberUpdatedState(onVisible)
+    LaunchedEffect(visible, visitKey, impressionsEnabled, item.browseId) {
+        if (visible && impressionsEnabled && visitKey.isNotBlank()) {
+            delay(1_000)
+            reportVisible?.invoke(item)
+        }
+    }
+    Row(
+        modifier = modifier
+            .heightIn(min = if (showReasons) 80.dp else 56.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
+            .combinedClickable(onClick = { onClick(item) }, onLongClick = onLongPress?.let { { it(item) } })
+            .contextClick(onLongPress?.let { { it(item) } })
+            .onGloballyPositioned { coordinates ->
+                bounds = coordinates.boundsInWindow()
+                fullArea = coordinates.size.width.toFloat() * coordinates.size.height
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AsyncImage(model = item.thumbnailUrl, contentDescription = null, contentScale = ContentScale.Crop,
+            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)))
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f).padding(end = 6.dp, top = 8.dp, bottom = 8.dp)) {
+            Text(item.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                color = if (isCurrent) PlayingAccent else MaterialTheme.colorScheme.onSurface,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (showReasons) Text(item.subtitle, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        if (isCurrent && isPlaying) SearchPlayingBars(Modifier.padding(end = 8.dp).size(16.dp))
     }
 }

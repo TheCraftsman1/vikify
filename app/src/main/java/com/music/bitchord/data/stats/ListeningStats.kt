@@ -309,6 +309,26 @@ object ListeningStats {
 
     // ── Reading ─────────────────────────────────────────────────────────────
 
+    /** A detached read for recommendations, including listening not flushed to disk yet. */
+    suspend fun personalizationTracks(): List<TrackEntry> = withContext(Dispatchers.IO) {
+        if (!ready) return@withContext emptyList()
+        writeLock.withLock {
+            val current = synchronized(lock) {
+                open?.let { bucket ->
+                    bucket.key to bucket.tracks.values.map { track ->
+                        track.copy(days = track.days.mapValues { (_, day) -> day.copy() }.toMutableMap())
+                    }
+                }
+            }
+            buildList {
+                months().filterNot { it.toString() == current?.first }.forEach { month ->
+                    read(month.toString())?.tracks?.let(::addAll)
+                }
+                current?.second?.let(::addAll)
+            }
+        }
+    }
+
     /**
      * The Replay for [period], merged off disk.
      *

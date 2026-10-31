@@ -42,9 +42,6 @@ object AppUpdateChecker {
 
     private const val CACHE_SUBDIR = "updates"
 
-    private const val LATEST_RELEASE_URL =
-        "https://api.github.com/repos/kushagrasinghx/BitChord/releases/latest"
-
     private val json = Json { ignoreUnknownKeys = true }
 
     private val _available = MutableStateFlow<UpdateInfo?>(null)
@@ -66,19 +63,20 @@ object AppUpdateChecker {
     private var downloadCancelled = false
 
     suspend fun check() = withContext(Dispatchers.IO) {
+        val url = BuildConfig.UPDATE_RELEASE_URL.takeIf { it.isNotBlank() } ?: return@withContext
         runCatching {
-            val request = Request.Builder().url(LATEST_RELEASE_URL).build()
+            val request = Request.Builder().url(url).build()
             val body = Http.client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) null else response.body?.string()
             } ?: return@runCatching
             val release = json.parseToJsonElement(body) as? JsonObject ?: return@runCatching
             val tag = release["tag_name"]?.jsonPrimitive?.contentOrNull ?: return@runCatching
-            val url = release["html_url"]?.jsonPrimitive?.contentOrNull ?: return@runCatching
+            val releaseUrl = release["html_url"]?.jsonPrimitive?.contentOrNull ?: return@runCatching
             val apkUrl = apkAssetUrl(release)
             val notes = release["body"]?.jsonPrimitive?.contentOrNull
             val latest = tag.removePrefix("v")
             if (isNewer(latest, BuildConfig.VERSION_NAME)) {
-                _available.value = UpdateInfo(latest, url, apkUrl, notes)
+                _available.value = UpdateInfo(latest, releaseUrl, apkUrl, notes)
             }
         }
     }
@@ -114,16 +112,22 @@ object AppUpdateChecker {
             ?.mapNotNull { asset ->
                 val name = asset["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
                 val url = asset["browser_download_url"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                val ours = name.startsWith(BuildConfig.UPDATE_APK_PREFIX, ignoreCase = true) &&
-                    name.endsWith(".apk", ignoreCase = true) &&
-                    asset["state"]?.jsonPrimitive?.contentOrNull == "uploaded"
-                if (ours) name.removeSuffix(".apk").removeSuffix(".APK") to url else null
+                val isUploaded = asset["state"]?.jsonPrimitive?.contentOrNull == "uploaded"
+                if (!isUploaded || !name.endsWith(".apk", ignoreCase = true)) return@mapNotNull null
+                val stripped = name.removeSuffix(".apk").removeSuffix(".APK")
+                val matchesPrefix = name.startsWith(BuildConfig.UPDATE_APK_PREFIX, ignoreCase = true) ||
+                    name.startsWith("Vikify", ignoreCase = true)
+                stripped to (url to matchesPrefix)
             }
             .orEmpty()
-        apks.firstOrNull { (name, _) -> '_' !in name }?.second
+        if (apks.isEmpty()) return null
+
+        val targeted = apks.filter { it.second.second }.ifEmpty { apks }
+        targeted.firstOrNull { (name, _) -> '_' !in name }?.second?.first
             ?: Build.SUPPORTED_ABIS.firstNotNullOfOrNull { abi ->
-                apks.firstOrNull { (name, _) -> name.endsWith("_$abi") }?.second
+                targeted.firstOrNull { (name, _) -> name.endsWith("_$abi", ignoreCase = true) }?.second?.first
             }
+            ?: targeted.firstOrNull()?.second?.first
     }.getOrNull()
 
     /**
@@ -142,7 +146,7 @@ object AppUpdateChecker {
             val dir = File(context.cacheDir, CACHE_SUBDIR).apply { mkdirs() }
             // Drop anything left over from an earlier attempt.
             dir.listFiles()?.forEach { it.delete() }
-            val target = File(dir, "bitchord-${info.version}.apk")
+            val target = File(dir, "vikify-${info.version}.apk")
 
             val request = Request.Builder().url(url).build()
             Http.client.newCall(request).execute().use { response ->

@@ -52,6 +52,17 @@ val listenTogetherServer: String = (
         ?: "https://bitchord-listen-together.onrender.com"
     ).trim().trimEnd('/')
 
+val updateRepo: String = (
+    localProps.getProperty("UPDATE_REPO")
+        ?: System.getenv("UPDATE_REPO")
+        ?: "vishnukanchipati/vikify"
+    ).trim()
+val updateUrl: String = (
+    localProps.getProperty("UPDATE_URL")
+        ?: System.getenv("UPDATE_URL")
+        ?: if (updateRepo.isNotEmpty()) "https://api.github.com/repos/$updateRepo/releases/latest" else ""
+    ).trim()
+
 /*
  * Bump this by hand before cutting each sideloaded test build ("beta2",
  * "beta3", ...) and blank it out before cutting the real release. Marks the
@@ -100,7 +111,8 @@ android {
         // apart by name (BitChordTV-v1.8.apk, BitChordTV-v1.8_x86_64.apk), so
         // the updater installs the TV app here, never the phone app. See
         // AppUpdateChecker.apkAssetUrl.
-        buildConfigField("String", "UPDATE_APK_PREFIX", "\"BitChordTV-\"")
+        buildConfigField("String", "UPDATE_RELEASE_URL", "\"${updateUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField("String", "UPDATE_APK_PREFIX", "\"VikifyTV-\"")
     }
 
     splits {
@@ -149,11 +161,11 @@ android {
         create("dev") {
             dimension = "env"
             applicationId = "com.dev.bitchord.tv"
-            resValue("string", "app_name", "BitChord TV")
+            resValue("string", "app_name", "Vikify TV")
         }
         create("prod") {
             dimension = "env"
-            resValue("string", "app_name", "BitChord TV")
+            resValue("string", "app_name", "Vikify TV")
         }
     }
 
@@ -417,7 +429,6 @@ dependencies {
 
     // ---- JS module execution: QuickJS VM for style source plugins ----
     // Held at InnerTubeX's version; the same VM runs QuickJsExecutor's module sources.
-    implementation("io.github.dokar3:quickjs-kt-android:1.0.14")
 
     // ---- SMB file shares: pure-Java SMB2/3 client (listing + streaming) ----
     implementation("com.hierynomus:smbj:0.15.0")
@@ -426,7 +437,6 @@ dependencies {
     // The full android artifact, not onnxruntime-mobile: mobile only loads .ort
     // files, which would put an offline conversion step between the model and
     // the app for a saving that does not matter in a self-distributed APK.
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.28.0")
 
     // ---- Casting: Google Cast sender + the route discovery it sits on ----
     // The framework and the router only. media3-cast is left out on purpose:

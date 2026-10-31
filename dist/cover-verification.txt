@@ -1,0 +1,28 @@
+Reusable collection cover milestone - 31 October 2026
+
+Shared JVM tests: 212 passed, 0 failures, 0 errors.
+Focused Android unit tests: 10 passed, 0 failures, 0 errors.
+Native Android tests: CoverRenderingTest, OK (6 tests), API 35 / Android 15.
+Combined completed checks: 228.
+
+Native tests cover all 12 composition/color combinations, output dimensions,
+Telugu glyph fallback, long titles, safe missing-style fallback, deterministic
+rendering, cache reuse, rename invalidation, truncated PNG repair, and an actual
+request through the app's SingletonImageLoader.
+
+The initial native run stopped during emulator process startup before tests
+began. A focused loader rerun and the complete six-test rerun passed.
+
+Manually inspected Settings > Appearance > Cover preview on the isolated test
+emulator with English and Telugu presets, Lime and Violet palettes, and full
+and compact artwork. Eighteen native cover exports and screen captures are in
+output/cover-preview. The comparison sheet is reference-comparison.png.
+
+Development packaging completed for universal, arm64-v8a, armeabi-v7a, and
+x86_64 APKs. dist/Vikify-debug.apk is the current universal development build.
+Packaged renderer/fetcher/specification classes and all 29 fixed mood cover
+assets were checked.
+
+Remaining: physical-phone performance, older Android versions, broader
+accessibility interaction, and language-qualified music generation. Telugu
+Melodies currently demonstrates artwork only.

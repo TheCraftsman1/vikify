@@ -173,10 +173,7 @@ fun TvApp(
     val update by viewModel.updateAvailable.collectAsState()
     var updateDismissed by remember { mutableStateOf(false) }
 
-    val spatialAudio by TvSettings.spatialAudioEnabled.collectAsState()
-    LaunchedEffect(spatialAudio) {
-        com.music.bitchord.ui.tv.audio.TvSpatialAudioEngine.setEnabled(spatialAudio)
-    }
+
 
     val signedIn by viewModel.signedIn.collectAsState()
     LaunchedEffect(signedIn) {
@@ -561,12 +558,12 @@ private fun TvTopBar(
         // The mark only, as the phone's Home heading shows it.
         Icon(
             painter = painterResource(R.drawable.ic_logo),
-            contentDescription = "BitChord",
+            contentDescription = "Vikify",
             tint = TvGlass.TextPrimary,
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .height(21.dp)
-                .aspectRatio(730f / 484f),
+                .aspectRatio(1f),
         )
         TvAvatarButton(
             imageUrl = if (signedIn) avatarUrl else null,
@@ -654,7 +651,7 @@ private fun TvAvatarButton(
     }
 }
 
-/** The BitChord mark, for the few places that show the app itself. */
+/** The Vikify mark, for the few places that show the app itself. */
 @Composable
 fun TvAppMark(modifier: Modifier = Modifier, size: androidx.compose.ui.unit.Dp = 96.dp) {
     Box(
@@ -668,7 +665,7 @@ fun TvAppMark(modifier: Modifier = Modifier, size: androidx.compose.ui.unit.Dp =
     ) {
         Icon(
             painter = painterResource(R.drawable.ic_logo),
-            contentDescription = "BitChord",
+            contentDescription = "Vikify",
             tint = Color.White,
             modifier = Modifier.size(size * 0.52f),
         )

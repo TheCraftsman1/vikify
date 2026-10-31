@@ -49,7 +49,6 @@ import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.TvSettings
 import com.music.bitchord.ui.MainViewModel
 import com.music.bitchord.ui.tv.TvAppMark
-import com.music.bitchord.ui.tv.audio.TvSpatialAudioEngine
 import com.music.bitchord.ui.tv.components.TvButton
 import com.music.bitchord.ui.tv.components.TvListRow
 import com.music.bitchord.ui.tv.components.tvClick
@@ -104,7 +103,7 @@ fun TvSetupScreen(
     ) { current ->
         when (current) {
             SetupStep.Welcome -> TvSetupPage(
-                title = "Welcome to BitChord",
+                title = "Welcome to Vikify",
                 message = "Your music, made for the big screen.",
                 hero = { TvAppMark(size = 106.dp) },
             ) {
@@ -218,7 +217,7 @@ private fun TvSignInStep(viewModel: MainViewModel, onContinue: () -> Unit) {
     TvSetupPage(
         title = if (signedIn) "Signed In" else "Sign In to YouTube Music",
         message = if (signedIn) {
-            "BitChord will use ${account?.name ?: "your account"}'s library and recommendations."
+            "Vikify will use ${account?.name ?: "your account"}'s library and recommendations."
         } else {
             "Bring your library, playlists and recommendations. You can also do this later in Settings."
         },
@@ -242,8 +241,6 @@ private fun TvSignInStep(viewModel: MainViewModel, onContinue: () -> Unit) {
 private fun TvPreferencesStep(onContinue: () -> Unit) {
     val lyrics by AppSettings.syncedLyrics.collectAsState()
     val canvas by AppSettings.animatedCanvas.collectAsState()
-    val automix by AppSettings.smartFadeEnabled.collectAsState()
-    val spatial by TvSettings.spatialAudioEnabled.collectAsState()
 
     TvSetupPage(
         title = "Listening",
@@ -264,19 +261,8 @@ private fun TvPreferencesStep(onContinue: () -> Unit) {
                     value = if (canvas) "On" else "Off",
                     onClick = { AppSettings.setAnimatedCanvas(!canvas) },
                 )
-                TvListRow(
-                    title = "Automix",
-                    value = if (automix) "On" else "Off",
-                    onClick = { AppSettings.setSmartFadeEnabled(!automix) },
-                )
-                TvListRow(
-                    title = "Spatial Audio",
-                    value = if (spatial) "On" else "Off",
-                    onClick = {
-                        TvSettings.setSpatialAudioEnabled(!spatial)
-                        TvSpatialAudioEngine.setEnabled(!spatial)
-                    },
-                )
+
+
             }
         },
     ) {

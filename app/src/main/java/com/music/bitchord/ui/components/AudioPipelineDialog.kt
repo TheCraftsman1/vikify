@@ -107,16 +107,12 @@ private fun bitExactVerdict(
     outputExact: Boolean,
     outputExactDetail: String?,
     loudnessActive: Boolean,
-    eqActive: Boolean,
-    spatialActive: Boolean,
 ): String = when {
     // Not a fault to fix: there is no DSD output path (native DSD or DoP)
     // here, so the PCM conversion is a deviation every DSD track carries,
     // whatever the stages after it do.
     dsd -> "No — DSD converted to PCM"
     loudnessActive -> "No — loudness normalization"
-    eqActive -> "No — equalizer"
-    spatialActive -> "No — spatial audio"
     outputExact -> "Yes${outputExactDetail?.let { " ($it)" }.orEmpty()}"
     else -> "No — ${outputExactDetail ?: "converted downstream"}"
 }
@@ -144,9 +140,6 @@ fun AudioPipelineDialog(
     val nerdStats by NerdStats.current.collectAsStateWithLifecycle()
     val outputStatus by AudioOutputStatus.current.collectAsStateWithLifecycle()
 
-    val eqEnabled by AppSettings.equalizerEnabled.collectAsStateWithLifecycle()
-    val eqPreset by AppSettings.equalizerPreset.collectAsStateWithLifecycle()
-    val spatialAudio by AppSettings.spatialAudio.collectAsStateWithLifecycle()
     val loudnessNormalization by AppSettings.loudnessNormalization.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
@@ -358,12 +351,6 @@ fun AudioPipelineDialog(
             val pcmFormat = outputStatus.dspFormat
             val dspRate = outputStatus.actualSampleRateHz ?: pcmRateHz
             val dspRateText = dspRate?.let(::rateText) ?: "—"
-            val eqPresetText = if (eqEnabled) {
-                eqPreset.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
-            } else {
-                "Flat"
-            }
-            val stereoExpandText = if (spatialAudio) "250%" else "100%"
             val buffersText = outputStatus.bufferSize?.let { size ->
                 val rate = outputStatus.actualSampleRateHz
                 val bytesPerSample = when (outputStatus.actualEncoding) {
@@ -410,8 +397,6 @@ fun AudioPipelineDialog(
                 PipelineRow(stringResource(R.string.pipeline_sample_rate), dspRateText)
                 PipelineRow(stringResource(R.string.pipeline_loudness_gain), loudnessGainText)
                 PipelineRow(stringResource(R.string.pipeline_loudness_measured), loudnessMeasuredText)
-                PipelineRow(stringResource(R.string.pipeline_eq_preset), eqPresetText)
-                PipelineRow(stringResource(R.string.pipeline_stereo_expand), stereoExpandText)
                 PipelineRow(stringResource(R.string.pipeline_buffers), buffersText)
                 PipelineRow(stringResource(R.string.pipeline_output_api), outputStatus.sink.ifBlank { "AAudio" })
                 // The verdict, rather than the settings. Names whichever
@@ -426,8 +411,6 @@ fun AudioPipelineDialog(
                         outputExact = outputStatus.outputExact,
                         outputExactDetail = outputStatus.outputExactDetail,
                         loudnessActive = loudnessNormalization && outputStatus.loudnessGainDb != null,
-                        eqActive = eqEnabled,
-                        spatialActive = spatialAudio,
                     ),
                 )
             }

@@ -15,6 +15,23 @@ import com.music.bitchord.data.AppUpdateChecker
 import com.music.bitchord.data.LocalMediaRepository
 import com.music.bitchord.data.LikeState
 import com.music.bitchord.data.YtMusicRepository
+import com.music.bitchord.data.personalization.GeneratedMix
+import com.music.bitchord.data.personalization.LocalMixKind
+import com.music.bitchord.data.personalization.LocalMixPlatform
+import com.music.bitchord.data.personalization.MixFailure
+import com.music.bitchord.data.personalization.TrackPreference
+import com.music.bitchord.data.personalization.PreferenceConfidence
+import com.music.bitchord.data.personalization.AndroidLocalMixes
+import com.music.bitchord.data.personalization.HomeCollectionPreferences
+import com.music.bitchord.data.personalization.HomeCollectionShelves
+import com.music.bitchord.data.personalization.HomeCollectionSnapshot
+import com.music.bitchord.data.personalization.HomeVisitSession
+import com.music.bitchord.data.personalization.MixCopyStore
+import com.music.bitchord.data.personalization.SavedMixCopy
+import com.music.bitchord.data.personalization.MixCopyDraft
+import com.music.bitchord.data.DebugLog
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import com.music.bitchord.data.model.SPOTIFY_MISSING_PREFIX
 import com.music.bitchord.data.model.SPOTIFY_PENDING_PREFIX
 import com.music.bitchord.data.spotify.SPOTIFY_PAGE_PREFIX
@@ -83,7 +100,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import com.music.bitchord.data.sources.AddonSource
 import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.data.sources.SourceRegistry
 import com.music.bitchord.data.sources.SourceResolver
@@ -101,7 +117,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /** What the Search tab searches: YouTube Music, or the Local Music folder on this device. */
-enum class SearchSource { YOUTUBE, LIBRARY, ADDONS }
+enum class SearchSource { YOUTUBE, LIBRARY }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -113,6 +129,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _home = MutableStateFlow<UiState<List<HomeShelf>>>(UiState.Loading)
     val home: StateFlow<UiState<List<HomeShelf>>> = _home.asStateFlow()
+    private val homeVisits = HomeVisitSession()
+    private var homeCollectionsReadJob: Job? = null
+    private var homeCollectionsPrepareJob: Job? = null
+    private var homeVisible = false
+    private var homeCollectionsLoadFailed = false
+    private val _homeCollectionPreferences = MutableStateFlow(HomeCollectionPreferences())
+    val homeCollectionPreferences = _homeCollectionPreferences.asStateFlow()
+    private val _homeCollectionVisit = MutableStateFlow("")
+    val homeCollectionVisit = _homeCollectionVisit.asStateFlow()
+    private val _savedMixCopies = MutableStateFlow<List<SavedMixCopy>>(emptyList())
+    val savedMixCopies = _savedMixCopies.asStateFlow()
+    private val _clearingPersonalization = MutableStateFlow(false)
+    val clearingPersonalization = _clearingPersonalization.asStateFlow()
 
     /**
      * Token for the next page of Home shelves; null once there's nothing
@@ -124,6 +153,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Titles already on screen, so a later page can't repeat a shelf. */
     private val homeSeenTitles = mutableSetOf<String>()
+
+    private var homeRecentShelf: HomeShelf? = null
+    private var homeQuickPicksShelf: HomeShelf? = null
+    private var homeTrendingShelf: HomeShelf? = null
+    private val homeNormalSongShelves = mutableListOf<HomeShelf>()
+    private val homeContinuationShelves = mutableListOf<HomeShelf>()
 
     private val _homeLoadingMore = MutableStateFlow(false)
 
@@ -204,23 +239,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Where the Search tab looks — see [setSearchSource]. */
     private val _searchSource = MutableStateFlow(SearchSource.YOUTUBE)
     val searchSource: StateFlow<SearchSource> = _searchSource.asStateFlow()
-
-    /**
-     * The Addons source's answer for the submitted query: every enabled addon
-     * searched at once and their rows interleaved. Null until something has
-     * been submitted. These songs carry source track keys, so a tap plays the
-     * addon's own stream with no YouTube lookup in between.
-     */
-    private val _addonResults = MutableStateFlow<UiState<List<Song>>?>(null)
-    val addonResults: StateFlow<UiState<List<Song>>?> = _addonResults.asStateFlow()
-    private var addonSearchJob: Job? = null
-
-    /** The words typed into the Addons search before, newest first. */
-    val addonSearchHistory: StateFlow<List<String>> = SearchHistory.addonRecent
-
-    fun removeAddonSearch(query: String) = SearchHistory.removeAddonQuery(query)
-
-    fun clearAddonSearchHistory() = SearchHistory.clearAddonQueries()
 
     /** Every track in the Local Music folder, read when the Library source is picked. */
     private val _librarySongs = MutableStateFlow<UiState<List<Song>>>(UiState.Loading)
@@ -583,6 +601,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private val _detailStack = MutableStateFlow<List<DetailPage>>(emptyList())
     val detailStack: StateFlow<List<DetailPage>> = _detailStack.asStateFlow()
+    private val personalMixJobs = mutableMapOf<String, Job>()
+    private val _refreshingMixes = MutableStateFlow<Set<String>>(emptySet())
+    val refreshingMixes: StateFlow<Set<String>> = _refreshingMixes.asStateFlow()
 
     /**
      * The app's back stack: the routes pushed over the tabs, interleaved with
@@ -633,7 +654,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
-
 
     /** Set once per launch if GitHub has a release newer than this build. */
     val updateAvailable: StateFlow<AppUpdateChecker.UpdateInfo?> = AppUpdateChecker.available
@@ -1403,7 +1423,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _playlistOwned.value = _playlistOwned.value + (browseId to owned)
     }
 
-
     /**
      * Guards every account write. All of them are signed-in-only, and the UI
      * hides them for guests — this is the backstop for a session that expired
@@ -1502,7 +1521,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!homeStale) return
         homeStale = false
         // A first load already in flight will pick the new play up by itself.
-        if (_home.value is UiState.Success) refresh(Feed.HOME)
+        if (_home.value is UiState.Success) refreshFeed(Feed.HOME, adoptHomeCollections = false)
     }
 
     private fun loadAccount() {
@@ -1552,14 +1571,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * state — a refresh that swapped the page for a spinner would be a worse
      * experience than the stale content it replaces.
      */
-    fun refresh(feed: Feed) {
+    fun refresh(feed: Feed) = refreshFeed(feed, adoptHomeCollections = true)
+
+    private fun refreshFeed(feed: Feed, adoptHomeCollections: Boolean) {
         if (feed in _refreshing.value) return
         if (feed == Feed.LIBRARY && !_signedIn.value) return
         val identity = listenerKey()
         _refreshing.value = _refreshing.value + feed
         viewModelScope.launch {
             when (feed) {
-                Feed.HOME -> refreshHome(identity)
+                Feed.HOME -> refreshHome(identity, adoptHomeCollections)
                 Feed.EXPLORE -> fetchExplore()
                 Feed.LIBRARY -> fetchLibrary(identity)
             }
@@ -1643,59 +1664,334 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         navigator.onDetailStackShrunk(0)
     }
 
+    @Synchronized
+    private fun rebuildHomeFeed() {
+        val snapshot = homeVisits.snapshot ?: run {
+            _home.value = if (homeCollectionsLoadFailed) UiState.Error(text(R.string.home_collections_load_failed)) else UiState.Loading
+            return
+        }
+        val (personalShelves, categoryShelves) = HomeCollectionShelves.build(snapshot)
+
+        val list = buildList {
+            addAll(personalShelves)
+            homeRecentShelf?.let { add(it) }
+            val quickPicks = homeQuickPicksShelf ?: com.music.bitchord.data.mood.MoodGenreRepository.initialQuickPicksShelf()
+            add(quickPicks)
+            val trending = homeTrendingShelf ?: com.music.bitchord.data.mood.MoodGenreRepository.initialTrendingSongsShelf()
+            add(trending)
+            synchronized(homeNormalSongShelves) {
+                addAll(homeNormalSongShelves)
+            }
+            addAll(categoryShelves)
+            synchronized(homeContinuationShelves) {
+                addAll(homeContinuationShelves)
+            }
+        }
+        _home.value = UiState.Success(list)
+    }
+
+    fun setHomeVisible(visible: Boolean) {
+        if (visible && !homeVisible && homeVisits.snapshot != null) beginHomeCollections()
+        homeVisible = visible
+    }
+
+    private fun publishHomeCollections() {
+        homeVisits.snapshot?.let { _homeCollectionPreferences.value = it.preferences }
+        rebuildHomeFeed()
+    }
+
+    private fun beginHomeCollections(applyPrepared: Boolean = false): Job {
+        homeCollectionsLoadFailed = false
+        val scope = AndroidLocalMixes.scope()
+        if (homeVisits.ticket?.scope != scope) _homeCollectionPreferences.value = HomeCollectionPreferences()
+        val request = homeVisits.begin(scope)
+        _homeCollectionVisit.value = request.id
+        homeCollectionsReadJob?.cancel()
+        homeVisits.snapshot?.let { publishHomeCollections() }
+        return viewModelScope.launch {
+            try {
+                val cached = AndroidLocalMixes.home.cached(scope)
+                if (scope != AndroidLocalMixes.scope() || !homeVisits.accept(request, cached)) return@launch
+                publishHomeCollections()
+                if (homeCollectionsPrepareJob?.isActive != true) {
+                    homeCollectionsPrepareJob = viewModelScope.launch {
+                        try {
+                            val prepared = AndroidLocalMixes.home.prepare(scope)
+                            if (scope == AndroidLocalMixes.scope()) homeVisits.stage(scope, prepared)
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (failure: Exception) { DebugLog.w("HomeCollections", "Could not prepare next Home visit", failure) }
+                    }
+                }
+                if (applyPrepared) {
+                    homeCollectionsPrepareJob?.join()
+                    if (scope == AndroidLocalMixes.scope() && homeVisits.current(request)) {
+                        val refreshed = AndroidLocalMixes.home.cached(scope)
+                        if (homeVisits.accept(request, refreshed)) publishHomeCollections()
+                    }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) {
+                DebugLog.w("HomeCollections", "Could not restore Home collections", failure)
+                // Corrupt controls are preserved on disk. Do not silently undo pins or exclusions.
+                if (scope == AndroidLocalMixes.scope() && homeVisits.snapshot == null && homeVisits.current(request)) {
+                    homeCollectionsLoadFailed = true
+                    _home.value = UiState.Error(text(R.string.home_collections_load_failed))
+                }
+            }
+        }.also { homeCollectionsReadJob = it }
+    }
+
+    fun setHomeCollectionPinned(id: String, pinned: Boolean, completed: (Boolean) -> Unit) =
+        updateHomeCollection(completed) { scope -> AndroidLocalMixes.home.store.pin(scope, id, pinned) }
+
+    fun setHomeCollectionHidden(id: String, hidden: Boolean, completed: (Boolean) -> Unit) =
+        updateHomeCollection(completed) { scope -> AndroidLocalMixes.home.store.hide(scope, id, hidden) }
+
+    fun followPersonalMix(id: String, followed: Boolean, completed: (Boolean) -> Unit) =
+        updateHomeCollection(completed) { scope -> AndroidLocalMixes.home.store.follow(scope, id, followed) }
+
+    private fun loadSavedMixCopies() {
+        val base = AndroidLocalMixes.baseScope()
+        _savedMixCopies.value = emptyList()
+        viewModelScope.launch {
+            try {
+                AndroidLocalMixes.resumeCleanup()
+                val copies = AndroidLocalMixes.copies.list(base)
+                if (base == AndroidLocalMixes.baseScope()) _savedMixCopies.value = copies
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { DebugLog.w("MixCopies", "Could not read saved copies", failure) }
+        }
+    }
+
+    fun personalMixCopyDraft(browseId: String): MixCopyDraft? {
+        val kind = LocalMixKind.fromId(browseId.removePrefix("mood:")) ?: return null
+        val page = _detailStack.value.lastOrNull { it.browseId == browseId } ?: return null
+        val version = page.generatedMixVersion ?: return null
+        val songs = (page.songs as? UiState.Success)?.data?.toList().orEmpty()
+        if (songs.isEmpty()) return null
+        return MixCopyDraft(AndroidLocalMixes.baseScope(), kind, version, songs)
+    }
+
+    fun savePersonalMixCopy(draft: MixCopyDraft, title: String, completed: (Boolean) -> Unit) {
+        val base = AndroidLocalMixes.baseScope()
+        if (draft.baseScope != base) return completed(false)
+        viewModelScope.launch {
+            try {
+                AndroidLocalMixes.copies.save(base, title, draft.kind, draft.sourceVersion, draft.songs)
+                if (base == AndroidLocalMixes.baseScope()) _savedMixCopies.value = AndroidLocalMixes.copies.list(base)
+                completed(true)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { completed(false) }
+        }
+    }
+
+    fun editSavedMixCopy(browseId: String, title: String? = null, delete: Boolean = false, removeTrack: String? = null,
+        completed: (Boolean) -> Unit) {
+        val base = AndroidLocalMixes.baseScope()
+        viewModelScope.launch {
+            try {
+                when {
+                    delete -> AndroidLocalMixes.copies.delete(base, browseId)
+                    removeTrack != null -> AndroidLocalMixes.copies.removeTrack(base, browseId, removeTrack)
+                    title != null -> AndroidLocalMixes.copies.rename(base, browseId, title)
+                }
+                if (base == AndroidLocalMixes.baseScope()) {
+                    _savedMixCopies.value = AndroidLocalMixes.copies.list(base)
+                    if (delete) {
+                        _detailStack.update { pages -> pages.filterNot { it.browseId == browseId } }
+                        navigator.onDetailStackShrunk(_detailStack.value.size)
+                    } else loadSavedCopyPage(browseId).join()
+                }
+                completed(true)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { completed(false) }
+        }
+    }
+
+    private fun loadSavedCopyPage(browseId: String): Job {
+        val base = AndroidLocalMixes.baseScope()
+        return viewModelScope.launch {
+            try {
+                val copy = AndroidLocalMixes.copies.get(base, browseId)
+                if (base != AndroidLocalMixes.baseScope()) return@launch
+                _detailStack.update { pages -> pages.map { page -> if (page.browseId != browseId) page else page.copy(
+                    title = copy?.title ?: page.title,
+                    songs = if (copy == null || copy.songs.isEmpty()) UiState.Error(text(R.string.mix_copy_empty)) else UiState.Success(copy.songs),
+                    subtitle = getApplication<Application>().getString(R.string.local_playlist_subtitle, copy?.songs?.size ?: 0),
+                    description = text(R.string.mix_copy_description),
+                    thumbnailUrl = copy?.coverUrl ?: page.thumbnailUrl,
+                ) } }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) {
+                if (base == AndroidLocalMixes.baseScope()) _detailStack.update { pages -> pages.map {
+                    if (it.browseId == browseId) it.copy(songs = UiState.Error(text(R.string.mix_copy_failed))) else it
+                } }
+            }
+        }
+    }
+
+    fun clearPersonalization(completed: (String) -> Unit) {
+        if (_clearingPersonalization.value) return
+        _clearingPersonalization.value = true
+        val base = AndroidLocalMixes.baseScope()
+        homeCollectionsReadJob?.cancel()
+        homeCollectionsPrepareJob?.cancel()
+        homeCollectionsPrepareJob = null
+        personalMixJobs.values.toList().forEach { it.cancel() }
+        viewModelScope.launch {
+            try {
+                val result = AndroidLocalMixes.clear(base)
+                if (base == AndroidLocalMixes.baseScope()) {
+                    homeVisits.reset()
+                    _homeCollectionPreferences.value = HomeCollectionPreferences()
+                    _detailStack.update { pages -> pages.filterNot { LocalMixKind.fromId(it.browseId.removePrefix("mood:")) != null } }
+                    navigator.onDetailStackShrunk(_detailStack.value.size)
+                    beginHomeCollections()
+                }
+                completed(text(if (result.cleanupComplete) R.string.personalization_cleared else R.string.personalization_cleanup_pending))
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) {
+                if (base == AndroidLocalMixes.baseScope()) beginHomeCollections()
+                completed(text(R.string.personalization_clear_failed))
+            } finally { _clearingPersonalization.value = false }
+        }
+    }
+
+    private fun updateHomeCollection(completed: (Boolean) -> Unit,
+        change: suspend (String) -> HomeCollectionSnapshot) {
+        val scope = AndroidLocalMixes.scope()
+        viewModelScope.launch {
+            try {
+                val saved = change(scope)
+                if (scope != AndroidLocalMixes.scope()) { completed(false); return@launch }
+                homeVisits.preferences(scope, saved.preferences)
+                publishHomeCollections()
+                completed(true)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { completed(false) }
+        }
+    }
+
+    fun recordHomeCollection(id: String, opened: Boolean = false) {
+        val request = homeVisits.ticket ?: return
+        if (request.scope != AndroidLocalMixes.scope()) return
+        val shown = (_home.value as? UiState.Success)?.data.orEmpty().any { shelf -> shelf.items.any { it.browseId == "mood:$id" } }
+        if (!shown) return
+        viewModelScope.launch {
+            try { AndroidLocalMixes.home.store.record(request.scope, request.id, id, opened) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { DebugLog.w("HomeCollections", "Could not save local Home summary", failure) }
+        }
+    }
+
+    private fun isAlbumShelf(shelf: HomeShelf): Boolean {
+        val titleLower = shelf.title.lowercase(Locale.ROOT)
+        if (titleLower.contains("album") || titleLower.contains("ep") || titleLower.contains("single")) {
+            return true
+        }
+        if (shelf.items.isNotEmpty() && shelf.items.all { item ->
+            val browseId = item.browseId.orEmpty()
+            browseId.startsWith("MPREb") || browseId.startsWith("OLAK") || browseId.startsWith("VLOLAK") ||
+                item.subtitle.contains("Album", ignoreCase = true) ||
+                item.subtitle.contains("Single", ignoreCase = true) ||
+                item.subtitle.contains("EP", ignoreCase = true)
+        }) {
+            return true
+        }
+        return false
+    }
+
+    private fun filterSongShelves(shelves: List<HomeShelf>): List<HomeShelf> {
+        return shelves
+            .filterNot { isAlbumShelf(it) }
+            .map { shelf ->
+                val songItems = shelf.items.filterNot { item ->
+                    val bId = item.browseId.orEmpty()
+                    bId.startsWith("MPREb") || bId.startsWith("OLAK") || bId.startsWith("VLOLAK") ||
+                        item.subtitle.contains("Album", ignoreCase = true)
+                }
+                if (songItems.isNotEmpty()) shelf.copy(items = songItems) else shelf
+            }
+            .filter { it.items.isNotEmpty() }
+    }
+
     fun loadHome() {
+        loadSavedMixCopies()
+        beginHomeCollections()
         val identity = listenerKey()
         val generation = homeLoadGeneration.incrementAndGet()
-        _home.value = UiState.Loading
         homeContinuation = null
         homeSeenTitles.clear()
+        homeRecentShelf = null
+        synchronized(homeNormalSongShelves) { homeNormalSongShelves.clear() }
+        synchronized(homeContinuationShelves) { homeContinuationShelves.clear() }
         _homeLoadingMore.value = false
         _homeRecentlyPlayedLoading.value = _signedIn.value
-        // The core feed plus one browse per supplement. Recently played is left
-        // out: it has its own skeleton at the head of the page rather than the
-        // one at the tail.
-        _homePendingShelves.value = 1 + YtMusicRepository.HOME_SUPPLEMENT_BROWSE_IDS.size
+        _homePendingShelves.value = 1 + if (_signedIn.value) 1 else 0
+
+        rebuildHomeFeed()
+
         viewModelScope.launch {
+            if (_signedIn.value) {
+                launch {
+                    try {
+                        YtMusicRepository.homeRecentlyPlayed()
+                            .onSuccess { shelf ->
+                                if (isCurrentHomeLoad(identity, generation)) {
+                                    _homeRecentlyPlayedLoading.value = false
+                                    homeRecentShelf = shelf
+                                    rebuildHomeFeed()
+                                }
+                            }
+                            .onFailure {
+                                if (isCurrentHomeLoad(identity, generation)) _homeRecentlyPlayedLoading.value = false
+                            }
+                    } finally {
+                        homeShelfRequestSettled(identity, generation)
+                    }
+                }
+            }
+            launch {
+                try {
+                    com.music.bitchord.data.mood.MoodGenreRepository.loadQuickPicksShelf()
+                        .onSuccess { shelf ->
+                            if (isCurrentHomeLoad(identity, generation)) {
+                                homeQuickPicksShelf = shelf
+                                rebuildHomeFeed()
+                            }
+                        }
+                } catch (e: Exception) {
+                    // Keep initial shelf
+                }
+            }
+            launch {
+                try {
+                    com.music.bitchord.data.mood.MoodGenreRepository.loadTrendingSongsShelf()
+                        .onSuccess { shelf ->
+                            if (isCurrentHomeLoad(identity, generation)) {
+                                homeTrendingShelf = shelf
+                                rebuildHomeFeed()
+                            }
+                        }
+                } catch (e: Exception) {
+                    // Keep initial shelf
+                }
+            }
             launch {
                 try {
                     YtMusicRepository.home()
                         .onSuccess { feed ->
                             if (!isCurrentHomeLoad(identity, generation)) return@onSuccess
                             homeContinuation = feed.continuation
-                            publishHomeShelves(feed.shelves)
-                        }
-                        .onFailure { failure ->
-                            if (isCurrentHomeLoad(identity, generation) && _home.value !is UiState.Success) {
-                                _home.value = UiState.Error(failure.friendly())
+                            val filtered = filterSongShelves(feed.shelves)
+                            synchronized(homeNormalSongShelves) {
+                                homeNormalSongShelves.clear()
+                                homeNormalSongShelves.addAll(filtered)
                             }
+                            rebuildHomeFeed()
                         }
                 } finally {
                     homeShelfRequestSettled(identity, generation)
-                }
-            }
-            if (_signedIn.value) {
-                launch {
-                    YtMusicRepository.homeRecentlyPlayed()
-                        .onSuccess { shelf ->
-                            if (isCurrentHomeLoad(identity, generation)) {
-                                _homeRecentlyPlayedLoading.value = false
-                                shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
-                            }
-                        }
-                        .onFailure {
-                            if (isCurrentHomeLoad(identity, generation)) _homeRecentlyPlayedLoading.value = false
-                        }
-                }
-            }
-            YtMusicRepository.HOME_SUPPLEMENT_BROWSE_IDS.forEach { browseId ->
-                launch {
-                    try {
-                        YtMusicRepository.homeSupplement(browseId).onSuccess { shelves ->
-                            if (isCurrentHomeLoad(identity, generation)) publishHomeShelves(shelves)
-                        }
-                    } finally {
-                        homeShelfRequestSettled(identity, generation)
-                    }
                 }
             }
         }
@@ -1713,36 +2009,43 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun isCurrentHomeLoad(identity: String?, generation: Long) =
         identity == listenerKey() && generation == homeLoadGeneration.get()
 
-    private fun publishHomeShelves(shelves: List<HomeShelf>, prepend: Boolean = false) {
-        val existing = (_home.value as? UiState.Success)?.data.orEmpty()
-        if (prepend) {
-            // YouTube's core home can also contain a stale "Recently played"
-            // shelf. The dedicated history endpoint wins and replaces it.
-            val replacing = shelves.map { it.title.lowercase(Locale.ROOT) }.toSet()
-            homeSeenTitles.addAll(replacing)
-            _home.value = UiState.Success(shelves + existing.filterNot {
-                it.title.lowercase(Locale.ROOT) in replacing
-            })
-            return
+    private fun publishHomeShelves(
+        shelves: List<HomeShelf>,
+        prepend: Boolean = false,
+        insertAfterQuickGrid: Boolean = false,
+    ) {
+        val filtered = filterSongShelves(shelves)
+        if (filtered.isNotEmpty()) {
+            synchronized(homeNormalSongShelves) {
+                homeNormalSongShelves.addAll(filtered)
+            }
+            rebuildHomeFeed()
         }
-        val added = shelves.withoutRepeatsOf(existing)
-            .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
-        if (added.isNotEmpty()) _home.value = UiState.Success(existing + added)
     }
 
     /** Refreshes the core feed without blanking the current Play page first. */
-    private suspend fun refreshHome(identity: String?) = coroutineScope {
-        val recent = if (_signedIn.value) async { YtMusicRepository.homeRecentlyPlayed() } else null
-        YtMusicRepository.home().onSuccess { feed ->
-            if (identity != listenerKey()) return@onSuccess
-            homeContinuation = feed.continuation
-            homeSeenTitles.clear()
-            val shelves = feed.shelves.withoutRepeatsOf(emptyList())
-                .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
-            if (shelves.isNotEmpty()) _home.value = UiState.Success(shelves)
-        }
-        recent?.await()?.onSuccess { shelf ->
-            if (identity == listenerKey()) shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
+    private suspend fun refreshHome(identity: String?, adoptHomeCollections: Boolean) = coroutineScope {
+        val personal = beginHomeCollections(applyPrepared = adoptHomeCollections)
+        val generation = homeLoadGeneration.incrementAndGet()
+        homeContinuation = null
+        homeSeenTitles.clear()
+        val recentAsync = if (_signedIn.value) async { YtMusicRepository.homeRecentlyPlayed() } else null
+        val homeAsync = async { YtMusicRepository.home() }
+
+        val recentResult = recentAsync?.await()?.getOrNull()
+        val homeResult = homeAsync.await().getOrNull()
+        personal.join()
+
+        if (identity == listenerKey()) {
+            homeRecentShelf = recentResult
+            if (homeResult != null) {
+                homeContinuation = homeResult.continuation
+                synchronized(homeNormalSongShelves) {
+                    homeNormalSongShelves.clear()
+                    homeNormalSongShelves.addAll(filterSongShelves(homeResult.shelves))
+                }
+            }
+            rebuildHomeFeed()
         }
     }
 
@@ -1759,14 +2062,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             YtMusicRepository.moreHome(token).onSuccess { feed ->
                 if (identity == listenerKey()) {
-                    val existing = (_home.value as? UiState.Success)?.data ?: emptyList()
-                    val added = feed.shelves.withoutRepeatsOf(existing)
-                        .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
-                    // A page with nothing new signals the feed has looped back on
-                    // itself rather than run dry with a token still attached —
-                    // treat it the same as exhausted so scrolling can't spin here.
+                    val filtered = filterSongShelves(feed.shelves)
+                    val existingTitles = (_home.value as? UiState.Success)?.data?.map { it.title.lowercase(Locale.ROOT) }?.toSet().orEmpty()
+                    val added = filtered.filterNot { it.title.lowercase(Locale.ROOT) in existingTitles }
                     homeContinuation = feed.continuation.takeIf { added.isNotEmpty() }
-                    if (added.isNotEmpty()) _home.value = UiState.Success(existing + added)
+                    if (added.isNotEmpty()) {
+                        synchronized(homeContinuationShelves) {
+                            homeContinuationShelves.addAll(added)
+                        }
+                        rebuildHomeFeed()
+                    }
                 }
             }
             if (identity == listenerKey()) _homeLoadingMore.value = false
@@ -1955,8 +2260,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _suggestions.value = emptyList()
             _typeaheadResults.value = emptyList()
             _results.value = null
-            addonSearchJob?.cancel()
-            _addonResults.value = null
             // The list is about to switch from search results to recent
             // searches (or the empty state) — without this it can keep
             // whatever scroll offset the results list was left at, landing
@@ -1984,44 +2287,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         searchSubmitted = true
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
-        if (_searchSource.value == SearchSource.ADDONS) {
-            runAddonSearch(q)
-            return
-        }
-        runSearch(anonymous = false)
-    }
 
-    /**
-     * Asks every enabled addon for [q] in parallel. A slow or failing addon
-     * only costs its own rows; the list is the rest of them, round-robin so
-     * no single catalogue buries the others.
-     */
-    private fun runAddonSearch(q: String) {
-        SearchHistory.recordAddonQuery(q)
-        addonSearchJob?.cancel()
-        _searchScrollReset.value += 1
-        val addons = SourceRegistry.active().filterIsInstance<AddonSource>()
-        if (addons.isEmpty()) {
-            _addonResults.value = UiState.Error(text(R.string.search_addons_none))
-            return
-        }
-        _addonResults.value = UiState.Loading
-        addonSearchJob = viewModelScope.launch {
-            val perAddon = coroutineScope {
-                addons.map { addon ->
-                    async {
-                        withTimeoutOrNull(ADDON_SEARCH_TIMEOUT_MS) {
-                            runCatching { addon.search(q, limit = ADDON_SEARCH_LIMIT) }.getOrDefault(emptyList())
-                        } ?: emptyList()
-                    }
-                }.map { it.await() }
-            }
-            val merged = buildList {
-                val longest = perAddon.maxOfOrNull { it.size } ?: 0
-                for (i in 0 until longest) perAddon.forEach { rows -> rows.getOrNull(i)?.let(::add) }
-            }
-            _addonResults.value = UiState.Success(merged)
-        }
+        runSearch(anonymous = false)
     }
 
     /**
@@ -2040,7 +2307,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         when (source) {
             SearchSource.LIBRARY -> loadLibrarySongs()
             SearchSource.YOUTUBE -> submitSearch()
-            SearchSource.ADDONS -> if (_query.value.isNotBlank()) submitSearch()
         }
     }
 
@@ -2397,8 +2663,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         /** Per-addon budget for the Addons search tab; a slow addon is left out, not waited on. */
-        private const val ADDON_SEARCH_TIMEOUT_MS = 12_000L
-        private const val ADDON_SEARCH_LIMIT = 20
 
         /** How many Spotify tracks are looked up on YouTube Music at once. */
         private const val SPOTIFY_MATCH_PARALLELISM = 6
@@ -2465,6 +2729,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          */
 
         fun browseTypeOf(browseId: String, fallback: BrowseType = BrowseType.OTHER): BrowseType = when {
+            browseId.startsWith("mood:") -> BrowseType.PLAYLIST
             // Built for playlists, but an album downloaded whole opens through
             // the same prefix, and its page should read as the album it is.
             browseId.startsWith(Downloads.PLAYLIST_PREFIX) ->
@@ -2474,6 +2739,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     ?.let { BrowseType.ALBUM }
                     ?: BrowseType.PLAYLIST
             browseId.startsWith(LocalGroups.PREFIX) -> LocalGroups.typeOf(browseId) ?: fallback
+            browseId.startsWith(MixCopyStore.PREFIX) -> BrowseType.PLAYLIST
             browseId.startsWith("UC") -> BrowseType.ARTIST
             browseId.startsWith("MPREb") || browseId.startsWith("VLOLAK") || browseId.startsWith("OLAK") -> BrowseType.ALBUM
             browseId.startsWith("VL") || browseId.startsWith("PL") -> BrowseType.PLAYLIST
@@ -2548,6 +2814,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             songs = UiState.Loading,
             type = resolved,
         )
+        if (browseId.startsWith(MixCopyStore.PREFIX)) { loadSavedCopyPage(browseId); return }
+        if (browseId.startsWith("mood:") && LocalMixKind.fromId(browseId.removePrefix("mood:")) != null &&
+            LocalMixPlatform.repository != null) {
+            loadPersonalMix(browseId, force = false)
+            return
+        }
         viewModelScope.launch {
             var sections = emptyList<HomeShelf>()
             // Callers that open an artist from a track — the player, the
@@ -2601,6 +2873,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             val local = localPageState(browseId)
             val state = when {
+                browseId.startsWith("mood:") -> {
+                    val moodId = browseId.removePrefix("mood:")
+                    val mood = com.music.bitchord.data.mood.MoodGenreRepository.findMood(moodId)
+                    val query = mood?.query ?: title
+                    name = mood?.title ?: title
+                    artwork = thumbnailUrl ?: mood?.assetUrl
+                    description = mood?.subtitle ?: "Vikify Mood Mix"
+                    val result = com.music.bitchord.data.mood.MoodGenreRepository.loadSongsForMood(moodId)
+                    result.fold(
+                        onSuccess = { songs ->
+                            if (songs.isEmpty()) {
+                                UiState.Error(text(R.string.no_tracks_here))
+                            } else {
+                                credit = getApplication<Application>().getString(R.string.local_playlist_subtitle, songs.size)
+                                UiState.Success(songs)
+                            }
+                        },
+                        onFailure = { UiState.Error(it.friendly()) },
+                    )
+                }
                 local != null -> local
                 resolved == BrowseType.ARTIST -> {
                     YtMusicRepository.artistPage(browseId).fold(
@@ -2812,6 +3104,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val context = getApplication<Application>()
         fun nonEmpty(songs: List<Song>, empty: () -> String): UiState<List<Song>> =
             if (songs.isEmpty()) UiState.Error(empty()) else UiState.Success(songs)
+
+        if (browseId.startsWith(MixCopyStore.PREFIX)) return nonEmpty(
+            AndroidLocalMixes.copies.get(AndroidLocalMixes.baseScope(), browseId)?.songs.orEmpty()) { text(R.string.mix_copy_empty) }
+        if (browseId.startsWith("mood:")) LocalMixKind.fromId(browseId.removePrefix("mood:"))?.let { kind ->
+            return nonEmpty(LocalMixPlatform.repository?.load(AndroidLocalMixes.scope(), kind)?.mix?.songs.orEmpty()) { text(R.string.mix_needs_history) }
+        }
 
         com.music.bitchord.data.spotify.LocalPlaylistStore.getPlaylist(browseId)?.let { playlist ->
             return nonEmpty(playlist.songs) { text(R.string.spotify_import_empty_playlist) }
@@ -3331,11 +3629,143 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    fun setRecommendationPreference(trackId: String, preference: TrackPreference?, completed: (Boolean) -> Unit) {
+        val scope = LocalMixPlatform.listenerScope()
+        viewModelScope.launch {
+            try {
+                AndroidLocalMixes.evidenceStore.setPreference(scope, trackId, preference)
+                if (scope == LocalMixPlatform.listenerScope() && preference == TrackPreference.HIDE) {
+                    _detailStack.update { pages -> pages.map { page ->
+                        val songs = (page.songs as? UiState.Success)?.data
+                        if (LocalMixKind.fromId(page.browseId.removePrefix("mood:")) == null || songs == null) page
+                        else {
+                            val filtered = songs.filterNot { it.videoId == trackId }
+                            page.copy(songs = if (filtered.isEmpty()) UiState.Error(text(R.string.mix_feedback_empty))
+                                else UiState.Success(filtered),
+                                subtitle = getApplication<Application>().getString(R.string.local_playlist_subtitle, filtered.size))
+                        }
+                    } }
+                }
+                completed(true)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { completed(false) }
+        }
+    }
+
+    fun refreshPersonalMix(browseId: String) = loadPersonalMix(browseId, force = true)
+
+    private fun loadPersonalMix(browseId: String, force: Boolean) {
+        val kind = LocalMixKind.fromId(browseId.removePrefix("mood:")) ?: return
+        val repository = LocalMixPlatform.repository ?: return
+        if (personalMixJobs[browseId]?.isActive == true) return
+        val scope = LocalMixPlatform.listenerScope()
+        fun current() = LocalMixPlatform.listenerScope() == scope
+        fun publish(mix: GeneratedMix, failure: MixFailure? = null) {
+            if (!current()) return
+            val preferences = AndroidLocalMixes.evidenceStore.knownFeedback(scope)?.preferences.orEmpty()
+            val visibleSongs = mix.songs.filter { preferences[it.videoId] != TrackPreference.HIDE }
+            val reason = when (kind) {
+                LocalMixKind.ON_REPEAT -> R.string.mix_reason_repeat
+                LocalMixKind.BACK_IN_ROTATION -> R.string.mix_reason_rotation
+                LocalMixKind.DAILY_MIX -> R.string.mix_reason_daily
+                LocalMixKind.COMFORT_ZONE -> R.string.mix_reason_comfort
+                LocalMixKind.ARTIST_ORBIT -> R.string.mix_reason_orbit
+                LocalMixKind.FRESH_FINDS -> R.string.mix_reason_fresh
+                LocalMixKind.BEYOND_THE_USUAL -> R.string.mix_reason_beyond
+            }
+            val updated = java.text.DateFormat.getDateTimeInstance(
+                java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT,
+            ).format(java.util.Date(mix.generatedAt))
+            val description = buildString {
+                append(text(reason))
+                append("\n")
+                if (mix.basedOnArtists.isNotEmpty()) {
+                    append(getApplication<Application>().getString(R.string.mix_based_on_artists, mix.basedOnArtists.joinToString(", ")))
+                    append("\n")
+                }
+                append(text(when (mix.confidence) {
+                    PreferenceConfidence.NONE, PreferenceConfidence.LEARNING -> R.string.mix_confidence_learning
+                    PreferenceConfidence.DEVELOPING -> R.string.mix_confidence_developing
+                    PreferenceConfidence.ESTABLISHED -> R.string.mix_confidence_established
+                }))
+                append("\n")
+                append(getApplication<Application>().getString(R.string.mix_updated, updated))
+                if (failure != null) { append("\n"); append(text(R.string.mix_kept_previous)) }
+            }
+            _detailStack.update { pages -> pages.map { page ->
+                if (page.browseId == browseId) page.copy(
+                    songs = if (visibleSongs.isEmpty()) UiState.Error(text(R.string.mix_feedback_empty)) else UiState.Success(visibleSongs),
+                    subtitle = getApplication<Application>().getString(R.string.local_playlist_subtitle, visibleSongs.size),
+                    description = description,
+                    generatedMixVersion = mix.version,
+                ) else page
+            } }
+        }
+        val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
+            try {
+                repository.cached(scope, kind)?.let { publish(it) }
+                val result = repository.load(scope, kind, force)
+                if (!current()) return@launch
+                val refreshedMix = result.mix
+                if (refreshedMix != null) publish(refreshedMix, result.failure) else {
+                    val message = if (result.failure == MixFailure.HIDDEN_BY_FEEDBACK) R.string.mix_feedback_empty
+                    else if (result.failure == MixFailure.REFRESH_FAILED) R.string.mix_refresh_failed
+                    else if (result.failure == MixFailure.NO_DISCOVERIES) {
+                        if (kind == LocalMixKind.BEYOND_THE_USUAL) R.string.mix_no_beyond_discoveries else R.string.mix_no_fresh_discoveries
+                    } else when (kind) {
+                        LocalMixKind.ON_REPEAT -> R.string.mix_needs_repeats
+                        LocalMixKind.BACK_IN_ROTATION -> R.string.mix_needs_old_favorites
+                        LocalMixKind.DAILY_MIX -> R.string.mix_needs_history
+                        LocalMixKind.COMFORT_ZONE -> R.string.mix_needs_comfort
+                        LocalMixKind.ARTIST_ORBIT -> R.string.mix_needs_orbit
+                        LocalMixKind.FRESH_FINDS -> R.string.mix_needs_fresh
+                        LocalMixKind.BEYOND_THE_USUAL -> R.string.mix_needs_beyond
+                    }
+                    _detailStack.update { pages -> pages.map { page ->
+                        if (page.browseId == browseId) page.copy(songs = UiState.Error(text(message))) else page
+                    } }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                if (current()) _detailStack.update { pages -> pages.map { page ->
+                    if (page.browseId != browseId) page else if (page.songs is UiState.Success) {
+                        page.copy(description = page.description.orEmpty() + "\n" + text(R.string.mix_kept_previous))
+                    } else page.copy(songs = UiState.Error(text(R.string.mix_refresh_failed)))
+                } }
+            } finally {
+                if (personalMixJobs[browseId] === currentCoroutineContext()[Job]) {
+                    personalMixJobs.remove(browseId)
+                    _refreshingMixes.update { it - browseId }
+                }
+            }
+        }
+        personalMixJobs[browseId] = job
+        _refreshingMixes.update { it + browseId }
+        job.start()
+    }
+
     private fun listenerKey(): String? = _activeAccountId.value?.let { accountId ->
         _activeProfileId.value?.let { profileId -> "$accountId:$profileId" }
     }
 
     private fun clearListenerState(restoreCached: Boolean = false) {
+        homeCollectionsReadJob?.cancel()
+        homeCollectionsPrepareJob?.cancel()
+        homeCollectionsPrepareJob = null
+        homeVisits.reset()
+        _savedMixCopies.value = emptyList()
+        homeCollectionsLoadFailed = false
+        _homeCollectionPreferences.value = HomeCollectionPreferences()
+        _homeCollectionVisit.value = ""
+        personalMixJobs.values.toList().forEach { it.cancel() }
+        personalMixJobs.clear()
+        _refreshingMixes.value = emptySet()
+        _detailStack.update { pages -> pages.filterNot { page ->
+            (page.browseId.startsWith("mood:") && LocalMixKind.fromId(page.browseId.removePrefix("mood:")) != null) ||
+                page.browseId.startsWith(MixCopyStore.PREFIX)
+        } }
+        navigator.onDetailStackShrunk(_detailStack.value.size)
         _account.value = null
         likedSyncJob?.cancel()
         LikeState.clear()

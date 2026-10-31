@@ -86,7 +86,6 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         // threads racing to create it. Joined before onCreate returns, so
         // nothing that runs after startup can see any of them half open.
         val backgroundInit = thread(name = "startup-init") {
-            SourceRegistry.init(this)
             AndroidStreamHooks.initInnerTubeX(this)
             // Its own directory: canvas clips are looping video, not audio, and
             // belong in a cache AudioCache's own limit and eviction policy were
@@ -140,6 +139,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         // PlaybackService because the Replay page reads it from the UI side and
         // both live in this process — one owner, one directory.
         ListeningStats.init(this)
+        com.music.bitchord.data.personalization.AndroidLocalMixes.install(this)
         // After AppSettings, whose switch decides whether half of it runs.
         ArtistFacts.init(this)
         // One cache directory can only be opened once per process, and
@@ -188,7 +188,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
                     chain.request().newBuilder()
                         .header(
                             "User-Agent",
-                            "BitChord/${BuildConfig.VERSION_NAME} (Android; +https://github.com/kushagrasinghx/BitChord)",
+                            "Vikify/${BuildConfig.VERSION_NAME} (Android; +https://github.com/vishnukanchipati/vikify)",
                         )
                         .build(),
                 )
@@ -212,6 +212,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
             // Coil's own transport never sees Http.client's interceptor, so
             // the header is attached per request instead. See WebDavCoilAuth.
             .components {
+                add(com.music.bitchord.data.covers.CoverFetcher.Factory())
                 add(WebDavCoilAuth())
                 // Covers filed on the SMB share; anything else falls
                 // through to Coil's own fetchers. See SmbCoverFetcher.

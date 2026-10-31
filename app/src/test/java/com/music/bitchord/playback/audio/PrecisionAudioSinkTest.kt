@@ -10,9 +10,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.audio.AudioSink
 import com.music.bitchord.playback.AudioOutputStatus
-import com.music.bitchord.playback.EqualizerProcessor
-import com.music.bitchord.playback.SpatialAudioProcessor
-import com.music.bitchord.playback.TransitionFilterProcessor
+import com.music.bitchord.playback.LoudnessProcessor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -174,11 +172,7 @@ class PrecisionAudioSinkTest {
     // either side of it round-trips exactly.
 
     /** Every stage present but switched off, which is the shipping default. */
-    private fun idleDspChain(): DspChain = DspChain(
-        spatial = SpatialAudioProcessor(),
-        equalizer = EqualizerProcessor(),
-        transition = TransitionFilterProcessor(),
-    )
+    private fun idleDspChain(): DspChain = DspChain()
 
     /**
      * 16-bit in, 16-bit out, every sample identical.
@@ -358,13 +352,10 @@ class PrecisionAudioSinkTest {
     @Test
     fun `precision stays active for a 5 point 1 stream`() {
         val fakeDelegate = FakeAudioSink()
-        val equalizer = EqualizerProcessor().apply {
-            setTuning(enabled = true, curve = com.music.bitchord.playback.EqCurve.FLAT, balance = 0f)
-        }
         val sink = createSink(
             fakeDelegate,
             enableFloatOutput = false,
-            dspChain = DspChain(equalizer = equalizer),
+            dspChain = DspChain(),
         )
         sink.configure(
             AudioSink.AudioSinkConfig.Builder(
@@ -429,14 +420,15 @@ class PrecisionAudioSinkTest {
     /** Switched on, the chain is reached and does colour the audio. */
     @Test
     fun `the DSP chain is reached when it is switched on`() {
-        val equalizer = EqualizerProcessor().apply {
-            setTuning(enabled = true, curve = com.music.bitchord.playback.EqCurve.FLAT, balance = 1f)
+        val loudness = LoudnessProcessor().apply {
+            mediaId = "test"
+            gainFor = { 0.5f }
         }
         val fakeDelegate = FakeAudioSink()
         val sink = createSink(
             fakeDelegate,
             enableFloatOutput = false,
-            dspChain = DspChain(equalizer = equalizer),
+            dspChain = DspChain(loudness = loudness),
         )
         sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_16BIT)).build())
 
@@ -448,10 +440,8 @@ class PrecisionAudioSinkTest {
 
         val handed = fakeDelegate.lastHandledBuffer!!.order(ByteOrder.nativeOrder())
         handed.rewind()
-        // Hard-right balance silences the left channel. If this ever starts
-        // matching the input, the chain has stopped being reached and the
-        // exactness tests above are no longer proving anything.
-        assertEquals(0.toShort(), handed.getShort())
+        // Normalization halves the samples, proving the chain is reached.
+        assertEquals(4000.toShort(), handed.getShort())
     }
 
     @Test
@@ -1100,8 +1090,8 @@ class PrecisionAudioSinkTest {
     @Test
     fun `handleBuffer executes DspChain modifying samples before passing to delegate`() {
         val fakeDelegate = FakeAudioSink()
-        val eq = EqualizerProcessor()
-        val dspChain = DspChain(equalizer = eq)
+        val loudness = LoudnessProcessor().apply { mediaId = "test"; gainFor = { 0.5f } }
+        val dspChain = DspChain(loudness = loudness)
         val sink = createSink(fakeDelegate, enableFloatOutput = true, dspChain = dspChain)
 
         val format = Format.Builder()
@@ -1112,8 +1102,7 @@ class PrecisionAudioSinkTest {
             .build()
         sink.configure(AudioSink.AudioSinkConfig.Builder(format).build())
 
-        // Set high preamp (+6 dB ~= 2x gain)
-        eq.setTuning(enabled = true, com.music.bitchord.playback.EqCurve(FloatArray(10), FloatArray(10), 6.0f), balance = 0f)
+        // Normalization applies half gain to both channels.
 
         val frameCount = 2048
         val inputBuffer = ByteBuffer.allocateDirect(frameCount * 2 * 4).order(ByteOrder.LITTLE_ENDIAN)
@@ -1130,16 +1119,16 @@ class PrecisionAudioSinkTest {
         delegateBuffer!!.position((frameCount - 1) * 2 * 4)
         val leftSample = delegateBuffer.getFloat()
         val rightSample = delegateBuffer.getFloat()
-        // With +6dB preamp (~1.995x), 0.25f becomes ~0.50f
-        assertEquals(0.5f, leftSample, 0.05f)
-        assertEquals(0.5f, rightSample, 0.05f)
+        // Half gain turns 0.25f into 0.125f.
+        assertEquals(0.125f, leftSample, 0.005f)
+        assertEquals(0.125f, rightSample, 0.005f)
     }
 
     @Test
     fun `handleBuffer executes DspChain modifying samples with PCM16 output`() {
         val fakeDelegate = FakeAudioSink()
-        val eq = EqualizerProcessor()
-        val dspChain = DspChain(equalizer = eq)
+        val loudness = LoudnessProcessor().apply { mediaId = "test"; gainFor = { 0.5f } }
+        val dspChain = DspChain(loudness = loudness)
         val sink = createSink(fakeDelegate, enableFloatOutput = false, dspChain = dspChain)
 
         val format = Format.Builder()
@@ -1150,8 +1139,7 @@ class PrecisionAudioSinkTest {
             .build()
         sink.configure(AudioSink.AudioSinkConfig.Builder(format).build())
 
-        // Set high preamp (+6 dB ~= 2x gain)
-        eq.setTuning(enabled = true, com.music.bitchord.playback.EqCurve(FloatArray(10), FloatArray(10), 6.0f), balance = 0f)
+        // Normalization applies half gain to both channels.
 
         val frameCount = 2048
         val inputBuffer = ByteBuffer.allocateDirect(frameCount * 2 * 2).order(ByteOrder.LITTLE_ENDIAN)
@@ -1169,9 +1157,9 @@ class PrecisionAudioSinkTest {
         delegateBuffer!!.position((frameCount - 1) * 2 * 2)
         val leftSample = delegateBuffer.getShort()
         val rightSample = delegateBuffer.getShort()
-        // 8192 with +6dB preamp (~2x) becomes ~16384 in PCM16
-        assertEquals(16384f, leftSample.toFloat(), 1500f)
-        assertEquals(16384f, rightSample.toFloat(), 1500f)
+        // Half gain turns 8192 into 4096 in PCM16.
+        assertEquals(4096f, leftSample.toFloat(), 1f)
+        assertEquals(4096f, rightSample.toFloat(), 1f)
     }
 
     @Test
@@ -1246,7 +1234,7 @@ class PrecisionAudioSinkTest {
         val fakeDelegate = FakeAudioSink()
         val sink = PrecisionAudioSink(
             delegate = fakeDelegate,
-            dspChain = DspChain(spatial = SpatialAudioProcessor(), equalizer = EqualizerProcessor(), transition = TransitionFilterProcessor()),
+            dspChain = DspChain(),
             enableFloatOutput = true,
             preferredOutputEncodingProvider = { PcmEncoding.PCM_24BIT_PACKED },
         )
@@ -1273,7 +1261,7 @@ class PrecisionAudioSinkTest {
         }
         val sink = PrecisionAudioSink(
             delegate = fakeDelegate,
-            dspChain = DspChain(spatial = SpatialAudioProcessor(), equalizer = EqualizerProcessor(), transition = TransitionFilterProcessor()),
+            dspChain = DspChain(),
             enableFloatOutput = true,
             preferredOutputEncodingProvider = { PcmEncoding.PCM_24BIT_PACKED },
         )
@@ -1295,7 +1283,7 @@ class PrecisionAudioSinkTest {
         val fakeDelegate = FakeAudioSink()
         val sink = PrecisionAudioSink(
             delegate = fakeDelegate,
-            dspChain = DspChain(spatial = SpatialAudioProcessor(), equalizer = EqualizerProcessor(), transition = TransitionFilterProcessor()),
+            dspChain = DspChain(),
             enableFloatOutput = true,
             preferredOutputEncodingProvider = { format -> PcmEncoding.PCM_16BIT },
         )

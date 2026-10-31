@@ -296,7 +296,18 @@ fun String?.durationMillis(): Long {
 /** As [Song.artworkAt], for artwork that isn't a track's. */
 fun String?.artworkAt(px: Int): String? {
     if (this == null) return null
-    val sized = this.replace(SIZE_HINT, "w$px-h$px")
+    if (startsWith("vikify-cover://v1?")) {
+        val size = if (px <= 192) 192 else if (px <= 480) 480 else 720
+        return if (Regex("([?&])size=\\d+").containsMatchIn(this)) replace(Regex("([?&])size=\\d+"), "$1size=$size")
+            else "$this&size=$size"
+    }
+    val sized = if (this.contains("i.ytimg.com")) {
+        this.replace("hqdefault.jpg", "sddefault.jpg")
+            .replace("mqdefault.jpg", "sddefault.jpg")
+            .replace("default.jpg", "sddefault.jpg")
+    } else {
+        this.replace(SIZE_HINT, "w$px-h$px")
+    }
     return if (isGoogleImageHost(this)) {
         sized.replace(PARAM_SIZE_HINT, "=s$px")
     } else {
@@ -323,7 +334,7 @@ private val PARAM_SIZE_HINT = Regex("""=s\d+""")
  * Rounded up, and one value for every row in the app rather than one per
  * row height, so they share a cache entry instead of each fetching its own.
  */
-const val ROW_ART_PX = 160
+const val ROW_ART_PX = 300
 
 /** Artwork for a shelf card: 166dp wide, so a little under 450px at 3x. */
 const val CARD_ART_PX = 480
@@ -445,6 +456,7 @@ data class HomeShelf(
     val subtitle: String = "",
     val moreBrowseId: String? = null,
     val moreParams: String? = null,
+    val collectionGrid: Boolean = false,
 )
 
 /**
@@ -559,6 +571,7 @@ data class DetailPage(
      * fetched with a session; see [SubscriptionState].
      */
     val subscription: SubscriptionState? = null,
+    val generatedMixVersion: Long? = null,
 )
 
 /**

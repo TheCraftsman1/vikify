@@ -1,0 +1,8 @@
+Vikify Android verification
+852 tests passed
+1 test skipped
+0 failures or errors
+Phone APK build passed
+TV Kotlin compilation passed
+Supplied launcher artwork verified
+Removed analysis models and feature classes absent from the APK

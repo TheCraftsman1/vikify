@@ -634,15 +634,7 @@ private fun Song.matchQuery(): String = buildString {
  * its play asks for that row and nothing else — see [SourceResolver.MIX_PARAM].
  * Empty for every other source.
  */
-private fun Song.pickedMixQuery(configId: String): String {
-    if (SourceRegistry.config(configId)?.kind != SourceKind.ADDON) return ""
-    val mix = when (sourceQuality) {
-        null -> SourceResolver.MIX_ANY
-        "DOLBY" -> SourceResolver.MIX_ATMOS
-        else -> SourceResolver.MIX_STEREO
-    }
-    return "&${SourceResolver.MIX_PARAM}=$mix"
-}
+
 
 fun Song.toMediaItem(): MediaItem {
     val sourceTrack = SourceRegistry.parseTrackKey(videoId)
@@ -681,7 +673,7 @@ fun Song.toMediaItem(): MediaItem {
         // current item, so reaching back for the session's metadata isn't an
         // option either.
         sourceTrack != null -> SourceRegistry.trackUri(sourceTrack.first, sourceTrack.second)
-            .let { "$it${matchQuery()}${pickedMixQuery(sourceTrack.first)}" }
+            .let { "$it${matchQuery()}" }
         // A track the listener reverted by hand stays reverted — see
         // [OriginalVersion]. Applied here rather than at the one menu that
         // reverts, because "stays" has to mean the next queue entry built for

@@ -404,25 +404,8 @@ class PrecisionAudioSink(
         super.setOutputStreamOffsetUs(outputStreamOffsetUs)
     }
 
-    /**
-     * Passed straight through, noting on the way how far the DSP chain is
-     * running ahead of it — see
-     * [com.music.bitchord.playback.TransitionFilterProcessor.leadUs]. The
-     * renderer polls this on every clock tick, so the lead stays current for
-     * free.
-     */
-    override fun getCurrentPositionUs(sourceEnded: Boolean): Long {
-        val position = super.getCurrentPositionUs(sourceEnded)
-        val processed = processedEndUs
-        if (position != AudioSink.CURRENT_POSITION_NOT_SET && processed != C.TIME_UNSET) {
-            dspChain.transition.leadUs = (processed - position).coerceAtLeast(0L)
-        }
-        return position
-    }
-
     override fun flush() {
         processedEndUs = C.TIME_UNSET
-        dspChain.transition.leadUs = 0L
         streaming = false
         outputByteBuffer.clear()
         outputByteBuffer.flip()
@@ -439,7 +422,6 @@ class PrecisionAudioSink(
 
     override fun reset() {
         processedEndUs = C.TIME_UNSET
-        dspChain.transition.leadUs = 0L
         streaming = false
         processCounter = 0L
         outputByteBuffer.clear()

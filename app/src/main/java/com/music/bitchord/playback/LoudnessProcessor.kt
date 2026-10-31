@@ -75,13 +75,6 @@ class LoudnessProcessor {
     @Volatile
     private var trimTarget = 1f
 
-    /**
-     * Keeps the limiter running even with no gain of this stage's own to
-     * apply. Set by [com.music.bitchord.playback.audio.DspChain] before every
-     * block, on the audio thread, from whether the equaliser is shaping it.
-     */
-    var holdLimiter = false
-
     private var sampleRate = 0
     private var channelCount = 0
     private var currentGain = 1f
@@ -154,7 +147,7 @@ class LoudnessProcessor {
         // it a fraction under unity for the rest of the track, and the chain
         // would never be bit-exact again after the EQ or normalization was
         // switched off.
-        if (!holdLimiter && targetGain == 1f && targetTrim >= 1f &&
+        if (targetGain == 1f && targetTrim >= 1f &&
             abs(currentGain - 1f) < SETTLED && currentTrim >= 1f - SETTLED && reduction >= PARK_REDUCTION
         ) {
             currentGain = 1f

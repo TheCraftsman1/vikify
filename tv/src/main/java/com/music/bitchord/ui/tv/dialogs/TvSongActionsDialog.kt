@@ -18,7 +18,6 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Info
@@ -129,10 +128,7 @@ fun TvSongActionMenuDialog(
             TvSleepTimerDialog(onDismiss = onDismiss)
             return
         }
-        SongSheet.Equalizer -> {
-            TvEqualizerDialog(onDismiss = onDismiss)
-            return
-        }
+
         SongSheet.Actions -> Unit
     }
 
@@ -224,13 +220,7 @@ fun TvSongActionMenuDialog(
                     )
                 }
             }
-            item {
-                TvListRow(
-                    title = "Equalizer",
-                    trailingIcon = Icons.Rounded.Equalizer,
-                    onClick = { sheet = SongSheet.Equalizer },
-                )
-            }
+
             item {
                 TvListRow(
                     title = "Sleep Timer",
@@ -251,7 +241,7 @@ fun TvSongActionMenuDialog(
     }
 }
 
-private enum class SongSheet { Actions, Playlist, Sleep, Equalizer }
+private enum class SongSheet { Actions, Playlist, Sleep }
 
 /**
  * A station seeded from [song], as the phone builds one: YouTube's radio for

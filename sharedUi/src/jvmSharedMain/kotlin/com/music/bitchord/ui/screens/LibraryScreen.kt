@@ -116,6 +116,7 @@ fun LibraryScreen(
     deviceItems: List<ShelfItem>,
     /** The big "Library" heading; the desktop's pages carry none. */
     showTitle: Boolean = true,
+    personalShelves: List<HomeShelf> = emptyList(),
 ) {
     val pinnedPlaylists by AppUi.host.pinnedPlaylists.collectAsStateWithLifecycle()
     val onDevice = stringResource(Res.string.on_device)
@@ -141,6 +142,12 @@ fun LibraryScreen(
                 }
             }
             item(key = "replay") { replay() }
+            personalShelves.filter { it.items.isNotEmpty() }.forEach { shelf ->
+                item(key = "personal:${shelf.title}") {
+                    LibraryGridShelf(shelf = shelf, onItemClick = onShelfItemClick,
+                        onItemLongPress = onShelfItemLongPress, onShowAll = { onShowAll(shelf) })
+                }
+            }
             if (links.isNotEmpty()) {
                 item(key = "links") { LibraryLinkList(links = links, onClick = onShelfItemClick) }
             }

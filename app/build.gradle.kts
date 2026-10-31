@@ -53,6 +53,17 @@ val listenTogetherServer: String = (
         ?: "https://bitchord-listen-together.onrender.com"
     ).trim().trimEnd('/')
 
+val updateRepo: String = (
+    localProps.getProperty("UPDATE_REPO")
+        ?: System.getenv("UPDATE_REPO")
+        ?: "vishnukanchipati/vikify"
+    ).trim()
+val updateUrl: String = (
+    localProps.getProperty("UPDATE_URL")
+        ?: System.getenv("UPDATE_URL")
+        ?: if (updateRepo.isNotEmpty()) "https://api.github.com/repos/$updateRepo/releases/latest" else ""
+    ).trim()
+
 // See the root build.gradle.kts: one version for the phone and its watch app.
 val betaSuffix = rootProject.extra["bitchordBetaSuffix"] as String
 
@@ -84,7 +95,8 @@ android {
         // Which release assets are this app's: the phone and TV APKs ship in
         // the same GitHub release, told apart by file name. See
         // AppUpdateChecker.apkAssetUrl.
-        buildConfigField("String", "UPDATE_APK_PREFIX", "\"BitChord-\"")
+        buildConfigField("String", "UPDATE_RELEASE_URL", "\"${updateUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField("String", "UPDATE_APK_PREFIX", "\"Vikify-\"")
     }
 
     splits {
@@ -117,7 +129,7 @@ android {
         create("dev") {
             dimension = "env"
             applicationId = "com.dev.bitchord"
-            resValue("string", "app_name", "vikify Dev")
+            resValue("string", "app_name", "Vikify")
         }
         create("prod") {
             dimension = "env"
@@ -382,7 +394,6 @@ dependencies {
 
     // ---- JS module execution: QuickJS VM for style source plugins ----
     // Held at InnerTubeX's version; the same VM runs QuickJsExecutor's module sources.
-    implementation("io.github.dokar3:quickjs-kt-android:1.0.14")
 
     // ---- SMB file shares: pure-Java SMB2/3 client (listing + streaming) ----
     implementation("com.hierynomus:smbj:0.15.0")
@@ -391,7 +402,6 @@ dependencies {
     // The full android artifact, not onnxruntime-mobile: mobile only loads .ort
     // files, which would put an offline conversion step between the model and
     // the app for a saving that does not matter in a self-distributed APK.
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.28.0")
 
     // ---- Casting: Google Cast sender + the route discovery it sits on ----
     // The framework and the router only. media3-cast is left out on purpose:

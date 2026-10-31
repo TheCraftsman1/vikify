@@ -805,7 +805,6 @@ fun NowPlayingScreen(
     // CanvasRepository, which is also where the "is this actually the right
     // track" check lives.
     val spotifyCanvasAutoHide by PlayerSettings.spotifyCanvasAutoHide.collectAsStateWithLifecycle()
-    val mixing by PlayerSettings.smartMixInProgress.collectAsStateWithLifecycle()
     val canvas = rememberCanvasArtwork(song)
     var canvasAspect by remember(canvas) { mutableFloatStateOf(0f) }
     // Whether the clip actually has a frame on screen right now, and one of
@@ -1311,11 +1310,10 @@ fun NowPlayingScreen(
         volume.dragging,
         lyricsOpen,
         queueOpen,
-        mixing,
     ) {
         if (!spotifyCanvasPresentation || !spotifyCanvasControlsOpen ||
             !spotifyCanvasAutoHide || !isPlaying || scrub.scrubbing || volume.dragging ||
-            lyricsOpen || queueOpen || mixing
+            lyricsOpen || queueOpen
         ) return@LaunchedEffect
         delay(SPOTIFY_CANVAS_CONTROLS_IDLE_MS)
         spotifyCanvasControlsOpen = false
@@ -1327,12 +1325,6 @@ fun NowPlayingScreen(
         if (spotifyCanvasPresentation && !lyricsOpen && !queueOpen) {
             spotifyCanvasControlsOpen = true
         }
-    }
-    // A transition can begin while Canvas is standing alone. Restore and pin
-    // the compact deck so both the outgoing and incoming song are identified;
-    // normal tap/idle collapsing resumes as soon as the mix finishes.
-    LaunchedEffect(spotifyCanvasPresentation, mixing) {
-        if (spotifyCanvasPresentation && mixing) spotifyCanvasControlsOpen = true
     }
     // Portrait clips always use the existing artwork mesh, even if the user
     // selected the legacy backdrop for ordinary artwork.
@@ -1737,8 +1729,6 @@ fun NowPlayingScreen(
                 animationSpec = tween(durationMillis = ARTWORK_SCALE_DURATION_MS, easing = ArtworkScaleEasing),
                 label = "landscapeArtworkScale",
             )
-            val versionAligning by PlayerSettings.versionAlignmentInProgress.collectAsStateWithLifecycle()
-            val transitionWindow by PlayerSettings.smartTransitionWindow.collectAsStateWithLifecycle()
             val panelOpen = lyricsOpen || queueOpen
 
             // Where the sleeve is drawn this frame on its way to or from the mini
@@ -1916,11 +1906,7 @@ fun NowPlayingScreen(
                                 PlayerScrubber(
                                     shown = shown,
                                     durationMs = durationMs,
-                                    loading = versionAligning || audioVersionSwitching,
-                                    mixing = mixing && !scrub.scrubbing,
-                                    transitionWindow = transitionWindow
-                                        ?.takeIf { !scrub.scrubbing && it.end > it.start }
-                                        ?.let { it.start..it.end },
+                                    loading = audioVersionSwitching,
                                     onScrub = onScrub,
                                     onScrubFinished = onScrubFinished,
                                 ) {
@@ -2320,7 +2306,7 @@ fun NowPlayingScreen(
                         // the compact metadata row consume their own taps first; empty
                         // video above or below them toggles the lower deck either way.
                         .toggleSpotifyCanvasControlsOnTap(
-                            enabled = spotifyCanvasPresentation && !mixing,
+                            enabled = spotifyCanvasPresentation,
                             onToggle = { spotifyCanvasControlsOpen = !spotifyCanvasControlsOpen },
                         )
                         .then(skipSwipeGesture),
@@ -2501,8 +2487,7 @@ fun NowPlayingScreen(
                     // half (fetch + measure); [audioVersionSwitching] is the resolve.
                     // Both named here, so there is no frame of the switch with nothing
                     // on screen saying the player is still working.
-                    val versionAligning by PlayerSettings.versionAlignmentInProgress.collectAsStateWithLifecycle()
-                    val versionSwitching = versionAligning || audioVersionSwitching
+                    val versionSwitching = audioVersionSwitching
                     // Height the artwork block below turns out not to need, spent by the
                     // controls at the foot of the screen. Filled in from inside the box,
                     // where the sleeve's real size is known; see [lastControlSpread].
@@ -3505,7 +3490,7 @@ fun NowPlayingScreen(
                         visible = !lyricPicker.picking &&
                             (!lyricsOpen || lyricsControlsOpen) &&
                             (!queueOpen || queueControlsOpen) &&
-                            (!spotifyCanvasPresentation || spotifyCanvasControlsOpen || mixing),
+                            (!spotifyCanvasPresentation || spotifyCanvasControlsOpen),
                         reveal = playerDeckReveal,
                         // Back to the main player from lyrics or the queue with the
                         // deck stood down: the sleeve is about to come back out, so
@@ -3580,19 +3565,14 @@ fun NowPlayingScreen(
                                 .padding(vertical = 4.dp),
                         )
                     }
-                    val transitionWindow by PlayerSettings.smartTransitionWindow.collectAsStateWithLifecycle()
                     PlayerScrubber(
                         shown = shown,
                         durationMs = durationMs,
                         loading = versionSwitching,
-                        mixing = mixing && !scrub.scrubbing,
                         // Hidden while scrubbing: the planner is still describing
                         // where the transition *would* be, and a marker sitting under
                         // a finger that is moving the playhead invites reading it as
                         // a drag target.
-                        transitionWindow = transitionWindow
-                            ?.takeIf { !scrub.scrubbing && it.end > it.start }
-                            ?.let { it.start..it.end },
                         onScrub = onScrub,
                         onScrubFinished = onScrubFinished,
                     ) {

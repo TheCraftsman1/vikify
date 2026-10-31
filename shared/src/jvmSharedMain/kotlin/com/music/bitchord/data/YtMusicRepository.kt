@@ -1006,6 +1006,11 @@ object YtMusicRepository {
     suspend fun deletePlaylist(playlistId: String): Result<Unit> =
         call("playlist:delete") { Innertube.deletePlaylist(playlistId) }
 
+    /** A bounded candidate source; recommendations do not need an artist's full discography. */
+    suspend fun artistTopTracks(browseId: String): Result<List<Song>> = call("artist-top:$browseId") {
+        InnertubeParser.parseArtistPage(Innertube.browse(browseId)).songs.take(75)
+    }
+
     /**
      * Artist page. The landing page only lists ~5 songs, so the linked
      * "Top songs" playlist is fetched to fill the list out, and any linked
