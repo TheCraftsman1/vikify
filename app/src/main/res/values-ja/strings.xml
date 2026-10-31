@@ -321,7 +321,7 @@
     <string name="downloads_finished">ダウンロード · 完了</string>
     <string name="downloading_progress">ダウンロード中 · %1$d%%</string>
     <string name="starting">開始しています</string>
-    <string name="saved_to_bitchord_folder">Music/Vikifyに保存済み</string>
+    <string name="saved_to_vikify_folder">Music/Vikifyに保存済み</string>
     <string name="nothing_downloading">ダウンロード中の項目はありません</string>
     <string name="nothing_to_explore">現在探索できるものはありません</string>
     <string name="no_youtube_music_results">YouTube Musicからの結果はありません</string>
@@ -639,7 +639,7 @@
     </plurals>
     <string name="no_local_albums">ここにはまだアルバムやプレイリストに属するものがありません。完全なアルバムやプレイリストをダウンロードするとここに表示されます。</string>
     <string name="play_your_replay">あなたのReplayを再生</string>
-    <string name="counted_on_device_with_bitchord">Vikifyでこのデバイス内で集計</string>
+    <string name="counted_on_device_with_vikify">Vikifyでこのデバイス内で集計</string>
     <string name="this_month">今月</string>
     <string name="this_year">今年</string>
     <string name="all_time">すべての期間</string>

@@ -336,7 +336,7 @@
     <string name="downloads_finished">Загрузки · завершено</string>
     <string name="downloading_progress">Загрузка · %1$d%%</string>
     <string name="starting">Начало</string>
-    <string name="saved_to_bitchord_folder">Сохранено в Музыка/Vikify</string>
+    <string name="saved_to_vikify_folder">Сохранено в Музыка/Vikify</string>
     <string name="nothing_downloading">Ничего не загружается</string>
     <string name="nothing_to_explore">Сейчас нечего смотреть в обзоре</string>
     <string name="no_youtube_music_results">Нет результатов из YouTube Music</string>
@@ -685,7 +685,7 @@
     </plurals>
     <string name="no_local_albums">Здесь пока ничего нет из альбома или плейлиста. Загрузите полный альбом или плейлист, и он появится здесь.</string>
     <string name="play_your_replay">Воспроизвести ваш Replay</string>
-    <string name="counted_on_device_with_bitchord">Подсчитано на этом устройстве с помощью Vikify</string>
+    <string name="counted_on_device_with_vikify">Подсчитано на этом устройстве с помощью Vikify</string>
     <string name="this_month">Этот месяц</string>
     <string name="this_year">Этот год</string>
     <string name="all_time">За всё время</string>

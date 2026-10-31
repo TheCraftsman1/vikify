@@ -339,7 +339,7 @@
     <string name="downloads_finished">Descargas · finalizadas</string>
     <string name="downloading_progress">Descargando · %1$d%%</string>
     <string name="starting">Iniciando</string>
-    <string name="saved_to_bitchord_folder">Guardada en Music/Vikify</string>
+    <string name="saved_to_vikify_folder">Guardada en Music/Vikify</string>
     <string name="nothing_downloading">No hay descargas activas</string>
     <string name="nothing_to_explore">No hay nada para explorar ahora</string>
     <string name="no_youtube_music_results">No hay resultados de YouTube Music</string>
@@ -672,7 +672,7 @@
     </plurals>
     <string name="no_local_albums">Todavía no hay archivos asociados a un álbum o playlist. Descarga un álbum o una playlist completa para que aparezca aquí.</string>
     <string name="play_your_replay">Reproducir tu Replay</string>
-    <string name="counted_on_device_with_bitchord">Calculado en este dispositivo con Vikify</string>
+    <string name="counted_on_device_with_vikify">Calculado en este dispositivo con Vikify</string>
     <string name="this_month">Este mes</string>
     <string name="this_year">Este año</string>
     <string name="all_time">Todo el tiempo</string>

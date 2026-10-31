@@ -505,7 +505,7 @@
     <string name="start_radio">Start radio</string>
     <string name="shared_link">Shared link</string>
     <string name="radio_started">%1$s radio started</string>
-    <string name="saved_to_bitchord_folder">Saved to Music/Vikify</string>
+    <string name="saved_to_vikify_folder">Saved to Music/Vikify</string>
     <string name="nothing_downloading">Nothing downloading</string>
     <string name="nothing_to_explore">Nothing to explore right now</string>
     <string name="no_youtube_music_results">No results from YouTube Music</string>
@@ -870,7 +870,7 @@
     </plurals>
     <string name="no_local_albums">Nothing here belongs to an album or playlist yet. Download a complete album or playlist and it will appear here.</string>
     <string name="play_your_replay">Play your Replay</string>
-    <string name="counted_on_device_with_bitchord">Counted on this device with Vikify</string>
+    <string name="counted_on_device_with_vikify">Counted on this device with Vikify</string>
     <string name="this_month">This month</string>
     <string name="replay_this_week">This week</string>
     <string name="replay_period_weekly">Weekly</string>

@@ -13,7 +13,7 @@
 
 services:
   - type: web
-    name: bitchord-listen-together
+    name: vikify-listen-together
     runtime: go
     plan: free
     region: singapore

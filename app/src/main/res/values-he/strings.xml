@@ -327,7 +327,7 @@
     <string name="downloads_finished">הורדות · הסתיימו</string>
     <string name="downloading_progress">מוריד · %1$d%%</string>
     <string name="starting">מתחיל</string>
-    <string name="saved_to_bitchord_folder">נשמר ב-Music/Vikify</string>
+    <string name="saved_to_vikify_folder">נשמר ב-Music/Vikify</string>
     <string name="nothing_downloading">שום דבר לא יורד</string>
     <string name="nothing_to_explore">אין מה לחקור כרגע</string>
     <string name="no_youtube_music_results">אין תוצאות מ-YouTube Music</string>
@@ -607,7 +607,7 @@
     <string name="no_listening_history">אין היסטוריית האזנה</string>
     <string name="no_local_albums">שום דבר כאן לא שייך עדיין לאלבום או רשימת השמעה. הורד אלבום מלא או רשימת השמעה והם יופיעו כאן.</string>
     <string name="play_your_replay">הפעל את ה-Replay שלך</string>
-    <string name="counted_on_device_with_bitchord">נספר במכשיר זה עם Vikify</string>
+    <string name="counted_on_device_with_vikify">נספר במכשיר זה עם Vikify</string>
     <string name="this_month">החודש</string>
     <string name="this_year">השנה</string>
     <string name="all_time">כל הזמן</string>

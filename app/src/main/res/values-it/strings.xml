@@ -371,7 +371,7 @@
     <string name="starting">Avvio</string>
     <string name="start_radio">Avvia radio</string>
     <string name="radio_started">Radio %1$s avviata</string>
-    <string name="saved_to_bitchord_folder">Salvato in Musica/Vikify</string>
+    <string name="saved_to_vikify_folder">Salvato in Musica/Vikify</string>
     <string name="nothing_downloading">Nessun download in corso</string>
     <string name="nothing_to_explore">Niente da esplorare al momento</string>
     <string name="no_youtube_music_results">Nessun risultato da YouTube Music</string>
@@ -707,7 +707,7 @@
     </plurals>
     <string name="no_local_albums">Niente qui appartiene ancora a un album o playlist. Scarica un album o una playlist completa e apparirà qui.</string>
     <string name="play_your_replay">Riproduci il tuo Replay</string>
-    <string name="counted_on_device_with_bitchord">Conteggiato su questo dispositivo con Vikify</string>
+    <string name="counted_on_device_with_vikify">Conteggiato su questo dispositivo con Vikify</string>
     <string name="this_month">Questo mese</string>
     <string name="this_year">Quest\'anno</string>
     <string name="all_time">Sempre</string>

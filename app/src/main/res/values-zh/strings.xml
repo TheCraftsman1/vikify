@@ -321,7 +321,7 @@
     <string name="downloads_finished">下载 · 已完成</string>
     <string name="downloading_progress">正在下载 · %1$d%%</string>
     <string name="starting">正在开始</string>
-    <string name="saved_to_bitchord_folder">已保存到 Music/Vikify</string>
+    <string name="saved_to_vikify_folder">已保存到 Music/Vikify</string>
     <string name="nothing_downloading">当前没有下载任务</string>
     <string name="nothing_to_explore">目前没有可探索的内容</string>
     <string name="no_youtube_music_results">YouTube Music 没有搜索结果</string>
@@ -639,7 +639,7 @@
     </plurals>
     <string name="no_local_albums">这里还没有任何属于专辑或播放列表的内容。下载完整的专辑或播放列表后，它们会显示在这里。</string>
     <string name="play_your_replay">播放你的 Replay</string>
-    <string name="counted_on_device_with_bitchord">由 Vikify 在此设备上统计</string>
+    <string name="counted_on_device_with_vikify">由 Vikify 在此设备上统计</string>
     <string name="this_month">本月</string>
     <string name="this_year">今年</string>
     <string name="all_time">全部时间</string>

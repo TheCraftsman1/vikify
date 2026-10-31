@@ -655,21 +655,21 @@ Attach generator configuration to definitions rather than making a separate algo
 
 ### Repository references
 
-[R1] `shared/src/jvmSharedMain/kotlin/com/music/bitchord/data/mood/MoodGenreRepository.kt` - collection definitions, fixed queries, basic personalized paths, filtering, and current in-memory cache.
+[R1] `shared/src/jvmSharedMain/kotlin/com/music/vikify/data/mood/MoodGenreRepository.kt` - collection definitions, fixed queries, basic personalized paths, filtering, and current in-memory cache.
 
-[R2] `app/src/main/java/com/music/bitchord/data/stats/ListeningRecorder.kt` - playback sampling and meaningful-play accounting.
+[R2] `app/src/main/java/com/music/vikify/data/stats/ListeningRecorder.kt` - playback sampling and meaningful-play accounting.
 
-[R3] `app/src/main/java/com/music/bitchord/data/stats/ListeningStats.kt` - monthly local aggregates and daily track evidence.
+[R3] `app/src/main/java/com/music/vikify/data/stats/ListeningStats.kt` - monthly local aggregates and daily track evidence.
 
-[R4] `app/src/main/java/com/music/bitchord/ui/MainViewModel.kt` - Home assembly, asynchronous loading guards, and mood collection routing.
+[R4] `app/src/main/java/com/music/vikify/ui/MainViewModel.kt` - Home assembly, asynchronous loading guards, and mood collection routing.
 
-[R5] `sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui/screens/HomeScreen.kt` - current shelves and compact two-column Made For You tiles.
+[R5] `sharedUi/src/jvmSharedMain/kotlin/com/music/vikify/ui/screens/HomeScreen.kt` - current shelves and compact two-column Made For You tiles.
 
-[R6] `shared/src/commonMain/kotlin/com/music/bitchord/data/model/Models.kt` - track identity, credited artists, queue-entry identity, and source references.
+[R6] `shared/src/commonMain/kotlin/com/music/vikify/data/model/Models.kt` - track identity, credited artists, queue-entry identity, and source references.
 
-[R7] `app/src/main/java/com/music/bitchord/playback/PlaybackService.kt` - playback callbacks and listening sampler integration.
+[R7] `app/src/main/java/com/music/vikify/playback/PlaybackService.kt` - playback callbacks and listening sampler integration.
 
-[R8] `shared/src/jvmSharedMain/kotlin/com/music/bitchord/data/YtMusicRepository.kt` - recents, catalog retrieval, and related playback operations.
+[R8] `shared/src/jvmSharedMain/kotlin/com/music/vikify/data/YtMusicRepository.kt` - recents, catalog retrieval, and related playback operations.
 
 [R9] `app/src/main/assets/moods` - 29 existing collection cover assets.
 

@@ -353,7 +353,7 @@
     <string name="starting">Başlatılıyor</string>
     <string name="start_radio">Radyoyu başlat</string>
     <string name="radio_started">%1$s radyosu başlatıldı</string>
-    <string name="saved_to_bitchord_folder">Müzik/Vikify klasörüne kaydedildi</string>
+    <string name="saved_to_vikify_folder">Müzik/Vikify klasörüne kaydedildi</string>
     <string name="nothing_downloading">İndirilen bir şey yok</string>
     <string name="nothing_to_explore">Şu anda keşfedilecek bir şey yok</string>
     <string name="no_youtube_music_results">YouTube Music\'ten sonuç yok</string>
@@ -689,7 +689,7 @@
     </plurals>
     <string name="no_local_albums">Burada henüz bir albüme veya çalma listesine ait bir şey yok. Tam bir albüm veya çalma listesi indir, burada görünecek.</string>
     <string name="play_your_replay">Replay\'ini çal</string>
-    <string name="counted_on_device_with_bitchord">Bu cihazda Vikify ile sayıldı</string>
+    <string name="counted_on_device_with_vikify">Bu cihazda Vikify ile sayıldı</string>
     <string name="this_month">Bu ay</string>
     <string name="this_year">Bu yıl</string>
     <string name="all_time">Tüm zamanlar</string>

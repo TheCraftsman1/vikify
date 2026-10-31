@@ -11,10 +11,10 @@
 
 <br/>
 
-[![Latest release](https://img.shields.io/github/v/release/kushagrasinghx/BitChord?style=for-the-badge&labelColor=0d1117)](https://github.com/kushagrasinghx/BitChord/releases)
-[![License](https://img.shields.io/github/license/kushagrasinghx/BitChord?style=for-the-badge&labelColor=0d1117)](https://github.com/kushagrasinghx/BitChord/blob/main/LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/kushagrasinghx/BitChord/total?style=for-the-badge&labelColor=0d1117)](https://github.com/kushagrasinghx/BitChord/releases)
-[![Listening now](https://api.bitchord.kushagrasingh.in/api/stats/live/badge.svg)](https://api.bitchord.kushagrasingh.in/api/stats/live)
+[![Latest release](https://img.shields.io/github/v/release/kushagrasinghx/Vikify?style=for-the-badge&labelColor=0d1117)](https://github.com/kushagrasinghx/Vikify/releases)
+[![License](https://img.shields.io/github/license/kushagrasinghx/Vikify?style=for-the-badge&labelColor=0d1117)](https://github.com/kushagrasinghx/Vikify/blob/main/LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/kushagrasinghx/Vikify/total?style=for-the-badge&labelColor=0d1117)](https://github.com/kushagrasinghx/Vikify/releases)
+[![Listening now](https://api.vikify.app/api/stats/live/badge.svg)](https://api.vikify.app/api/stats/live)
 
 <br/>
 
@@ -23,8 +23,8 @@
 <br/>
 
 <a href="https://fmhy.net/mobile#youtube-music" target="_blank" rel="noopener noreferrer"><img src="https://cdn.jsdelivr.net/gh/JMcrafter26/badges@main/src/assets/available/fmhy/cozy.svg" alt="Featured on FMHY" height="55"/></a>
-<a href="https://trendshift.io/repositories/177639?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-177639" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/177639/daily?language=Kotlin" alt="kushagrasinghx%2FBitChord | Trendshift" width="250" height="55"/></a>
-<a href="https://trendshift.io/repositories/177639?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-177639" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/177639/weekly?language=Kotlin" alt="kushagrasinghx%2FBitChord | Trendshift" width="250" height="55"/></a>
+<a href="https://trendshift.io/repositories/177639?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-177639" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/177639/daily?language=Kotlin" alt="kushagrasinghx%2FVikify | Trendshift" width="250" height="55"/></a>
+<a href="https://trendshift.io/repositories/177639?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-177639" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/177639/weekly?language=Kotlin" alt="kushagrasinghx%2FVikify | Trendshift" width="250" height="55"/></a>
 
 </div>
 
@@ -89,9 +89,9 @@
 
 <h1><a id="download"></a>Download</h1>
 
-<a href="https://github.com/kushagrasinghx/BitChord/releases" target="_blank" rel="noopener noreferrer"><img src="https://cdn.jsdelivr.net/gh/JMcrafter26/badges@main/src/assets/supported/android/cozy.svg" alt="Download for Android" height="55"/></a>
+<a href="https://github.com/kushagrasinghx/Vikify/releases" target="_blank" rel="noopener noreferrer"><img src="https://cdn.jsdelivr.net/gh/JMcrafter26/badges@main/src/assets/supported/android/cozy.svg" alt="Download for Android" height="55"/></a>
 
-Grab the latest signed APK from the [Releases](https://github.com/kushagrasinghx/BitChord/releases) page. Sideloading requires enabling "Install unknown apps" for whichever app you download it with.
+Grab the latest signed APK from the [Releases](https://github.com/kushagrasinghx/Vikify/releases) page. Sideloading requires enabling "Install unknown apps" for whichever app you download it with.
 
 
 </div>
@@ -108,8 +108,8 @@ We welcome contributions to vikify! Please review our [Contributing Guide](CONTR
 
 ### Thanks to all contributors ❤
 
-<a href="https://github.com/kushagrasinghx/BitChord/graphs/contributors">
-  <img src="https://raw.githubusercontent.com/kushagrasinghx/BitChord/contributors/contributors.svg" />
+<a href="https://github.com/kushagrasinghx/Vikify/graphs/contributors">
+  <img src="https://raw.githubusercontent.com/kushagrasinghx/Vikify/contributors/contributors.svg" />
 </a>
 
 </div>
