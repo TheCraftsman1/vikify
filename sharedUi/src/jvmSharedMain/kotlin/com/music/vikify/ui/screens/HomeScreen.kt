@@ -47,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberUpdatedState
@@ -157,6 +158,7 @@ fun HomeScreen(
     collectionVisitKey: String = "",
     collectionImpressionsEnabled: Boolean = false,
     onCollectionVisible: ((ShelfItem) -> Unit)? = null,
+    djCompanion: (@Composable () -> Unit)? = null,
 ) {
     val recentsViewType by AppUi.host.homeRecentsViewType.collectAsStateWithLifecycle()
     var viewport by remember { mutableStateOf(Rect.Zero) }
@@ -214,18 +216,26 @@ fun HomeScreen(
                         feedSkeleton(firstIsHero = leadHero)
                     }
                 }
-                is UiState.Error -> item {
-                    MessageState(state.message, actionLabel = stringResource(Res.string.retry), onAction = onRetry)
+                is UiState.Error -> {
+                    item {
+                        MessageState(state.message, actionLabel = stringResource(Res.string.retry), onAction = onRetry)
+                    }
+                    homeDjCard(djCompanion)
                 }
                 is UiState.Success -> {
                     if (recentlyPlayedLoading) {
                         recentlyPlayedSkeleton(listLayout = recentsViewType == LibraryViewType.LIST)
+                    }
+                    if (state.data.isEmpty() && !recentlyPlayedLoading) item(key = "home-empty") {
+                        MessageState(stringResource(Res.string.home_empty_music),
+                            actionLabel = stringResource(Res.string.retry), onAction = onRetry)
                     }
                     // The loading skeleton already owns the hero slot. Until
                     // Recently Played lands, every real shelf must retain its
                     // compact-card layout instead of briefly becoming a hero.
                     itemsIndexedShelves(
                         shelves = state.data,
+                        djCompanion = djCompanion,
                         onItemClick = onItemClick,
                         onItemLongPress = onItemLongPress,
                         collectionVisitKey = collectionVisitKey,
@@ -289,9 +299,16 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
     collectionImpressionsEnabled: Boolean,
     onCollectionVisible: ((ShelfItem) -> Unit)?,
     viewport: Rect,
+    djCompanion: (@Composable () -> Unit)? = null,
 ) {
+    val shelfKeys = homeShelfKeys(shelves)
+    val djPosition = ((shelves.size + 1) / 2).coerceAtLeast(1)
     shelves.forEachIndexed { index, shelf ->
-        item(key = if (shelf.collectionGrid) "collection:${shelf.title}" else shelf.title + index) {
+        if (index == djPosition) homeDjCard(djCompanion)
+        item(
+            key = shelfKeys[index],
+            contentType = if (shelf.collectionGrid) "collection-grid" else "shelf",
+        ) {
             val openItem: (ShelfItem) -> Unit = { item -> onItemClick(item, shelf.title) }
             val isSongShelf = shelf.title.equals(RECENTS_TITLE, ignoreCase = true) ||
                 shelf.title.equals("Quick picks", ignoreCase = true) ||
@@ -342,6 +359,16 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
             }
         }
     }
+    if (shelves.size <= djPosition) homeDjCard(djCompanion)
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.homeDjCard(content: (@Composable () -> Unit)?) {
+    if (content == null) return
+    item(key = "dj-companion") {
+        Box(Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 24.dp)) {
+            content()
+        }
+    }
 }
 
 /** The same four-rows-per-page treatment used by an artist's Top songs. */
@@ -355,6 +382,8 @@ private fun RecentShelf(
     viewType: LibraryViewType,
     onViewTypeToggle: () -> Unit,
 ) {
+    val itemKeys = remember(shelf.items) { homeItemKeys(shelf.items) }
+    val columns = remember(shelf.items) { shelf.items.chunked(RECENT_TRACKS_PER_COLUMN) }
     Column(Modifier.padding(bottom = 26.dp)) {
         RecentSectionHeader(
             title = shelf.title,
@@ -370,16 +399,23 @@ private fun RecentShelf(
                     contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(shelf.items.chunked(RECENT_TRACKS_PER_COLUMN)) { column ->
+                    items(
+                        count = columns.size,
+                        key = { itemKeys[it * RECENT_TRACKS_PER_COLUMN] },
+                        contentType = { "track-column" },
+                    ) { columnIndex ->
+                        val column = columns[columnIndex]
                         Column(Modifier.width(columnWidth)) {
-                            column.forEach { item ->
-                                RecentTrackRow(
-                                    item = item,
-                                    onClick = { onItemClick(item) },
-                                    onLongPress = onItemLongPress?.let { { it(item) } },
-                                    isCurrent = isCurrentItem(item),
-                                    isPlaying = isCurrentItem(item) && isPlaying,
-                                )
+                            column.forEachIndexed { rowIndex, item ->
+                                key(itemKeys[columnIndex * RECENT_TRACKS_PER_COLUMN + rowIndex]) {
+                                    RecentTrackRow(
+                                        item = item,
+                                        onClick = { onItemClick(item) },
+                                        onLongPress = onItemLongPress?.let { { it(item) } },
+                                        isCurrent = isCurrentItem(item),
+                                        isPlaying = isCurrentItem(item) && isPlaying,
+                                    )
+                                }
                             }
                         }
                     }
@@ -392,7 +428,8 @@ private fun RecentShelf(
                     contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    items(shelf.items) { item ->
+                    items(count = shelf.items.size, key = { itemKeys[it] }, contentType = { "hero-card" }) { index ->
+                        val item = shelf.items[index]
                         HeroCard(
                             item = item,
                             onClick = { onItemClick(item) },
@@ -559,13 +596,17 @@ fun CompactTrackRow(
 private fun HomeTitle(title: String, modifier: Modifier = Modifier) {
     val style = MaterialTheme.typography.displayLarge
     val logoHeight = with(LocalDensity.current) { (style.fontSize * LOGO_TO_FONT).toDp() }
-    val greeting = remember {
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        when (hour) {
+    var hour by remember { mutableIntStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000)
+            hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        }
+    }
+    val greeting = when (hour) {
             in 4..11 -> "Good morning"
             in 12..17 -> "Good afternoon"
             else -> "Good evening"
-        }
     }
     Column(modifier = modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp)) {
         Icon(
@@ -816,6 +857,7 @@ private fun HeroShelf(
     currentSong: Song? = null,
     isPlaying: Boolean = false,
 ) {
+    val itemKeys = remember(shelf.items) { homeItemKeys(shelf.items) }
     Column(Modifier.padding(bottom = 26.dp)) {
         SectionHeader(shelf.title, shelf.subtitle)
         val isCurrentItem = shelf.items.playingItemMatcher(currentSong)
@@ -830,7 +872,8 @@ private fun HeroShelf(
                 contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                items(shelf.items) { item ->
+                items(count = shelf.items.size, key = { itemKeys[it] }, contentType = { "hero-card" }) { index ->
+                    val item = shelf.items[index]
                     HeroCard(
                         item = item,
                         onClick = { onItemClick(item) },
@@ -921,6 +964,7 @@ internal fun Shelf(
     currentSong: Song? = null,
     isPlaying: Boolean = false,
 ) {
+    val itemKeys = remember(shelf.items) { homeItemKeys(shelf.items) }
     Column(Modifier.padding(bottom = 26.dp)) {
         SectionHeader(shelf.title, shelf.subtitle)
         val isCurrentItem = shelf.items.playingItemMatcher(currentSong)
@@ -928,8 +972,9 @@ internal fun Shelf(
             contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            leadingCard?.let { card -> item(key = "leading") { card() } }
-            items(shelf.items) { item ->
+            leadingCard?.let { card -> item(key = "leading", contentType = "leading-card") { card() } }
+            items(count = shelf.items.size, key = { itemKeys[it] }, contentType = { "shelf-card" }) { index ->
+                val item = shelf.items[index]
                 ShelfCard(
                     item = item,
                     onClick = { onItemClick(item) },
@@ -1022,7 +1067,7 @@ private fun ServiceCard(colors: List<Color>, trackKey: String, icon: ImageVector
         MeshGradientBackground(
             palette = palette,
             trackKey = trackKey,
-            continuous = true,
+            continuous = false,
             blurRadius = 24.dp,
         )
         Icon(
@@ -1064,7 +1109,7 @@ internal fun ShelfCard(
                     MeshGradientBackground(
                         palette = palette,
                         trackKey = "local:downloads",
-                        continuous = true,
+                        continuous = false,
                         blurRadius = 24.dp,
                     )
                     Icon(
@@ -1162,19 +1207,20 @@ private fun SpotifyQuickGrid(
     showReasons: Boolean,
 ) {
     val isCurrentItem = items.playingItemMatcher(currentSong)
+    val itemKeys = remember(items) { homeItemKeys(items) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = PAGE_GUTTER, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items.chunked(2).forEach { rowItems ->
+        items.chunked(2).forEachIndexed { rowIndex, rowItems ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                rowItems.forEach { item ->
-                    key(item.browseId ?: item.title) {
+                rowItems.forEachIndexed { columnIndex, item ->
+                    key(itemKeys[rowIndex * 2 + columnIndex]) {
                         CollectionQuickCard(item, isCurrentItem(item), isPlaying, showReasons,
                             onItemClick, onItemLongPress, visitKey, impressionsEnabled, onVisible,
                             viewport, Modifier.weight(1f))

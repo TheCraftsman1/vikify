@@ -1,0 +1,9 @@
+{
+  "projects": { "default": "vikify-95144" },
+  "targets": {
+    "vikify-95144": {
+      "hosting": { "share": ["vikify"] },
+      "database": { "party": ["vikify-95144-default-rtdb"] }
+    }
+  }
+}

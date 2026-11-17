@@ -87,7 +87,7 @@ class PersonalizationResetCoordinatorTest {
             val mixes = GeneratedMixRepository(dir.resolve("mixes"), { f.history }, {
                 entered.complete(Unit); release.await(); f.candidates.map { it.song }
             }, isCurrentScope = { it == boundaries.scope("a") }, clock = { f.now }, zone = { f.zone })
-            val generating = async { mixes.load("a", LocalMixKind.DAILY_MIX) }
+            val generating = async { mixes.load("a", LocalMixKind.DAILY_MIX, force = true) }
             entered.await()
             val resetting = async { PersonalizationResetCoordinator(boundaries, evidence, mixes, home).reset("a", { f.history }, { f.now }, f.zone) }
             withTimeout(2_000) { while (boundaries.scope("a") == "a") yield() }

@@ -5,6 +5,11 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
+        <exclude domain="file" path="listening" />
+        <exclude domain="file" path="artist_facts.json" />
+        <exclude domain="sharedpref" path="vikify_replay_sync.xml" />
+        <exclude domain="sharedpref" path="vikify_ai.xml" />
+        <exclude domain="sharedpref" path="vikify_ai_plain.xml" />
         <exclude domain="sharedpref" path="vikify_auth.xml" />
         <exclude domain="sharedpref" path="vikify_auth_plain.xml" />
         <exclude domain="sharedpref" path="vikify_sources.xml" />
@@ -15,6 +20,11 @@
         <exclude domain="sharedpref" path="vikify_party_queue_stash.xml" />
     </cloud-backup>
     <device-transfer>
+        <exclude domain="file" path="listening" />
+        <exclude domain="file" path="artist_facts.json" />
+        <exclude domain="sharedpref" path="vikify_replay_sync.xml" />
+        <exclude domain="sharedpref" path="vikify_ai.xml" />
+        <exclude domain="sharedpref" path="vikify_ai_plain.xml" />
         <exclude domain="sharedpref" path="vikify_auth.xml" />
         <exclude domain="sharedpref" path="vikify_auth_plain.xml" />
         <exclude domain="sharedpref" path="vikify_sources.xml" />

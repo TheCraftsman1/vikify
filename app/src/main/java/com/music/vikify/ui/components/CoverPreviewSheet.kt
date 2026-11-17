@@ -42,6 +42,41 @@ import com.music.vikify.data.covers.CoverSpec
 import com.music.vikify.data.covers.CoverUri
 import kotlinx.coroutines.delay
 
+/** The same artwork system as the preview, attached to a real playlist draft. */
+@Composable
+internal fun PlaylistCoverEditor(title: String, onCoverChange: (String) -> Unit) {
+    var template by remember { mutableStateOf(CoverCatalog.templates.first()) }
+    var palette by remember { mutableStateOf(CoverCatalog.palettes.first()) }
+    val cleanTitle = remember(title) { CoverCatalog.title(title.ifBlank { "Your playlist" }) }
+    val spec = remember(cleanTitle, template, palette) {
+        CoverSpec("playlist_draft", cleanTitle,
+            locale = if (cleanTitle.any { it in '\u0C00'..'\u0C7F' }) "te-IN" else "en-IN",
+            templateId = template.id, paletteId = palette.id, variant = 1)
+    }
+    val uri = remember(spec) { CoverUri.encode(spec, 720) }
+    LaunchedEffect(uri) { onCoverChange(uri) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Playlist cover", style = MaterialTheme.typography.titleSmall)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            AsyncImage(uri, contentDescription = "$cleanTitle cover", contentScale = ContentScale.Fit,
+                modifier = Modifier.size(112.dp).clip(RoundedCornerShape(14.dp)))
+            Text("Make it yours. Your title appears on the cover as you type.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f))
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CoverCatalog.templates.forEach { option -> FilterChip(selected = template == option,
+                onClick = { template = option }, label = { Text(option.name) }) }
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CoverCatalog.palettes.forEach { option -> FilterChip(selected = palette == option,
+                onClick = { palette = option }, label = { Text(option.name) }, leadingIcon = {
+                    Spacer(Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(Color(option.accent)))
+                }) }
+        }
+    }
+}
+
 @Composable
 fun CoverPreviewSheet() {
     var title by remember { mutableStateOf("Telugu Melodies") }

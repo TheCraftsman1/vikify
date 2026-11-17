@@ -151,6 +151,9 @@ fun ListenTogetherScreen(
     val customServer by ListenTogether.customServerUrl.collectAsStateWithLifecycle()
     val connectionState by ListenTogether.serverConnectionState.collectAsStateWithLifecycle()
     val activity by ListenTogether.activity.collectAsStateWithLifecycle()
+    val cloudUid by com.music.vikify.data.firebase.FirebaseSyncManager.userId.collectAsStateWithLifecycle()
+    val cloudAnonymous by com.music.vikify.data.firebase.FirebaseSyncManager.isAnonymous.collectAsStateWithLifecycle()
+    val partySignedIn = if (ListenTogether.usesFirebaseRooms()) cloudUid != null && !cloudAnonymous else signedIn
 
     var codeInput by remember(inviteCode) { mutableStateOf(inviteCode.orEmpty()) }
     var busy by remember { mutableStateOf(false) }
@@ -246,9 +249,9 @@ fun ListenTogetherScreen(
 
     // A link tap is already an explicit request to join. Signed-out users keep
     // the populated code while the sign-in page is open.
-    LaunchedEffect(inviteCode, inviteServer, signedIn) {
+    LaunchedEffect(inviteCode, inviteServer, partySignedIn) {
         val code = inviteCode ?: return@LaunchedEffect
-        if (!signedIn || busy) return@LaunchedEffect
+        if (!partySignedIn || busy) return@LaunchedEffect
 
         val activeServer = (ListenTogether.activePartyServerBase() ?: ListenTogether.effectiveIdleServerBase()).trim().trimEnd('/')
         val targetServer = inviteServer?.trim()?.trimEnd('/')
@@ -366,7 +369,7 @@ fun ListenTogetherScreen(
                     maxMembers = maxMembers,
                     onMaxMembersChange = { maxMembers = it.coerceIn(2, 10) },
                     busy = busy,
-                    enabled = signedIn && ListenTogether.hasServer,
+                    enabled = partySignedIn && ListenTogether.hasServer,
                     error = failure,
                     onCreate = {
                         busy = true
@@ -392,7 +395,7 @@ fun ListenTogetherScreen(
                         failure = null
                     },
                     busy = busy,
-                    enabled = signedIn && ListenTogether.hasServer,
+                    enabled = partySignedIn && ListenTogether.hasServer,
                     error = failure,
                     onSubmit = { openPartyPreview(codeInput, null) },
                 )
@@ -484,7 +487,7 @@ fun ListenTogetherScreen(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 14.dp),
         )
 
-        if (!signedIn) {
+        if (!partySignedIn) {
             SettingsGroup(footer = stringResource(R.string.listen_together_sign_in_footer)) {
                 SettingsRow(
                     icon = Icons.Rounded.Login,
@@ -498,7 +501,7 @@ fun ListenTogetherScreen(
         if (!state.inParty) {
             PartyLanding(
                 avatarUrl = ListenTogether.myAvatarUrl(),
-                enabled = signedIn && ListenTogether.hasServer && !busy,
+                enabled = partySignedIn && ListenTogether.hasServer && !busy,
                 // The last attempt's message does not belong on the next one.
                 onCreate = {
                     failure = null
@@ -1000,6 +1003,7 @@ private fun connectionLine(state: ListenTogether.State): String = when {
     // the server's last word on it rather than this device's own reckoning, and
     // saying so is more use than a spinner.
     !state.clockSynced -> stringResource(R.string.listen_together_syncing_clock)
+    ListenTogether.isFirebaseParty() -> stringResource(R.string.listen_together_room_connected)
     else -> stringResource(R.string.listen_together_in_sync, state.roundTripMs)
 }
 

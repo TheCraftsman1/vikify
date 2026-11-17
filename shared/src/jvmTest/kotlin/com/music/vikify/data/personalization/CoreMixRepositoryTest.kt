@@ -57,7 +57,7 @@ class CoreMixRepositoryTest {
         }
         try {
             assertNotNull(repository(dir, related = { fetch(radio) }, artistTracks = { fetch(artists) })
-                .load("listener", LocalMixKind.ARTIST_ORBIT).mix)
+                .load("listener", LocalMixKind.ARTIST_ORBIT, force = true).mix)
             assertEquals(2, radio.get())
             assertEquals(2, artists.get())
             assertTrue(peak.get() <= 2)

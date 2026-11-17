@@ -54,11 +54,19 @@ val listenTogetherServer: String = (
         ?: "https://vikify-listen-together.onrender.com"
     ).trim().trimEnd('/')
 
+val firebasePartyDatabaseUrl = "https://vikify-95144-default-rtdb.asia-southeast1.firebasedatabase.app"
+
 val updateRepo: String = (
     localProps.getProperty("UPDATE_REPO")
         ?: System.getenv("UPDATE_REPO")
         ?: "vishnukanchipati/vikify"
     ).trim()
+// Public address of Vikify's authenticated music-intelligence service; provider keys stay on that server.
+val gnaniApiKey: String = (localProps.getProperty("GNANI_API_KEY") ?: System.getenv("GNANI_API_KEY") ?: "").trim()
+val nvidiaApiKey: String = (localProps.getProperty("NVIDIA_API_KEY") ?: System.getenv("NVIDIA_API_KEY") ?: "").trim()
+val nvidiaModel: String = (localProps.getProperty("NVIDIA_MODEL") ?: System.getenv("NVIDIA_MODEL")
+    ?: "nvidia/nemotron-3.5-lightning-30b-a3b").trim()
+val vmieBaseUrl = (localProps.getProperty("VMIE_BASE_URL") ?: System.getenv("VMIE_BASE_URL") ?: "").trim().trimEnd('/')
 val updateUrl: String = (
     localProps.getProperty("UPDATE_URL")
         ?: System.getenv("UPDATE_URL")
@@ -93,11 +101,16 @@ android {
             "LISTEN_TOGETHER_SERVER",
             "\"${listenTogetherServer.replace("\\", "\\\\").replace("\"", "\\\"")}\"",
         )
+        buildConfigField("String", "FIREBASE_PARTY_DATABASE_URL", "\"$firebasePartyDatabaseUrl\"")
         // Which release assets are this app's: the phone and TV APKs ship in
         // the same GitHub release, told apart by file name. See
         // AppUpdateChecker.apkAssetUrl.
         buildConfigField("String", "UPDATE_RELEASE_URL", "\"${updateUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "UPDATE_APK_PREFIX", "\"Vikify-\"")
+        buildConfigField("String", "VMIE_BASE_URL", "\"${vmieBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField("String", "GNANI_API_KEY", "\"\"")
+        buildConfigField("String", "NVIDIA_API_KEY", "\"\"")
+        buildConfigField("String", "NVIDIA_MODEL", "\"${nvidiaModel.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
 
     splits {
@@ -131,6 +144,8 @@ android {
             dimension = "env"
             applicationId = "com.music.vikify"
             resValue("string", "app_name", "Vikify")
+            buildConfigField("String", "GNANI_API_KEY", "\"${gnaniApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+            buildConfigField("String", "NVIDIA_API_KEY", "\"${nvidiaApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         }
         create("prod") {
             dimension = "env"
@@ -185,7 +200,11 @@ android {
             )
             // Null without a keystore to sign with: the build then produces
             // app-release-unsigned.apk instead of failing outright.
-            signingConfig = signingConfigs.findByName("release")
+            signingConfig = if (providers.gradleProperty("testSigning").orNull == "true") {
+                // Installable performance-test APK that updates the existing debug
+                // app while retaining release/Compose optimizations. Opt-in only.
+                signingConfigs.getByName("debug")
+            } else signingConfigs.findByName("release")
         }
         /*
          * The release build, installable next to the dev and prod apps: same R8,
@@ -255,16 +274,42 @@ val newPipeExtractorRaw: Configuration by configurations.creating {
     isTransitive = false
     isCanBeConsumed = false
 }
+
+// Firestore needs google.type.LatLng and google.rpc.Status from this AAR.
+// Its older com.google.protobuf well-known messages also ship in the pinned
+// protobuf-javalite runtime; retain the Google API types without those duplicates.
+val firebaseTypesRaw: Configuration by configurations.creating {
+    isTransitive = false
+    isCanBeConsumed = false
+}
 dependencies {
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
     implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-database")
     implementation("com.google.firebase:firebase-firestore") {
         exclude(group = "com.google.firebase", module = "protolite-well-known-types")
     }
-    implementation("com.google.android.gms:play-services-auth:21.3.0")
+    implementation("androidx.credentials:credentials:1.6.0")
+    implementation("androidx.webkit:webkit:1.14.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
     newPipeExtractorRaw("com.github.TeamNewPipe:NewPipeExtractor:v0.26.3")
+    firebaseTypesRaw("com.google.firebase:protolite-well-known-types:18.0.1@aar")
+}
+val firebaseTypesStripped = tasks.register<org.gradle.api.tasks.bundling.Jar>("stripFirebaseDuplicateWellKnownTypes") {
+    inputs.property("excludedProtobufPaths", "com/google/protobuf/**;google/protobuf/**")
+    archiveFileName.set("firebase-google-api-types-18.0.1.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("stripped-libs"))
+    from(provider {
+        firebaseTypesRaw.flatMap { aar ->
+            zipTree(aar).matching { include("classes.jar") }.files.map { zipTree(it) }
+        }
+    }) {
+        exclude("com/google/protobuf/**")
+        exclude("google/protobuf/**")
+    }
 }
 val newPipeExtractorStripped = tasks.register<org.gradle.api.tasks.bundling.Jar>(
     "stripNewPipeExtractorUtils"
@@ -391,6 +436,7 @@ dependencies {
     // re-derive this list with
     //   ./gradlew :app:dependencies --configuration prodReleaseRuntimeClasspath
     implementation(files(newPipeExtractorStripped))
+    implementation(files(firebaseTypesStripped))
     implementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0a5d5ef20ca7ef09549996")
     implementation("org.jsoup:jsoup:1.22.2")
     implementation("com.google.code.findbugs:jsr305:3.0.2")

@@ -15,6 +15,7 @@ import com.music.vikify.data.model.HomeShelf
  */
 sealed interface AppRoute {
     data object Settings : AppRoute
+    data object Dj : AppRoute
     data object AccountScrobbling : AppRoute
     data object ListenTogether : AppRoute
     data object WearOs : AppRoute

@@ -21,6 +21,14 @@ import java.util.concurrent.ConcurrentHashMap
     val epochDay: Long = 0, val baseline: List<ResetTrack> = emptyList(), val cleanupScopes: List<String> = emptyList(),
 )
 
+/** Scope hashes, device generations and cleanup queues never leave this device. */
+@Serializable private data class CloudResetMarker(
+    val schemaVersion: Int = 1,
+    val cutoff: Long,
+    val epochDay: Long,
+    val baseline: List<ResetTrack>,
+)
+
 /** A durable generation boundary prevents preserved Replay totals from rebuilding cleared preferences. */
 class PersonalizationResetStore(private val directory: File) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -34,16 +42,53 @@ class PersonalizationResetStore(private val directory: File) {
 
     fun pending(base: String): List<String> = synchronized(locks.getOrPut(base) { Any() }) { read(base).cleanupScopes }
 
+    /** Portable, deterministic reset identity; null means this profile has never been reset. */
+    fun cloudMarker(base: String): String? = synchronized(locks.getOrPut(base) { Any() }) {
+        marker(read(base))
+    }
+
+    /**
+     * Adopts a newer cloud reset without letting an old device resurrect discarded learning.
+     * The caller must finish pending cleanup before importing evidence into the new [scope].
+     * A false result means the caller must reread local state and merge again.
+     */
+    suspend fun adoptCloudMarker(base: String, expected: String?, desired: String?): Boolean = withContext(Dispatchers.IO) {
+        synchronized(locks.getOrPut(base) { Any() }) {
+            val old = read(base)
+            val current = marker(old)
+            if (current != expected) return@synchronized false
+            if (current == desired) return@synchronized true
+            // Reset is monotonic. Missing or stale cloud state cannot undo a local reset.
+            if (desired == null) return@synchronized false
+            require(desired.toByteArray(Charsets.UTF_8).size <= 8_000_000) { "Cloud reset marker is too large" }
+            val incoming = json.decodeFromString(CloudResetMarker.serializer(), desired)
+            validate(incoming)
+            require(encode(incoming) == desired) { "Cloud reset marker is not canonical" }
+            // Independent devices can reset in the same millisecond. Canonical max is the
+            // deterministic tie-break used by the cloud manifest, so both replicas converge.
+            if (incoming.cutoff < old.cutoff ||
+                (incoming.cutoff == old.cutoff && desired <= current.orEmpty())) return@synchronized false
+            val oldScope = if (old.generation == 0L) base else "$base:reset:${old.generation}"
+            write(base, ResetBoundary(key = hash(base), generation = Math.addExact(old.generation, 1),
+                cutoff = incoming.cutoff, epochDay = incoming.epochDay, baseline = incoming.baseline,
+                cleanupScopes = (old.cleanupScopes + oldScope).distinct()))
+            true
+        }
+    }
+
     suspend fun reset(base: String, history: List<TrackListeningEvidence>, cutoff: Long, zone: ZoneId): String = withContext(Dispatchers.IO) {
         synchronized(locks.getOrPut(base) { Any() }) {
             val old = read(base)
             val oldScope = if (old.generation == 0L) base else "$base:reset:${old.generation}"
-            val day = Instant.ofEpochMilli(cutoff).atZone(zone).toLocalDate().toEpochDay()
+            require(cutoff > 0) { "Invalid reset cutoff" }
+            // Millisecond collisions and a clock moving backwards must not undo a reset.
+            val effectiveCutoff = maxOf(cutoff, Math.addExact(old.cutoff, 1))
+            val day = Instant.ofEpochMilli(effectiveCutoff).atZone(zone).toLocalDate().toEpochDay()
             val baseline = history.mapNotNull { track ->
                 val days = track.days.filter { it.epochDay >= day }.map { ResetDay(it.epochDay, it.plays.coerceAtLeast(0), it.heardMs.coerceAtLeast(0)) }
                 if (days.isEmpty()) null else ResetTrack(hash(track.song.videoId), days)
             }
-            val next = ResetBoundary(key = hash(base), generation = Math.addExact(old.generation, 1), cutoff = cutoff,
+            val next = ResetBoundary(key = hash(base), generation = Math.addExact(old.generation, 1), cutoff = effectiveCutoff,
                 epochDay = day, baseline = baseline, cleanupScopes = (old.cleanupScopes + oldScope).distinct())
             write(base, next)
             "$base:reset:${next.generation}"
@@ -57,14 +102,17 @@ class PersonalizationResetStore(private val directory: File) {
         }
     }
 
-    fun learningHistory(base: String, history: List<TrackListeningEvidence>): List<TrackListeningEvidence> {
+    fun learningHistory(base: String, history: List<TrackListeningEvidence>, includeResetDay: Boolean = true): List<TrackListeningEvidence> {
         val boundary = synchronized(locks.getOrPut(base) { Any() }) { read(base) }
         if (boundary.generation == 0L) return history
         val baseline = boundary.baseline.associate { it.key to it.days.associateBy { day -> day.day } }
         return history.mapNotNull { track ->
             if (track.lastPlayedAt <= boundary.cutoff) return@mapNotNull null
             val previous = baseline[hash(track.song.videoId)].orEmpty()
-            val days = track.days.filter { it.epochDay >= boundary.epochDay }.mapNotNull { day ->
+            // Cross-device day aggregates cannot separate late-arriving pre-reset plays from
+            // new plays on the cutoff day. Cloud callers conservatively start the following day.
+            val days = track.days.filter { it.epochDay > boundary.epochDay ||
+                (includeResetDay && it.epochDay == boundary.epochDay) }.mapNotNull { day ->
                 val old = previous[day.epochDay]
                 val plays = (day.plays - (old?.plays ?: 0)).coerceAtLeast(0)
                 val ms = (day.heardMs - (old?.heardMs ?: 0)).coerceAtLeast(0)
@@ -85,6 +133,28 @@ class PersonalizationResetStore(private val directory: File) {
             }
         } else ResetBoundary(key = key)
         return value.also { cache[base] = it }
+    }
+
+    private fun marker(boundary: ResetBoundary): String? = if (boundary.generation == 0L) null else
+        encode(CloudResetMarker(cutoff = boundary.cutoff, epochDay = boundary.epochDay, baseline = boundary.baseline))
+
+    private fun encode(marker: CloudResetMarker): String = json.encodeToString(CloudResetMarker.serializer(),
+        marker.copy(baseline = marker.baseline.sortedBy { it.key }.map { it.copy(days = it.days.sortedBy { day -> day.day }) }))
+
+    private fun validate(marker: CloudResetMarker) {
+        require(marker.schemaVersion == 1 && marker.cutoff > 0) { "Unsupported cloud reset marker" }
+        val utcDay = Instant.ofEpochMilli(marker.cutoff).atZone(ZoneId.of("UTC")).toLocalDate().toEpochDay()
+        require(marker.epochDay in (utcDay - 1)..(utcDay + 1)) { "Invalid cloud reset day" }
+        require(marker.baseline.size <= 50_000 && marker.baseline.map { it.key }.distinct().size == marker.baseline.size) {
+            "Invalid cloud reset baseline"
+        }
+        marker.baseline.forEach { track ->
+            require(track.key.matches(Regex("[a-f0-9]{64}")) && track.days.size <= 1_100 &&
+                track.days.map { it.day }.distinct().size == track.days.size) { "Invalid cloud reset track" }
+            require(track.days.all { it.day >= marker.epochDay && it.plays >= 0 && it.heardMs >= 0 }) {
+                "Invalid cloud reset counters"
+            }
+        }
     }
 
     private fun write(base: String, boundary: ResetBoundary) {

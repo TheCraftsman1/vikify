@@ -60,6 +60,8 @@ fun AccountProfileSelector(
     onRemoveAccount: (GoogleAccountSession) -> Unit,
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit,
+    googleEmail: String? = null,
+    onChooseGoogleAccount: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var managing by remember { mutableStateOf(false) }
@@ -94,6 +96,15 @@ fun AccountProfileSelector(
                 item { Text(stringResource(R.string.switch_account), style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(20.dp, 18.dp, 20.dp, 8.dp)) }
+                item {
+                    Column(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onChooseGoogleAccount)
+                        .padding(horizontal = 20.dp, vertical = 12.dp)) {
+                        Text(stringResource(R.string.vikify_google_account), style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(googleEmail ?: stringResource(R.string.choose_device_google_account),
+                            style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
                 accounts.forEach { account ->
                 item {
                     Text(account.email.ifBlank { account.name.ifBlank { stringResource(R.string.accounts) } },

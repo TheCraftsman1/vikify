@@ -9,6 +9,8 @@ import com.music.vikify.VikifyApplication
 import com.music.vikify.BuildConfig
 import com.music.vikify.data.DebugLog as Log
 import com.music.vikify.data.settings.AppSettings
+import com.music.vikify.data.firebase.FirebaseSyncManager
+import com.google.firebase.auth.FirebaseAuth
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -44,6 +46,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -51,6 +55,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -366,7 +372,8 @@ object ListenTogether {
      * The default party server this build ships pointed at, from `LISTEN_TOGETHER_SERVER`
      * in `local.properties` or build environment.
      */
-    val defaultServer: String = when (val res = parseAndNormalizeServerUrl(BuildConfig.LISTEN_TOGETHER_SERVER)) {
+    val defaultServer: String = when (val res = parseAndNormalizeServerUrl(
+        BuildConfig.FIREBASE_PARTY_DATABASE_URL.ifBlank { BuildConfig.LISTEN_TOGETHER_SERVER })) {
         is ServerUrlValidationResult.Valid -> res.normalizedUrl
         is ServerUrlValidationResult.Invalid -> error("Invalid BuildConfig.LISTEN_TOGETHER_SERVER: ${BuildConfig.LISTEN_TOGETHER_SERVER}")
     }
@@ -402,6 +409,15 @@ object ListenTogether {
     @Volatile
     private var activePartyServerBase: String? = null
     fun activePartyServerBase(): String? = activePartyServerBase
+
+    private lateinit var firebaseRooms: FirebasePartyTransport
+    private var firebaseRoomJob: Job? = null
+    private val firebaseControlMutex = Mutex()
+    private var firebaseSessionUid: String? = null
+    fun usesFirebaseRooms(): Boolean = isFirebaseAddress(effectiveIdleServerBase())
+    fun isFirebaseParty(): Boolean = firebaseSessionUid != null
+    private fun isFirebaseAddress(value: String): Boolean = BuildConfig.FIREBASE_PARTY_DATABASE_URL.isNotBlank() &&
+        normalizeServerBase(value).equals(normalizeServerBase(BuildConfig.FIREBASE_PARTY_DATABASE_URL), ignoreCase = true)
 
     /** Whether idle operations are currently falling back to the default server. */
     val isUsingDefaultFallback: Boolean
@@ -458,6 +474,7 @@ object ListenTogether {
 
     fun setScreenActive(active: Boolean) {
         isScreenActive = active
+        if (::firebaseRooms.isInitialized) firebaseRooms.setScreenActive(active && usesFirebaseRooms())
         if (active && !shouldSkipIdleProbe(
                 screenActive = true,
                 connectionLive = _state.value.connection == Connection.LIVE,
@@ -551,6 +568,14 @@ object ListenTogether {
         showChecking: Boolean = false,
         targetGeneration: Long? = null,
     ): ServerConnectionState {
+        if (isFirebaseAddress(_customServer.value.ifBlank { defaultServer })) {
+            val online = ::firebaseRooms.isInitialized && firebaseRooms.connected.value
+            val resolved = if (online) ServerConnectionState.DefaultOnline(0) else ServerConnectionState.Offline
+            _effectiveIdleServer.value = defaultServer
+            _serverConnectionState.value = resolved
+            _serverStatus.value = ServerStatus(resolved.health)
+            return resolved
+        }
         if (showChecking) {
             resolutionMutex.withLock {
                 if (targetGeneration == null || targetGeneration == resolutionGeneration) {
@@ -565,7 +590,10 @@ object ListenTogether {
             customServer = custom,
             defaultServer = defaultServer,
             probeCustom = { probeHealthWithLatency(custom, CUSTOM_SERVER_TIMEOUT_MS) },
-            probeDefault = { probeHealthWithLatency(defaultServer, DEFAULT_SERVER_TIMEOUT_MS) },
+            probeDefault = {
+                if (isFirebaseAddress(defaultServer)) ProbeResult(::firebaseRooms.isInitialized && firebaseRooms.connected.value)
+                else probeHealthWithLatency(defaultServer, DEFAULT_SERVER_TIMEOUT_MS)
+            },
         )
 
         resolutionMutex.withLock {
@@ -608,15 +636,24 @@ object ListenTogether {
             val response = http.get("$raw/healthz") {
                 timeout { requestTimeoutMillis = timeoutMs }
             }
-            if (!response.status.isSuccess()) return@runCatching false
             val body = runCatching { response.bodyAsText() }.getOrDefault("")
-            body.contains("\"ok\":true")
+            isHealthResponse(response.status.value, body)
         }.getOrElse {
             Log.w(TAG, "health check failed for ${redact(raw)}: ${redact(it.message)}")
             false
         }
         val elapsed = clock.nowMs() - start
         return ProbeResult(isOnline = isOnline, latencyMs = if (isOnline) elapsed.coerceAtLeast(0L) else 0L)
+    }
+
+    /** A formatted health response is valid; a proxy page or quoted string is not. */
+    internal fun isHealthResponse(statusCode: Int, body: String): Boolean {
+        if (statusCode !in 200..299) return false
+        return runCatching {
+            val fields = json.parseToJsonElement(body) as? JsonObject ?: return@runCatching false
+            val ok = fields["ok"] as? JsonPrimitive ?: return@runCatching false
+            !ok.isString && ok.booleanOrNull == true
+        }.getOrDefault(false)
     }
 
     private suspend fun probeHealth(baseUrl: String): Boolean =
@@ -661,14 +698,20 @@ object ListenTogether {
 
     fun init(context: Context) {
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        firebaseRooms = FirebasePartyTransport(BuildConfig.FIREBASE_PARTY_DATABASE_URL, deviceId())
         val rawSaved = prefs.getString(KEY_SERVER, null)?.trim().orEmpty()
         val normalizedSaved = when (val res = parseAndNormalizeServerUrl(rawSaved)) {
             is ServerUrlValidationResult.Valid -> res.normalizedUrl
             is ServerUrlValidationResult.Invalid -> ""
         }
         _customServer.value = normalizedSaved
-        _effectiveIdleServer.value = if (normalizedSaved.isNotBlank()) {
-            normalizedSaved
+        // The retired built-in Render address is no longer a custom deployment.
+        if (normalizedSaved == normalizeServerBase(BuildConfig.LISTEN_TOGETHER_SERVER)) {
+            _customServer.value = ""
+            prefs.edit().remove(KEY_SERVER).apply()
+        }
+        _effectiveIdleServer.value = if (_customServer.value.isNotBlank()) {
+            _customServer.value
         } else {
             defaultServer
         }
@@ -676,8 +719,33 @@ object ListenTogether {
         val code = prefs.getString(KEY_CODE, null)
         val saved = prefs.getString(KEY_TOKEN, null)
         prefs.edit().remove(KEY_CODE).remove(KEY_TOKEN).apply()
-        if (!code.isNullOrBlank() && !saved.isNullOrBlank()) {
+        val savedFirebaseUid = prefs.getString(KEY_FIREBASE_UID, null)
+        prefs.edit().remove(KEY_FIREBASE_UID).apply()
+        if (!code.isNullOrBlank() && savedFirebaseUid != null) {
+            scope.launch {
+                if (FirebaseAuth.getInstance().currentUser?.uid == savedFirebaseUid) {
+                    runCatching { firebaseRooms.leave(code) }
+                }
+            }
+        } else if (!code.isNullOrBlank() && !saved.isNullOrBlank()) {
             releaseStaleSlot(code, saved)
+        }
+
+        scope.launch {
+            firebaseRooms.connected.collect { connected ->
+                if (usesFirebaseRooms()) {
+                    _serverConnectionState.value = if (connected) ServerConnectionState.DefaultOnline(0) else ServerConnectionState.Offline
+                    _serverStatus.value = ServerStatus(if (connected) Health.ONLINE else Health.OFFLINE)
+                }
+            }
+        }
+        scope.launch {
+            combine(FirebaseSyncManager.userId, FirebaseSyncManager.isAnonymous) { uid, anonymous -> uid.takeUnless { anonymous } }
+                .collect { uid ->
+                    if (firebaseSessionUid != null && firebaseSessionUid != uid) {
+                        clearFirebaseSession("Your Google account changed. Join the room again.")
+                    }
+                }
         }
 
         val manager = context.getSystemService(ConnectivityManager::class.java)
@@ -724,6 +792,10 @@ object ListenTogether {
      */
     private fun releaseStaleSlotOnServer(serverBase: String, code: String, held: String) {
         if (serverBase.isBlank() || code.isBlank() || held.isBlank()) return
+        if (isFirebaseAddress(serverBase)) {
+            scope.launch { runCatching { firebaseRooms.leave(code) } }
+            return
+        }
         scope.launch {
             runCatching {
                 http.post("$serverBase/api/parties/$code/leave") {
@@ -748,6 +820,7 @@ object ListenTogether {
 
         prefs.edit().putString(KEY_SERVER, normalizedUrl).apply()
         _customServer.value = normalizedUrl
+        firebaseRooms.setScreenActive(isScreenActive && isFirebaseAddress(normalizedUrl.ifBlank { defaultServer }))
 
         val (job, _) = resolutionMutex.withLock {
             activeResolutionJob?.cancel()
@@ -763,7 +836,8 @@ object ListenTogether {
     }
 
     /** Whether this device has an account it can jam as. */
-    fun canJoin(): Boolean = identity() != null
+    fun canJoin(): Boolean = if (usesFirebaseRooms()) FirebaseSyncManager.userId.value != null &&
+        !FirebaseSyncManager.isAnonymous.value else identity() != null
 
     fun nickname(): String = prefs.getString(KEY_NICKNAME, null).orEmpty()
 
@@ -775,6 +849,10 @@ object ListenTogether {
      * Opens the socket for a membership that was restored from storage.
      */
     fun ensureConnected() {
+        if (firebaseSessionUid != null) {
+            if (firebaseRoomJob?.isActive != true) _state.value.code?.let { observeFirebaseRoom(it, checkNotNull(firebaseSessionUid)) }
+            return
+        }
         if (_state.value.code == null || token == null) return
         if (socketJob?.isActive == true) return
         connect()
@@ -814,6 +892,12 @@ object ListenTogether {
     }
 
     private suspend fun doCreateOnServer(serverBase: String, nickname: String, maxMembers: Int): String {
+        if (isFirebaseAddress(serverBase)) {
+            val membership = firebaseRooms.create(firebaseName(nickname), FirebaseAuth.getInstance().currentUser?.photoUrl?.toString(),
+                maxMembers, AppSettings.autoplay.value)
+            commitFirebaseMembership(membership)
+            return membership.code
+        }
         val who = identity(nickname) ?: throw PartyException("not_signed_in", "Sign in to listen together.")
         if (serverBase.isBlank()) throw PartyException("no_server", "Set the party server address first.")
         val membership = post(
@@ -869,6 +953,11 @@ object ListenTogether {
     }
 
     private suspend fun doJoinOnServer(serverBase: String, code: String, nickname: String): String {
+        if (isFirebaseAddress(serverBase)) {
+            val membership = firebaseRooms.join(code, firebaseName(nickname), FirebaseAuth.getInstance().currentUser?.photoUrl?.toString())
+            commitFirebaseMembership(membership)
+            return membership.code
+        }
         val who = identity(nickname) ?: throw PartyException("not_signed_in", "Sign in to listen together.")
         if (serverBase.isBlank()) throw PartyException("no_server", "Set the party server address first.")
         val cleaned = code.filter { it.isLetterOrDigit() }.uppercase()
@@ -932,6 +1021,9 @@ object ListenTogether {
         targetCode: String,
         nickname: String = nickname(),
     ): SwitchPartyResult = switchMutex.withLock {
+        if (isFirebaseAddress(targetCustomServer.ifBlank { defaultServer })) {
+            return@withLock switchFirebaseParty(targetCode, nickname)
+        }
         withContext(Dispatchers.IO) {
             val who = identity(nickname)
                 ?: return@withContext if (_state.value.inParty) {
@@ -1008,6 +1100,10 @@ object ListenTogether {
                 }
 
                 // Stop old socket
+                firebaseRoomJob?.cancel()
+                firebaseRoomJob = null
+                firebaseSessionUid = null
+                prefs.edit().remove(KEY_FIREBASE_UID).apply()
                 socketJob?.cancel()
                 socketJob = null
                 session = null
@@ -1046,6 +1142,16 @@ object ListenTogether {
     /** Give up this device's slot. The party carries on without it. */
     suspend fun leaveParty() = switchMutex.withLock {
         withContext(Dispatchers.IO) {
+            if (firebaseSessionUid != null) {
+                val code = _state.value.code
+                clearFirebaseSession()
+                if (code != null) {
+                    try { firebaseRooms.leave(code) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (failure: Exception) { Log.w(TAG, "Could not confirm room departure: ${failure.javaClass.simpleName}") }
+                }
+                return@withContext
+            }
             val code = _state.value.code
             val held = token
             val currentServer = activePartyServerBase ?: resolveHttpBase(effectiveIdleServerBase())
@@ -1060,6 +1166,95 @@ object ListenTogether {
             if (code != null && held != null) {
                 releaseStaleSlotOnServer(currentServer, code, held)
             }
+        }
+    }
+
+    private fun firebaseName(value: String): String = value.trim().takeIf { it.isNotBlank() }?.take(80)
+        ?: FirebaseSyncManager.userDisplayName.value?.takeIf { it.isNotBlank() }?.take(80)
+        ?: "Listener"
+
+    private fun firebaseMessage(failure: Throwable): String = when (failure) {
+        is FirebasePartyFailure -> failure.message.orEmpty()
+        else -> "Party Room could not update. Check your connection and try again."
+    }
+
+    private fun partyServerNowMs(): Long? = if (firebaseSessionUid != null) {
+        firebaseRooms.nowServerMs().takeIf { firebaseRooms.clockReady }
+    } else clock.serverNowMs()
+
+    private fun commitFirebaseMembership(membership: PartyMembership) {
+        val uid = firebaseRooms.currentUid() ?: throw FirebasePartyFailure("not_signed_in", "Sign in with Google to join a room.")
+        check(membership.you.userId == uid) { "Party account changed" }
+        socketJob?.cancel()
+        socketJob = null
+        session = null
+        firebaseRoomJob?.cancel()
+        firebaseSessionUid = uid
+        activePartyServerBase = BuildConfig.FIREBASE_PARTY_DATABASE_URL
+        token = "firebase"
+        prefs.edit().putString(KEY_CODE, membership.code).putString(KEY_TOKEN, "firebase")
+            .putString(KEY_FIREBASE_UID, uid).apply()
+        _state.value = State(code = membership.code, you = membership.you, members = membership.party.members,
+            maxMembers = membership.party.maxMembers, hostOnlyControl = membership.party.hostOnlyControl,
+            playback = membership.party.playback, queue = membership.party.queue,
+            connection = Connection.CONNECTING, clockSynced = firebaseRooms.clockReady)
+        observeFirebaseRoom(membership.code, uid)
+    }
+
+    private fun observeFirebaseRoom(code: String, uid: String) {
+        firebaseRoomJob?.cancel()
+        firebaseRoomJob = firebaseRooms.observe(code, uid, onSnapshot = { party, connected ->
+            if (firebaseSessionUid == uid && _state.value.code == code) {
+                val you = party.members.firstOrNull { it.userId == uid }
+                if (you == null) clearFirebaseSession("You are no longer in this room.")
+                else _state.update { current ->
+                    current.copy(you = you, members = party.members, maxMembers = party.maxMembers,
+                        hostOnlyControl = party.hostOnlyControl, playback = party.playback, queue = party.queue,
+                        connection = if (connected) Connection.LIVE else Connection.CONNECTING,
+                        clockSynced = firebaseRooms.clockReady, roundTripMs = firebaseRooms.roundTripMs, error = null)
+                }
+            }
+        }, onError = { failure ->
+            if (firebaseSessionUid == uid && _state.value.code == code) {
+                if (failure is FirebasePartyFailure && failure.code in setOf("kicked", "no_such_party", "account_changed", "removed", "not_joined", "not_a_member", "permission_denied")) {
+                    if (failure.code == "kicked") recordKick(code)
+                    clearFirebaseSession(firebaseMessage(failure))
+                } else _state.update { it.copy(connection = Connection.CONNECTING, error = firebaseMessage(failure)) }
+            }
+        })
+    }
+
+    private fun clearFirebaseSession(error: String? = null) {
+        firebaseRoomJob?.cancel()
+        firebaseRoomJob = null
+        firebaseSessionUid = null
+        token = null
+        activePartyServerBase = null
+        _awaitingStart.value = false
+        prefs.edit().remove(KEY_CODE).remove(KEY_TOKEN).remove(KEY_FIREBASE_UID).apply()
+        _state.value = State(error = error)
+    }
+
+    /** Confirm the target before releasing the old room, including a full/expired target. */
+    private suspend fun switchFirebaseParty(code: String, nickname: String): SwitchPartyResult {
+        val oldCode = _state.value.code
+        val oldBase = activePartyServerBase
+        val oldToken = token
+        return try {
+            val membership = firebaseRooms.join(code, firebaseName(nickname), FirebaseAuth.getInstance().currentUser?.photoUrl?.toString())
+            withContext(NonCancellable) {
+                if (oldCode != null && (oldCode != membership.code || !isFirebaseAddress(oldBase.orEmpty()))) {
+                    if (isFirebaseAddress(oldBase.orEmpty())) runCatching { firebaseRooms.leave(oldCode) }
+                    else if (oldToken != null) releaseStaleSlotOnServer(oldBase.orEmpty(), oldCode, oldToken)
+                }
+                setCustomServerUrl("")
+                commitFirebaseMembership(membership)
+            }
+            SwitchPartyResult.Success(membership.code)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) {
+            if (oldCode != null) SwitchPartyResult.TargetFailedRecovered(oldCode, firebaseMessage(failure))
+            else SwitchPartyResult.TargetFailedNoParty(firebaseMessage(failure))
         }
     }
 
@@ -1129,6 +1324,32 @@ object ListenTogether {
     }
 
     private fun send(frame: JsonObject) {
+        val uid = firebaseSessionUid
+        val code = _state.value.code
+        if (uid != null && code != null) {
+            val action = frame["action"]?.jsonPrimitive?.content ?: return
+            val requestedAt = SystemClock.elapsedRealtime()
+            scope.launch {
+                try {
+                    firebaseControlMutex.withLock {
+                        if (uid != firebaseSessionUid || code != _state.value.code) return@withLock
+                        if (SystemClock.elapsedRealtime() - requestedAt > 10_000) {
+                            throw FirebasePartyFailure("offline", "That room control expired. Try it again.")
+                        }
+                        firebaseRooms.control(code, action, frame)
+                    }
+                    if (uid == firebaseSessionUid && code == _state.value.code) {
+                        recordActivity(PartyActivity(action, firebaseName(nickname()), firebaseRooms.nowServerMs()))
+                    }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (failure: Exception) {
+                    if (uid == firebaseSessionUid && code == _state.value.code) {
+                        _state.update { it.copy(error = firebaseMessage(failure)) }
+                    }
+                }
+            }
+            return
+        }
         val live = session ?: return
         scope.launch {
             runCatching { live.send(Frame.Text(frame.toString())) }
@@ -1175,7 +1396,7 @@ object ListenTogether {
         val playback = _state.value.playback
         val track = playback.track ?: return null
         if (!playback.isPlaying) return playback.positionMs
-        val serverNow = clock.serverNowMs() ?: return playback.effectivePositionMs
+        val serverNow = partyServerNowMs() ?: return playback.effectivePositionMs
         val elapsed = (serverNow - playback.anchorMs).coerceAtLeast(0)
         val position = playback.positionMs + elapsed
         val duration = track.durationMs
@@ -1190,7 +1411,7 @@ object ListenTogether {
     fun msUntilStart(): Long {
         val playback = _state.value.playback
         if (!playback.isPlaying) return 0
-        val serverNow = clock.serverNowMs() ?: return 0
+        val serverNow = partyServerNowMs() ?: return 0
         return (playback.anchorMs - serverNow).coerceAtLeast(0)
     }
 
@@ -1589,6 +1810,7 @@ object ListenTogether {
         return runCatching {
             refuseIfRecentlyKicked(cleaned)
             val base = resolveHttpBase(server ?: effectiveIdleServerBase())
+            if (isFirebaseAddress(base)) return@runCatching firebaseRooms.preview(cleaned)
             if (base.isBlank()) throw PartyException("no_server", "Set the party server address first.")
             val response = http.get("$base/api/parties/$cleaned/preview")
             if (!response.status.isSuccess()) {
@@ -1627,15 +1849,23 @@ object ListenTogether {
 
     private suspend fun HttpResponse.toPartyException(): PartyException {
         val body = runCatching { bodyAsText() }.getOrDefault("")
+        return parsePartyError(status.value, body)
+    }
+
+    /** Distinguishes a missing deployment/route from the server's structured expired-room error. */
+    internal fun parsePartyError(statusCode: Int, body: String): PartyException {
         val parsed = runCatching { json.decodeFromString(ApiError.serializer(), body) }.getOrNull()
+        val code = parsed?.code.orEmpty().ifBlank { "http_$statusCode" }
         return PartyException(
-            code = parsed?.code.orEmpty().ifBlank { "http_${status.value}" },
-            message = parsed?.message?.takeIf { it.isNotBlank() }
+            code = code,
+            message = if (statusCode == 404 && parsed?.code.isNullOrBlank())
+                "Party server isn't deployed at this address. Check server settings."
+                else parsed?.message?.takeIf { it.isNotBlank() }
                 // 422 is the server rejecting an identity, which here can only
                 // mean the account layer handed over something blank.
-                ?: if (status.value == 422) "This account can't be used to jam."
-                else "The party server said ${status.value}.",
-            statusCode = status.value,
+                ?: if (statusCode == 422) "This account can't be used to jam."
+                else "The party server said $statusCode.",
+            statusCode = statusCode,
         )
     }
 
@@ -1676,6 +1906,7 @@ object ListenTogether {
      */
     private fun Throwable.displayMessage(): String = when (this) {
         is PartyException -> message ?: UNREACHABLE
+        is FirebasePartyFailure -> message ?: "The room could not be updated."
         else -> UNREACHABLE
     }
 
@@ -1703,6 +1934,7 @@ object ListenTogether {
 
     private val ABSOLUTE_URL = Regex("""(?:https?|wss?)://[^\s,;)\]}'\"]+""", RegexOption.IGNORE_CASE)
     private const val KEY_CODE = "party_code"
+    private const val KEY_FIREBASE_UID = "firebase_party_uid"
     private const val KEY_TOKEN = "party_token"
     private const val KEY_DEVICE = "device_id"
     private const val KEY_NICKNAME = "party_nickname"

@@ -202,12 +202,14 @@ internal fun AndroidLyricsShareSheet(
                                     failed = true
                                     saved = false
                                 } else {
-                                    context.startActivity(
-                                        Intent.createChooser(
-                                            sendIntent(uri),
-                                            context.getString(R.string.share_your_lyrics),
-                                        ),
-                                    )
+                                    failed = runCatching {
+                                        context.startActivity(
+                                            Intent.createChooser(
+                                                sendIntent(uri),
+                                                context.getString(R.string.share_your_lyrics),
+                                            ),
+                                        )
+                                    }.isFailure
                                 }
                             }
                         }

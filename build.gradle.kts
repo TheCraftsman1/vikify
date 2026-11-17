@@ -41,8 +41,8 @@ buildscript {
  * No "v" in the name — the in-app updater reads it as a number; the "v" is the
  * release tag's alone.
  */
-extra["vikifyVersionCode"] = 29
-extra["vikifyVersionName"] = "1.8.1"
+extra["vikifyVersionCode"] = 32
+extra["vikifyVersionName"] = "2.0.2"
 
 /*
  * Bump this by hand before cutting each sideloaded test build ("beta2",

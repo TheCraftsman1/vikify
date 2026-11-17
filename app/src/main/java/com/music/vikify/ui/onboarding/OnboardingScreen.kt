@@ -1,10 +1,6 @@
 package com.music.vikify.ui.onboarding
 
 import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -34,7 +30,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -78,10 +76,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.android.gms.common.api.ApiException
 import com.music.vikify.R
 import com.music.vikify.auth.GoogleAuthHelper
 import com.music.vikify.data.firebase.FirebaseSyncManager
@@ -94,19 +92,14 @@ import com.music.vikify.ui.icons.VikifyIcons
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 
-private const val TAG = "OnboardingScreen"
 private const val NAME_LIMIT = 40
 private const val PAGE_NAME = 0
 private const val PAGE_CONNECT = 1
 
-// Debug certificate SHA-1 fingerprint for easy reference/copying if needed
-const val APP_DEBUG_SHA1 = "0D:EF:84:C9:86:6E:17:BF:4A:F9:1E:66:82:12:B1:3C:5F:27:B0:B5"
-
 /**
  * Onboarding Flow:
  * Page 1: "What should we call you?" - minimalist aesthetic with angled 3D wave hero graphic.
- * Page 2: "Save your music to the cloud" - explains why to connect Google & Spotify to save
- * playlists, favorites, and history, with seamless 1-tap device email discovery.
+ * Page 2: Optional account connections, with an always-visible way into the app.
  */
 @Composable
 fun OnboardingScreen(
@@ -128,6 +121,9 @@ fun OnboardingScreen(
     val coroutineScope = rememberCoroutineScope()
     val activity = context as? Activity
     val spotifyToken by AppSettings.spotifySpdcToken.collectAsState()
+    val firebaseUserEmail by FirebaseSyncManager.userEmail.collectAsState()
+    val isAnonymousFirebase by FirebaseSyncManager.isAnonymous.collectAsState()
+    val hasGoogleAccount = !isAnonymousFirebase && !firebaseUserEmail.isNullOrBlank()
 
     BackHandler(enabled = page == PAGE_CONNECT) {
         page = PAGE_NAME
@@ -139,95 +135,40 @@ fun OnboardingScreen(
     ) { result ->
         val parsed = GoogleAuthHelper.parseSignInResult(result.data)
         parsed.onSuccess { account ->
-            val idToken = account.idToken
-            val email = account.email
-            val displayName = account.displayName
-
-            if (idToken != null) {
-                coroutineScope.launch {
-                    isSigningInGoogle = true
+            coroutineScope.launch {
+                try {
                     val signResult = FirebaseSyncManager.signInWithGoogleCredential(
-                        idToken = idToken,
-                        email = email,
-                        displayName = displayName
+                        idToken = account.idToken,
+                        email = account.email,
+                        displayName = account.displayName,
                     )
-                    isSigningInGoogle = false
-
                     signResult.onSuccess {
-                        val chosenName = displayName?.takeIf { it.isNotBlank() } ?: name.trim()
+                        val chosenName = account.displayName?.takeIf { it.isNotBlank() } ?: name.trim()
                         if (chosenName.isNotBlank()) {
                             onNameChosen(chosenName)
                         }
-                        Toast.makeText(context, "Signed in as ${account.email}", Toast.LENGTH_SHORT).show()
-                        onFinish()
-                    }.onFailure { e ->
-                        googleAuthError = "Firebase sign-in failed: ${e.message}"
+                        Toast.makeText(context, "Google connected for cloud backup", Toast.LENGTH_SHORT).show()
+                    }.onFailure {
+                        googleAuthError = "Google was selected, but cloud sign-in couldn't finish. Please try again."
                     }
+                } finally {
+                    isSigningInGoogle = false
                 }
-            } else {
-                Toast.makeText(context, "No ID token received from Google", Toast.LENGTH_LONG).show()
             }
         }.onFailure { e ->
             isSigningInGoogle = false
-            val apiException = e as? ApiException
-            val code = apiException?.statusCode ?: -1
-            Log.w(TAG, "Google Sign-In failed with status code $code: ${e.message}", e)
-
-            if (code == 10) {
-                googleAuthError = "Firebase configuration required:\n\n" +
-                        "Google Play Services reported error code 10 (DEVELOPER_ERROR).\n" +
-                        "Please add your SHA-1 fingerprint to Firebase Console under Project Settings -> Your Apps:\n\n" +
-                        APP_DEBUG_SHA1
-            } else if (code == 12501) {
-                // User dismissed the bottom sheet
-                Log.d(TAG, "User cancelled account picker")
-            } else {
-                googleAuthError = "Google Sign-In error (Code $code): ${e.message}"
-            }
+            googleAuthError = GoogleAuthHelper.userMessage(e)
         }
     }
 
-    // Dialog when Google Sign-In needs SHA-1 added to Firebase Console
     if (googleAuthError != null) {
         AlertDialog(
             onDismissRequest = { googleAuthError = null },
-            title = {
-                Text(
-                    text = "Google Sign-In Setup",
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            },
-            text = {
-                Column {
-                    Text(
-                        text = googleAuthError ?: "",
-                        fontSize = 14.sp,
-                        color = Color.White.copy(alpha = 0.85f)
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "Tap below to copy SHA-1 to clipboard:",
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.6f)
-                    )
-                }
-            },
+            title = { Text("Couldn't connect Google", color = Color.White) },
+            text = { Text(googleAuthError.orEmpty(), color = Color.White.copy(alpha = .85f)) },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("SHA-1", APP_DEBUG_SHA1))
-                        Toast.makeText(context, "SHA-1 copied to clipboard!", Toast.LENGTH_SHORT).show()
-                        googleAuthError = null
-                    }
-                ) {
-                    Text("Copy SHA-1", color = Color(0xFF64B5F6), fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
                 TextButton(onClick = { googleAuthError = null }) {
-                    Text("Dismiss", color = Color.White.copy(alpha = 0.7f))
+                    Text("OK", color = Color.White)
                 }
             },
             containerColor = Color(0xFF1E1E24)
@@ -272,17 +213,26 @@ fun OnboardingScreen(
                     ConnectStepPage(
                         name = name.trim().ifBlank { "Listener" },
                         isSigningInGoogle = isSigningInGoogle,
+                        hasGoogleAccount = hasGoogleAccount,
+                        googleEmail = firebaseUserEmail,
+                        signedInYouTube = signedIn,
                         spotifyConnected = spotifyToken.isNotBlank(),
                         onBack = { page = PAGE_NAME },
                         onGoogleSignIn = {
-                            if (activity != null) {
-                                val intent = GoogleAuthHelper.getSignInIntent(activity)
-                                googleSignInLauncher.launch(intent)
+                            if (!isSigningInGoogle && activity != null) {
+                                isSigningInGoogle = true
+                                googleAuthError = null
+                                try {
+                                    googleSignInLauncher.launch(GoogleAuthHelper.getSignInIntent(activity))
+                                } catch (_: Exception) {
+                                    isSigningInGoogle = false
+                                    googleAuthError = "Google sign-in couldn't open. Please try again."
+                                }
                             }
                         },
                         onSpotifySignIn = onSpotifySignIn,
                         onYouTubeSignIn = onSignIn,
-                        onSkip = onFinish
+                        onStartListening = onFinish
                     )
                 }
             }
@@ -429,19 +379,22 @@ private fun NameStepPage(
 }
 
 /**
- * Step 2: "Save your music to the cloud"
- * Explains why connecting accounts safeguards user data, and offers Google Sign-In & Spotify login.
+ * Keep the destination separate from account actions: signing in must never
+ * replace the way into the app with another sign-in button.
  */
 @Composable
 private fun ConnectStepPage(
     name: String,
     isSigningInGoogle: Boolean,
+    hasGoogleAccount: Boolean,
+    googleEmail: String?,
+    signedInYouTube: Boolean,
     spotifyConnected: Boolean,
     onBack: () -> Unit,
     onGoogleSignIn: () -> Unit,
     onSpotifySignIn: () -> Unit,
     onYouTubeSignIn: () -> Unit,
-    onSkip: () -> Unit,
+    onStartListening: () -> Unit,
 ) {
     val scrollState = rememberScrollState()
 
@@ -449,11 +402,12 @@ private fun ConnectStepPage(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .padding(horizontal = 28.dp)
-            .verticalScroll(scrollState),
-        verticalArrangement = Arrangement.SpaceBetween
+            .navigationBarsPadding()
+            .padding(horizontal = 28.dp),
     ) {
-        Column {
+        Column(
+            Modifier.weight(1f).verticalScroll(scrollState).padding(bottom = 24.dp),
+        ) {
             // Header with Back Button and Brand
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -498,7 +452,7 @@ private fun ConnectStepPage(
 
             // Headline
             Text(
-                text = "Save your music\nto the cloud",
+                text = if (hasGoogleAccount) "You're ready\nto listen" else "Your music\nstarts here",
                 style = TextStyle(
                     fontSize = 34.sp,
                     lineHeight = 40.sp,
@@ -512,7 +466,11 @@ private fun ConnectStepPage(
 
             // Explanation text
             Text(
-                text = "Hi $name! Sign in to completely back up your playlists, favorites, and history with Firebase Cloud. Your library syncs across your devices and with friends in real-time.",
+                text = if (hasGoogleAccount) {
+                    "Hi $name! You're signed in. Start listening now, or connect a music account to bring in your library."
+                } else {
+                    "Hi $name! Start listening now, or connect your accounts for cloud backup and your music library."
+                },
                 style = TextStyle(
                     fontSize = 15.sp,
                     lineHeight = 22.sp,
@@ -522,7 +480,7 @@ private fun ConnectStepPage(
 
             Spacer(Modifier.height(20.dp))
 
-            // Feature Highlights Box
+            // Cloud identity and music sessions have separate, stable actions.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -530,62 +488,71 @@ private fun ConnectStepPage(
                     .background(Color.White.copy(alpha = 0.06f))
                     .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)), RoundedCornerShape(18.dp))
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                FeatureRow(
-                    icon = "☁️",
-                    title = "Cloud Playlist Backup",
-                    description = "Never lose your custom playlists or favorite songs"
+                Text(
+                    text = "Cloud backup · Optional",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontSize = 14.sp,
                 )
-                FeatureRow(
-                    icon = "⚡",
-                    title = "Real-time Multi-Device Sync",
-                    description = "Listen together and seamlessly continue on any phone"
+                PillAction(
+                    label = when {
+                        isSigningInGoogle -> "Connecting to Google…"
+                        hasGoogleAccount -> "Google connected ✓"
+                        else -> "Sign in with Google"
+                    },
+                    primary = false,
+                    enabled = !isSigningInGoogle && !hasGoogleAccount,
+                    leading = {
+                        if (isSigningInGoogle) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Image(
+                                painter = painterResource(Res.drawable.ic_google_g),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    },
+                    onClick = onGoogleSignIn,
                 )
-                FeatureRow(
-                    icon = "🎵",
-                    title = "Spotify & YouTube Integration",
-                    description = "Import existing playlists and stream without limits"
+                Text(
+                    text = if (hasGoogleAccount) googleEmail.orEmpty() else "Save and sync your Vikify playlists.",
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 13.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-        }
 
-        Spacer(Modifier.height(24.dp))
-
-        // Actions Column
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // 1. Google Sign-In Button
-            PillAction(
-                label = if (isSigningInGoogle) "Connecting to Google..." else "Sign in with Google",
-                primary = true,
-                enabled = !isSigningInGoogle,
-                leading = {
-                    if (isSigningInGoogle) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = Color.Black,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Image(
-                            painter = painterResource(Res.drawable.ic_google_g),
-                            contentDescription = "Google",
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                },
-                onClick = onGoogleSignIn
+            Spacer(Modifier.height(24.dp))
+            Text(
+                text = "Your music library · Optional",
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = 14.sp,
             )
-
-            // 2. Spotify Login Button
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Use a different account for each service if you like.",
+                color = Color.White.copy(alpha = 0.65f),
+                fontSize = 13.sp,
+            )
+            Spacer(Modifier.height(12.dp))
             PillAction(
-                label = if (spotifyConnected) "Spotify Connected ✓" else "Connect with Spotify",
+                label = if (signedInYouTube) "YouTube Music · Session saved" else "Connect YouTube Music",
                 primary = false,
+                enabled = !isSigningInGoogle,
+                onClick = onYouTubeSignIn,
+            )
+            Spacer(Modifier.height(12.dp))
+            PillAction(
+                label = if (spotifyConnected) "Spotify · Session saved" else "Connect Spotify",
+                primary = false,
+                enabled = !isSigningInGoogle,
                 leading = {
                     Image(
                         painter = painterResource(Res.drawable.spotify_logo),
@@ -593,47 +560,28 @@ private fun ConnectStepPage(
                         modifier = Modifier.size(20.dp)
                     )
                 },
-                onClick = onSpotifySignIn
+                onClick = onSpotifySignIn,
             )
-
-            // 3. Skip / Guest mode
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Skip for now • Continue as guest",
-                    fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickable(onClick = onSkip)
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                )
-            }
         }
-    }
-}
 
-@Composable
-private fun FeatureRow(icon: String, title: String, description: String) {
-    Row(verticalAlignment = Alignment.Top) {
-        Text(text = icon, fontSize = 18.sp, modifier = Modifier.padding(end = 12.dp, top = 2.dp))
-        Column {
-            Text(
-                text = title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
+        // Pinned outside the scroll area, including on short screens and large text.
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            PillAction(
+                label = "Start listening",
+                primary = true,
+                enabled = !isSigningInGoogle,
+                onClick = onStartListening,
             )
             Text(
-                text = description,
+                text = "You can connect accounts later in Settings.",
+                textAlign = TextAlign.Center,
                 fontSize = 12.sp,
                 lineHeight = 16.sp,
-                color = Color.White.copy(alpha = 0.60f)
+                color = Color.White.copy(alpha = 0.6f),
             )
         }
     }
@@ -662,7 +610,7 @@ private fun PillAction(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(58.dp)
+            .heightIn(min = 58.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -685,7 +633,8 @@ private fun PillAction(
                 indication = null,
                 enabled = enabled,
                 onClick = onClick
-            ),
+            )
+            .padding(horizontal = 18.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -699,7 +648,8 @@ private fun PillAction(
             fontWeight = FontWeight.Bold,
             color = if (primary) Color.Black else Color.White,
             textAlign = TextAlign.Center,
-            maxLines = 1
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

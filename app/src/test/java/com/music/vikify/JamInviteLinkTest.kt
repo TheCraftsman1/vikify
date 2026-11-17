@@ -36,6 +36,16 @@ class JamInviteLinkTest {
     }
 
     @Test
+    fun `parses Firebase Hosting invites with explicit server authority`() {
+        val invite = JamInviteLink.parseInvite("https://vikify.web.app/invite/abc123?server=https%3A%2F%2Fcustom.example.com")
+        assertEquals("ABC123", JamInviteLink.parse("https://vikify-95144.web.app/invite/ABC123"))
+        assertEquals("ABC123", invite?.code)
+        assertEquals("https://custom.example.com", invite?.serverUrl)
+        assertNull(JamInviteLink.parse("https://vikify.web.app.evil.example/invite/ABC123"))
+        assertNull(JamInviteLink.parse("https://another-project.web.app/invite/ABC123"))
+    }
+
+    @Test
     fun `rejects other hosts schemes paths and malformed codes`() {
         assertNull(JamInviteLink.parse("http://vikify.app/invite/ABC123"))
         assertNull(JamInviteLink.parse("https://example.com/invite/ABC123"))
@@ -49,7 +59,7 @@ class JamInviteLinkTest {
     @Test
     fun `builds the canonical share URL`() {
         assertEquals(
-            "https://vikify.app/invite/ABC123",
+            "https://vikify.web.app/invite/ABC123",
             JamInviteLink.url("abc123"),
         )
     }
@@ -65,11 +75,11 @@ class JamInviteLinkTest {
             JamInviteLink.url("abc123", "https://my-party.onrender.com/"),
         )
         assertEquals(
-            "https://vikify.app/invite/ABC123",
+            "https://vikify.web.app/invite/ABC123",
             JamInviteLink.url("abc123", ""),
         )
         assertEquals(
-            "https://vikify.app/invite/ABC123",
+            "https://vikify.web.app/invite/ABC123",
             JamInviteLink.url("abc123", null),
         )
     }
@@ -103,6 +113,7 @@ class JamInviteLinkTest {
     @Test
     fun `parses web invite with server parameter`() {
         val invite = JamInviteLink.parseInvite("https://vikify.app/invite/ABC123?server=https%3A%2F%2Fcustom.example.com")
+        assertEquals("ABC123", JamInviteLink.parse("https://vikify-95144.web.app/invite/ABC123"))
         assertEquals("ABC123", invite?.code)
         assertEquals("https://custom.example.com", invite?.serverUrl)
     }
@@ -135,7 +146,7 @@ class JamInviteLinkTest {
         } else {
             JamInviteLink.url(code, activePartyHost)
         }
-        assertEquals("https://vikify.app/invite/JAM001", link)
+        assertEquals("https://vikify.web.app/invite/JAM001", link)
     }
 
     @Test
@@ -148,7 +159,7 @@ class JamInviteLinkTest {
             JamInviteLink.url(code, customHost)
         }
         assertEquals("https://custom.jam.example.com/invite/JAM002", link)
-        assertNotEquals("https://vikify.app/invite/JAM002", link)
+        assertNotEquals("https://vikify.web.app/invite/JAM002", link)
     }
 
     @Test

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TV has no Google Services configuration. Replace this with that build's
+         generated resource when enabling Firebase Google sign-in for TV. -->
+    <string name="default_web_client_id" translatable="false"></string>
+</resources>

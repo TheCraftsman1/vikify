@@ -368,11 +368,11 @@ internal fun ReplayCardRow(
                 label = card.label,
                 value = card.value,
                 detail = card.detail,
-                artworkUrl = card.artworkUrl,
                 holder = holder,
                 memberSince = memberSince,
                 onClick = { onCardClick(card.page) },
                 modifier = Modifier.width(300.dp),
+                showChip = card.page == ReplayStoryPage.MINUTES,
             )
         }
     }

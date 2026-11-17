@@ -71,3 +71,7 @@
 -dontwarn org.conscrypt.**
 -dontwarn com.android.org.conscrypt.**
 -dontwarn io.github.muntashirakon.adb.**
+
+# ---- Firebase Firestore & Protobuf ----
+-dontwarn com.google.rpc.**
+-dontwarn com.google.type.**

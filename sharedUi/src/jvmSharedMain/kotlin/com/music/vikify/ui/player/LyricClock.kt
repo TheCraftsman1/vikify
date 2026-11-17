@@ -35,7 +35,7 @@ import kotlin.math.abs
  *
  * All times are milliseconds on the [System.nanoTime] clock. Plain arithmetic
  * with no Compose in it, so it can be tested frame by frame;
- * `rememberLyricClock` is the composable that drives it.
+ * `rememberPlaybackClock` is the composable that drives it for lyrics and the scrubber.
  */
 internal class LyricClock(startMs: Long) {
     /** Where the lyrics are drawn, in song milliseconds. */

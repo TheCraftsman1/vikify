@@ -47,11 +47,8 @@ import java.util.Locale
  * question. Days are still counted, as a total per day inside the bucket, which
  * is enough for "your biggest day" without a file per day to get there.
  *
- * ## Nothing leaves the device
- *
- * There is no upload, no account and no id. [Backup] can write the whole thing
- * out as JSON because the user asked it to, and that is the only way any of this
- * goes anywhere.
+ * Replay is recorded locally. Backup can export the buckets, and ReplayCloudSync
+ * can publish them for the account that opts in.
  */
 object ListeningStats {
 
@@ -102,6 +99,7 @@ object ListeningStats {
         val period: ReplayPeriod,
         val version: Long,
         val facts: Int,
+        val remote: List<StoredBucket>,
         val day: LocalDate,
         val summary: ReplaySummary,
     )
@@ -309,10 +307,15 @@ object ListeningStats {
 
     // ── Reading ─────────────────────────────────────────────────────────────
 
-    /** A detached read for recommendations, including listening not flushed to disk yet. */
+    /**
+     * A detached read for recommendations, including the active bucket and other
+     * installations' Replay snapshots. Cloud history stays read-only: only the
+     * local month files are exported by [exportAll], so it cannot be uploaded a
+     * second time by this installation.
+     */
     suspend fun personalizationTracks(): List<TrackEntry> = withContext(Dispatchers.IO) {
         if (!ready) return@withContext emptyList()
-        writeLock.withLock {
+        val local = writeLock.withLock {
             val current = synchronized(lock) {
                 open?.let { bucket ->
                     bucket.key to bucket.tracks.values.map { track ->
@@ -327,6 +330,7 @@ object ListeningStats {
                 current?.second?.let(::addAll)
             }
         }
+        mergePersonalizationTracks(local, ReplayCloudSync.remote.value)
     }
 
     /**
@@ -340,6 +344,7 @@ object ListeningStats {
         flushAndAwait()
         val today = LocalDate.now()
         val facts = ArtistFacts.revision.value
+        val remote = ReplayCloudSync.remote.value
         // Every input to the merge, so the cache cannot be stale: which months
         // are on disk and what is in them ([version]), what is known about the
         // artists in them, which period was asked for, and — because "this
@@ -347,27 +352,23 @@ object ListeningStats {
         // Library tab asks for this, so it is asked often and usually for an
         // answer that has not changed.
         cached?.takeIf {
-            it.period == period && it.version == version && it.facts == facts && it.day == today
+            it.period == period && it.version == version && it.facts == facts && it.remote === remote && it.day == today
         }?.let { return@withContext it.summary }
 
         val merged = MergedBucket()
-        when {
-            period.needsDayFilter() -> {
-                // Week may span two months: read both, filter by day.
-                val range = period.range(today)!!
-                months().filter { month ->
-                    val start = month.atDay(1)
-                    val end = month.atEndOfMonth()
-                    !(end < range.first || start > range.second)
-                }.forEach { month -> read(month.toString())?.let { bucket -> merged.add(bucket, range) } }
-            }
-            else -> {
-                months().filter { period.covers(it, today) }
-                    .forEach { month -> read(month.toString())?.let(merged::add) }
-            }
+        val range = period.range(today).takeIf { period.needsDayFilter() }
+        fun covers(month: YearMonth): Boolean = if (range != null) {
+            month.atEndOfMonth() >= range.first && month.atDay(1) <= range.second
+        } else {
+            period.covers(month, today)
         }
+        fun add(bucket: StoredBucket) {
+            if (range == null) merged.add(bucket) else merged.add(bucket, range)
+        }
+        months().asSequence().filter(::covers).mapNotNull { read(it.toString()) }.forEach(::add)
+        remote.filter { covers(YearMonth.parse(it.month)) }.forEach(::add)
         merged.toSummary(period, today).also {
-            cached = Cached(period, version, facts, today, it)
+            cached = Cached(period, version, facts, remote, today, it)
         }
     }
 
@@ -550,18 +551,25 @@ object ListeningStats {
         val albumDays = HashMap<String, DayStats>()
         var earliest: String? = null
 
-        fun add(bucket: StoredBucket) {
+        private fun addEntities(bucket: StoredBucket) {
             bucket.tracks.forEach { entry ->
-                tracks.merge(entry.id, entry.copy()) { a, b -> a.also { it.absorb(b) } }
+                tracks.merge(entry.id, entry.copy(days = entry.days.copyStats())) { a, b -> a.also { it.absorb(b) } }
             }
             bucket.artists.forEach { entry ->
-                val lead = entry.copy(name = primaryArtist(entry.name) ?: entry.name)
+                val lead = entry.copy(name = primaryArtist(entry.name) ?: entry.name, days = entry.days.copyStats())
                 artists.merge(lead.name.lowercase(Locale.ROOT), lead) { a, b -> a.also { it.absorb(b) } }
             }
             bucket.albums.forEach { entry ->
                 val key = albumKey(entry.name, entry.sub.orEmpty())
-                albums.merge(key, entry.copy()) { a, b -> a.also { it.absorb(b) } }
+                albums.merge(key, entry.copy(days = entry.days.copyStats())) { a, b -> a.also { it.absorb(b) } }
             }
+        }
+
+        private fun Map<String, DayStats>.copyStats() =
+            mapValuesTo(mutableMapOf()) { (_, value) -> value.copy() }
+
+        fun add(bucket: StoredBucket) {
+            addEntities(bucket)
             repeat(24) { hours[it] += bucket.hours.getOrElse(it) { 0L } }
             bucket.days.forEach { (day, ms) ->
                 val date = "${bucket.month}-%02d".format(day)
@@ -585,23 +593,12 @@ object ListeningStats {
 
         /** Add only the days that fall within [range], keyed as "YYYY-MM-DD". */
         fun add(bucket: StoredBucket, range: Pair<LocalDate, LocalDate>) {
-            // Merge entity-level data (tracks/artists/albums) so weekRange() can read them.
-            bucket.tracks.forEach { entry ->
-                tracks.merge(entry.id, entry.copy()) { a, b -> a.also { it.absorb(b) } }
-            }
-            bucket.artists.forEach { entry ->
-                val lead = entry.copy(name = primaryArtist(entry.name) ?: entry.name)
-                artists.merge(lead.name.lowercase(Locale.ROOT), lead) { a, b -> a.also { it.absorb(b) } }
-            }
-            bucket.albums.forEach { entry ->
-                val key = albumKey(entry.name, entry.sub.orEmpty())
-                albums.merge(key, entry.copy()) { a, b -> a.also { it.absorb(b) } }
-            }
+            addEntities(bucket)
             // Merge day-level sub-buckets for the flat days map and cross-month totals.
             addDaySubs(bucket)
             bucket.days.forEach { (day, ms) ->
                 val candidate = "${bucket.month}-%02d".format(day)
-                val date = runCatching { LocalDate.parse(candidate.replace("-", "/")) }.getOrNull()
+                val date = runCatching { LocalDate.parse(candidate) }.getOrNull()
                     ?: return@forEach
                 if (date >= range.first && date <= range.second) {
                     days[candidate] = (days[candidate] ?: 0L) + ms
@@ -847,6 +844,24 @@ object ListeningStats {
      */
     private const val MAX_TRACKS = 600
     private const val MAX_NAMES = 400
+}
+
+/** Copies every mutable day counter before combining independent history sources. */
+internal fun mergePersonalizationTracks(
+    local: List<TrackEntry>,
+    remote: List<StoredBucket>,
+): List<TrackEntry> {
+    val tracks = linkedMapOf<String, TrackEntry>()
+    fun add(entry: TrackEntry) {
+        val detached = entry.copy(
+            days = entry.days.mapValuesTo(mutableMapOf()) { (_, day) -> day.copy() },
+        )
+        val previous = tracks[entry.id]
+        if (previous == null) tracks[entry.id] = detached else previous.absorb(detached)
+    }
+    local.forEach(::add)
+    remote.forEach { bucket -> bucket.tracks.forEach(::add) }
+    return tracks.values.toList()
 }
 
 /** Daily-level listening for a single track or artist. */

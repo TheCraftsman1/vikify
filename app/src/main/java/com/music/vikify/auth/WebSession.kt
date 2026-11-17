@@ -63,39 +63,45 @@ object BrowserSession {
      * to sign any account out.
      *
      * The encrypted account registry owns independent cookie snapshots. The
-     * WebView, however, has one process-wide jar, so opening the channel picker
-     * after selecting an older account would otherwise show whichever account
-     * happened to sign in most recently. Replace the local jar with that
-     * account's snapshot before loading YouTube Music.
+     * supplied manager belongs to the selected account's WebView profile on
+     * supported providers, or the legacy shared jar on older providers.
+     * Restore fully before loading the page.
      */
-    fun installGoogleCookies(cookieHeader: String) {
-        clearGoogleCookies()
-        val manager = runCatching { CookieManager.getInstance() }.getOrElse {
-            Log.w("Vikify", "no cookie manager to restore: ${it.message}")
-            return
-        }
+    fun installGoogleCookies(cookieHeader: String, manager: CookieManager, onInstalled: () -> Unit) {
         val entries = cookieHeader.split(';').mapNotNull { entry ->
             val name = entry.substringBefore('=').trim()
             val value = entry.substringAfter('=', "").trim()
             if (name.isEmpty() || value.isEmpty()) null else "$name=$value; Path=/; Secure"
         }
-        YOUTUBE_ORIGINS.forEach { origin ->
-            entries.forEach { cookie -> manager.setCookie(origin, cookie) }
+        fun install() {
+            var pending = YOUTUBE_ORIGINS.size * entries.size
+            if (pending == 0) { onInstalled(); return }
+            YOUTUBE_ORIGINS.forEach { origin ->
+                entries.forEach { cookie ->
+                    manager.setCookie(origin, cookie) {
+                        if (--pending == 0) onInstalled()
+                    }
+                }
+            }
         }
-        runCatching { manager.flush() }
-        Log.d("Vikify", "restored ${entries.size} browser cookies for the selected account")
+        if (BrowserProfiles.supported) {
+            // Only this account's profile is cleared; wait before restoring so
+            // an asynchronous removal cannot delete the newly installed cookies.
+            manager.removeAllCookies { install() }
+        } else {
+            clearGoogleCookies()
+            install()
+        }
     }
 
     /**
      * Forgets the Google login the in-app browser is holding.
      *
-     * Google's cookies only, by name, rather than [CookieManager.removeAllCookies]:
-     * the same jar holds the Discord and Last.fm logins from their own in-app
-     * browsers, and signing out of YouTube Music is not a reason to sign out of
-     * those. There is no per-domain removal in the API, so each cookie is
-     * overwritten with an expired one of the same name.
+     * Isolated profiles can be cleared entirely. Older providers retain the
+     * domain-scoped best-effort expiration so other services stay signed in.
      */
-    fun clearGoogleCookies() {
+    fun clearGoogleCookies(accountId: String? = null) {
+        if (runCatching { BrowserProfiles.clear(youtubeBrowserProfile(accountId)) }.getOrDefault(false)) return
         // Best effort throughout. CookieManager needs a WebView provider, and
         // on a device that is mid-update or has none there isn't one — which is
         // a reason for the next sign-in to be less convenient, not a reason for

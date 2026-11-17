@@ -282,7 +282,7 @@ fun rememberArtworkColors(imageUrl: String?, canvasFrame: ImageBitmap? = null): 
             .build()
         val result = SingletonImageLoader.get(context).execute(request)
         val bitmap = (result as? SuccessResult)?.image?.toImageBitmap() ?: return@LaunchedEffect
-        palette = MeshPalette(paletteOf(bitmap))
+        palette = withContext(Dispatchers.Default) { MeshPalette(paletteOf(bitmap)) }
     }
 
     LaunchedEffect(canvasFrame) {
@@ -290,8 +290,9 @@ fun rememberArtworkColors(imageUrl: String?, canvasFrame: ImageBitmap? = null): 
         // Reject near-black frames (first read after surface recreation, before
         // ExoPlayer decodes real content).  A dark sleeve will still exceed the
         // threshold because compression noise pushes mean luminance above ~12.
-        if (isLikelyBlackFrame(frame)) return@LaunchedEffect
-        val colors = withContext(Dispatchers.Default) { paletteOf(frame) }
+        val colors = withContext(Dispatchers.Default) {
+            if (isLikelyBlackFrame(frame)) null else paletteOf(frame)
+        } ?: return@LaunchedEffect
         palette = MeshPalette(colors)
     }
     return palette

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.music.vikify",
+      "sha256_cert_fingerprints": [
+        "B2:F3:A1:5A:93:00:2C:94:D8:CE:39:C5:A1:A1:F0:03:52:5F:BD:C2:9C:BA:AC:F0:E3:5D:4B:EA:48:77:A4:D0"
+      ]
+    }
+  }
+]

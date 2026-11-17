@@ -5,6 +5,8 @@ import com.music.vikify.VikifyApplication
 import com.music.vikify.data.YtMusicRepository
 import com.music.vikify.data.model.Song
 import com.music.vikify.data.stats.ListeningStats
+import com.music.vikify.data.stats.ReplayCloudSync
+import com.music.vikify.data.firebase.FirebaseSyncManager
 import com.music.vikify.data.stats.TrackEntry
 import java.io.File
 import java.time.LocalDate
@@ -44,6 +46,15 @@ object AndroidLocalMixes {
 
     suspend fun resumeCleanup() = resetCoordinator.resumeCleanup(baseScope())
 
+    internal fun cloudResetMarker(base: String): String? = boundaries.cloudMarker(base)
+
+    internal suspend fun adoptCloudReset(base: String, expected: String?, desired: String?): Boolean {
+        if (expected != desired) AndroidListeningEvidence.finish(SessionEnd.SCOPE_CHANGED)
+        if (!boundaries.adoptCloudMarker(base, expected, desired)) return false
+        check(resetCoordinator.resumeCleanup(base)) { "Personalization cleanup is pending" }
+        return true
+    }
+
     fun install(context: Context) {
         boundaries = PersonalizationResetStore(File(context.filesDir, "personalization_boundaries"))
         copies = MixCopyStore(File(context.filesDir, "saved_mix_copies"))
@@ -54,7 +65,10 @@ object AndroidLocalMixes {
             directory = File(context.filesDir, "personalized_mixes"),
             evidence = {
                 val identity = scope()
-                val legacy = boundaries.learningHistory(baseScope(), deviceListeningEvidence(ListeningStats.personalizationTracks()))
+                // A late cloud bucket cannot separate pre-reset and post-reset listens on its cutoff day.
+                val cloud = FirebaseSyncManager.userId.value?.let(ReplayCloudSync::isEnabledFor) == true
+                val legacy = boundaries.learningHistory(baseScope(), deviceListeningEvidence(ListeningStats.personalizationTracks()),
+                    includeResetDay = !cloud)
                 enrichSessionEvidence(legacy, evidenceStore.snapshot(identity).sessions, System.currentTimeMillis())
             },
             related = { song -> YtMusicRepository.radio(song.videoId).getOrThrow() },

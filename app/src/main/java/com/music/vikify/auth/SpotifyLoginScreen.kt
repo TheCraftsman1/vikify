@@ -17,10 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.net.toUri
-
-private const val LOGIN_URL =
-    "https://accounts.spotify.com/login?continue=https%3A%2F%2Fopen.spotify.com%2F"
+import org.json.JSONObject
 
 private val SPOTIFY_COOKIE_URLS = listOf(
     "https://open.spotify.com",
@@ -30,7 +27,8 @@ private val SPOTIFY_COOKIE_URLS = listOf(
 )
 
 private val LOGIN_HOST_SUFFIXES = listOf(
-    "spotify.com", "scdn.co", "google.com", "gstatic.com", "facebook.com", "apple.com",
+    "spotify.com", "scdn.co", "google.com", "gstatic.com", "googleapis.com",
+    "googleusercontent.com", "facebook.com", "apple.com",
 )
 
 private fun hostMatches(uri: Uri?, suffixes: List<String>): Boolean {
@@ -44,10 +42,15 @@ private fun isLoginHost(uri: Uri?) = hostMatches(uri, LOGIN_HOST_SUFFIXES)
 /**
  * Signs the login WebView out of Spotify. Disconnecting only forgot the
  * stored cookie, and the WebView's own jar would have signed the next
- * "Sign in" straight back in. Only Spotify's cookies go — the same jar holds
- * the YouTube Music sign-in.
+ * "Sign in" straight back in. Isolated Spotify profiles are cleared fully;
+ * the legacy fallback expires only Spotify cookies in the shared jar.
  */
 fun clearSpotifyWebSession() {
+    if (runCatching {
+        BrowserProfiles.clear(BrowserProfiles.SPOTIFY_LOGIN).also { isolated ->
+            if (isolated) BrowserProfiles.clear(BrowserProfiles.SPOTIFY_HARVEST)
+        }
+    }.getOrDefault(false)) return
     val cookies = CookieManager.getInstance()
     for (url in SPOTIFY_COOKIE_URLS) {
         val names = cookies.getCookie(url)?.split(";")
@@ -65,18 +68,14 @@ fun clearSpotifyWebSession() {
 
 /**
  * In-app Spotify sign-in. Lets the real accounts.spotify.com page handle the
- * login, then hands the `sp_dc` cookie to [onConnected] once the page lands on
- * open.spotify.com.
- *
- * Must be hosted as a root overlay, like [DiscordLoginScreen], never inside the
- * page content: that subtree is the `hazeSource` and the glass backdrop, both of
- * which record it into a layer and draw it a second time. A WebView drawn twice
- * flickers, drops parts of the page, and on some devices takes the app down in
- * Chromium's draw functor.
+ * login and hands the `sp_dc` cookie to [onConnected] once the page lands on
+ * open.spotify.com. An email hint identifies neither a Spotify session nor a
+ * Google website session; the provider still owns authorization.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun SpotifyLoginScreen(
+    emailHint: String? = null,
     onConnected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -87,27 +86,20 @@ fun SpotifyLoginScreen(
         modifier = modifier.fillMaxSize(),
         factory = { context ->
             WebView(context).apply {
-                // MATCH_PARENT, not the WRAP_CONTENT Compose hands a bare view:
-                // see DiscordLoginScreen — a zero layout viewport collapses
-                // any page sized off `height: 100%`, and Spotify's is.
+                val cookies = BrowserProfiles.attach(this, BrowserProfiles.SPOTIFY_LOGIN)
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
-                // The device's own mobile Chrome, minus the WebView markers. A
-                // desktop user agent served the desktop layout scaled into a
-                // phone, where part of the page fell off screen.
-                settings.userAgentString = browserUserAgent(settings.userAgentString)
+                settings.setSupportMultipleWindows(false)
                 setBackgroundColor(0xFF121212.toInt())
-                CookieManager.getInstance().setAcceptCookie(true)
-                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                cookies.setAcceptCookie(true)
+                cookies.setAcceptThirdPartyCookies(this, true)
 
                 var sent = false
                 webViewClient = object : WebViewClient() {
-                    // Spotify's own pages and the identity providers its sign-in
-                    // hands off to; anything else is not part of logging in.
                     override fun shouldOverrideUrlLoading(
                         view: WebView,
                         request: WebResourceRequest,
@@ -115,8 +107,31 @@ fun SpotifyLoginScreen(
 
                     override fun onPageFinished(view: WebView, url: String?) {
                         canGoBack = view.canGoBack()
-                        if (sent || url?.startsWith("https://open.spotify.com") != true) return
-                        val raw = CookieManager.getInstance().getCookie("https://open.spotify.com") ?: return
+
+                        // Convenience only, on Spotify's actual login origin. Never enter passwords
+                        // or inject an identifier into Google's authorization pages.
+                        if (!emailHint.isNullOrBlank() && isSpotifyLoginPage(url)) {
+                            val jsEmail = JSONObject.quote(emailHint)
+                            val autoFillSnippet = """
+                                (function() {
+                                    try {
+                                        var spInput = document.getElementById('login-username') ||
+                                                      document.querySelector('input[data-testid="login-username"]') ||
+                                                      document.querySelector('input[name="username"]') ||
+                                                      document.querySelector('input[type="email"]');
+                                        if (spInput && (!spInput.value || spInput.value.length === 0)) {
+                                            spInput.value = $jsEmail;
+                                            spInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                            spInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                        }
+                                    } catch(e) {}
+                                })();
+                            """.trimIndent()
+                            view.evaluateJavascript(autoFillSnippet, null)
+                        }
+
+                        if (sent || !isSpotifyPlayerPage(url) || !isSpotifyPlayerPage(view.url)) return
+                        val raw = cookies.getCookie("https://open.spotify.com") ?: return
                         val token = raw.split(";")
                             .map { it.trim() }
                             .firstOrNull { it.startsWith("sp_dc=") }
@@ -124,17 +139,33 @@ fun SpotifyLoginScreen(
                             ?.takeIf { it.isNotBlank() }
                             ?: return
                         sent = true
-                        // Hide before handing over, so the web player this
-                        // landed on doesn't flash up as the overlay tears down.
+                        cookies.flush()
                         view.visibility = View.GONE
                         onConnected(token)
                     }
                 }
                 webView = this
-                loadUrl(LOGIN_URL)
+                // Reopening a valid website session should not start at an email form.
+                if (!emailHint.isNullOrBlank() && BrowserProfiles.supported) {
+                    BrowserProfiles.clear(BrowserProfiles.SPOTIFY_LOGIN)
+                }
+                BrowserProfiles.whenReady(BrowserProfiles.SPOTIFY_LOGIN) {
+                    if (webView === this) {
+                        val existing = cookies.getCookie(SPOTIFY_PLAYER_ORIGIN)
+                        val hasSession = existing?.split(';')?.any {
+                            it.substringBefore('=').trim() == "sp_dc" && it.substringAfter('=', "").isNotBlank()
+                        } == true
+                        loadUrl(if (hasSession && emailHint.isNullOrBlank()) "$SPOTIFY_PLAYER_ORIGIN/" else spotifyLoginUrl(emailHint))
+                    }
+                }
             }
         },
-        onRelease = { it.destroy() },
+        onRelease = {
+            BrowserProfiles.cookies(it).flush()
+            webView = null
+            it.stopLoading()
+            it.destroy()
+        },
     )
 
     BackHandler(enabled = canGoBack) {

@@ -300,6 +300,7 @@ private fun Song.canStartStation(): Boolean =
 class PlaybackService : MediaLibraryService() {
 
     private var mediaSession: MediaLibrarySession? = null
+    private var taskRemoved = false
     private val searchResults = ConcurrentHashMap<String, List<Song>>()
     private val searchBrowseResults = ConcurrentHashMap<String, List<BrowseItem>>()
     private val songCache = ConcurrentHashMap<String, Song>()
@@ -689,6 +690,31 @@ class PlaybackService : MediaLibraryService() {
     private var discordPresenceUp = false
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var djSession: com.music.vikify.dj.AndroidDjSession? = null
+
+    private fun handleDjCommand(args: Bundle) {
+        if (taskRemoved) return
+        val dj = djSession ?: com.music.vikify.dj.AndroidDjSession(
+            this, scope, player = { player }, prepareQueue = ::beginRadioQueue,
+            captureBoundedQueue = ::captureBoundedContextSnapshot,
+            restoreBoundedQueue = { exoPlayer, snapshot ->
+                val restored = runCatching { restoreBoundedQueue(exoPlayer, snapshot) }.getOrDefault(false)
+                if (!restored) clearBoundedContext()
+                restored
+            },
+        ).also { djSession = it }
+        when (args.getString("operation")) {
+            "open" -> dj.open(args.getString("name").orEmpty())
+            "start" -> dj.start(genres = args.getString("genres").orEmpty(), voice = args.getBoolean("voice", true), name = args.getString("name").orEmpty())
+            "pick" -> dj.pick()
+            "play-track" -> dj.playTrack(args.getString("text").orEmpty())
+            "voice" -> dj.setVoice(args.getBoolean("enabled", true))
+            "stop" -> dj.stop()
+            "like" -> dj.like()
+            "interrupt" -> dj.interrupt()
+            "request" -> dj.request(args.getString("text").orEmpty())
+        }
+    }
 
     /** Canonical context owner for the active local bounded album/playlist. */
     private val boundedContextRegistry = ContextRegistry { snapshot ->
@@ -1781,6 +1807,7 @@ class PlaybackService : MediaLibraryService() {
 
     private fun createCrossfadeController() = CrossfadeController(
             scope,
+            canTransition = { !com.music.vikify.dj.DjPlayback.state.value.active },
             active = { requireNotNull(player) },
             standby = { requireNotNull(spare) },
             onHandoff = ::adoptPlayer,
@@ -2425,6 +2452,7 @@ class PlaybackService : MediaLibraryService() {
      * everything arriving in one burst at the end of the queue.
      */
     private fun loadAutoplayForCurrentTrack() {
+        if (com.music.vikify.dj.DjPlayback.state.value.active) return
         val exoPlayer = player ?: return
         val party = ListenTogether.state.value
         if (!autoplayEnabled(party) ||
@@ -5259,14 +5287,20 @@ class PlaybackService : MediaLibraryService() {
 
     /** Capture logical state and only the materialized bounded projection. */
     private fun saveBoundedContextSnapshot(player: ExoPlayer, immediately: Boolean = false) {
-        if (ListenTogether.state.value.inParty) return
-        val window = boundedContextWindow ?: return
-        val context = boundedContextRegistry.snapshot() ?: return
-        val source = boundedContextSource ?: return
-        if (context.contextToken != boundedContextToken || context.songs.isEmpty()) return
+        val state = captureBoundedContextSnapshot(player) ?: return
+        if (immediately) BoundedContextPersistence.saveImmediately(state) else BoundedContextPersistence.save(state)
+    }
+
+    /** Reusable in-memory snapshot; DJ takeover needs no persistence read or write here. */
+    private fun captureBoundedContextSnapshot(player: ExoPlayer): BoundedContextPersistence.State? {
+        if (ListenTogether.state.value.inParty || player.mediaItemCount == 0) return null
+        val window = boundedContextWindow ?: return null
+        val context = boundedContextRegistry.snapshot() ?: return null
+        val source = boundedContextSource ?: return null
+        if (context.contextToken != boundedContextToken || context.songs.isEmpty()) return null
         val currentIndex = player.currentMediaItemIndex.coerceIn(0, player.mediaItemCount - 1)
         val range = LastPlayed.window(player.mediaItemCount, currentIndex)
-        if (range.isEmpty()) return
+        if (range.isEmpty()) return null
         val entries = range.map { index ->
             val item = player.getMediaItemAt(index)
             BoundedContextPersistence.Entry(
@@ -5275,7 +5309,7 @@ class PlaybackService : MediaLibraryService() {
                 cycleId = if (item.queueTier == QueueTier.CONTEXT) item.contextCycleId else null,
             )
         }
-        val state = BoundedContextPersistence.State(
+        return BoundedContextPersistence.State(
             context = context,
             source = source,
             window = window.snapshot(),
@@ -5283,7 +5317,6 @@ class PlaybackService : MediaLibraryService() {
             currentIndex = currentIndex - range.first,
             positionMs = player.currentPosition,
         )
-        if (immediately) BoundedContextPersistence.saveImmediately(state) else BoundedContextPersistence.save(state)
     }
 
     /** Drop every service-side reference that could resurrect the former queue. */
@@ -6562,32 +6595,51 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
-        mediaSession
+        mediaSession.takeUnless { taskRemoved }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        // A removed task is an explicit stop. Android must not recreate a
+        // started playback service later with a null/redelivered intent.
+        return START_NOT_STICKY
+    }
 
     /**
      * Called by Android when the user swipes this app's task away from the
      * recent apps screen.
      *
-     * When [AppSettings.stopOnTaskRemoved] is on we stop the player and let the
-     * service die naturally; otherwise we leave it running in the background so
-     * music continues past the swipe, which is the default Android behaviour for
-     * a foreground-service-backed media session.
+     * Removing the task ends listening, including an in-flight DJ request,
+     * voice clip, crossfade and any receiver playing on the phone's behalf.
+     * Backgrounding the app with Home still leaves normal music playback intact.
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
+        if (taskRemoved) return
+        taskRemoved = true
+        // A normal DJ stop restores the pre-DJ queue and may resume it. An app
+        // close must discard that restoration before shutting the voice down.
+        djSession?.stop(announce = false, restoreQueue = false)
+        djSession?.close()
+        djSession = null
+        scope.cancel()
+        crossfade?.release()
+        crossfade = null
+        if (speakers.active) speakers.pause()
+        if (castPlayback.active) CastController.disconnect(resumeHere = false)
+        // Crossfade settlement can resume its outgoing player, so stop both
+        // after releasing it. This also cancels buffering, not just audio.
+        eachPlayer { it.pause(); it.stop() }
+        mediaSession?.release()
+        mediaSession = null
+        publishWidgetState(playing = false)
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
         super.onTaskRemoved(rootIntent)
-        if (AppSettings.stopOnTaskRemoved.value) {
-            // A receiver left playing with nothing on the phone to drive it
-            // would run out its few queued tracks and stop on its own anyway;
-            // better to say so now than leave the TV on a casting screen.
-            if (castPlayback.active) CastController.disconnect(resumeHere = false)
-            // Both, or a swipe-away mid-crossfade leaves the outgoing track
-            // playing on its own out of a service that is on its way out.
-            eachPlayer { it.stop() }
-            stopSelf()
-        }
     }
 
     override fun onDestroy() {
+        djSession?.stop(announce = false, restoreQueue = false)
+        djSession?.close()
+        djSession = null
         WearBridge.attachStreams(null)
         WearBridge.releaseSpeaker()
         // Let go of the receiver's player but leave its session alone: a
@@ -7307,6 +7359,7 @@ class PlaybackService : MediaLibraryService() {
                 .add(upgradeQualityCommand)
                 .add(swapVersionCommand)
                 .add(queueDragCommand)
+                .add(SessionCommand(com.music.vikify.dj.ACTION_DJ, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailablePlayerCommands(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS)
@@ -7331,7 +7384,9 @@ class PlaybackService : MediaLibraryService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
+            if (taskRemoved) return Futures.immediateFuture(SessionResult(SessionError.ERROR_SESSION_DISCONNECTED))
             when (customCommand.customAction) {
+                com.music.vikify.dj.ACTION_DJ -> handleDjCommand(args)
                 ACTION_START_BOUNDED_CONTEXT -> startBoundedContext(args)
                 ACTION_CLEAR_BOUNDED_CONTEXT -> clearBoundedContext()
                 ACTION_TOGGLE_AUTOPLAY -> toggleAutoplayFromNotification()

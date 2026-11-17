@@ -104,7 +104,9 @@ android {
             )
             // Null without a keystore, like the phone: an unsigned APK rather
             // than a build failure.
-            signingConfig = signingConfigs.findByName("release")
+            signingConfig = if (providers.gradleProperty("testSigning").orNull == "true") {
+                signingConfigs.getByName("debug")
+            } else signingConfigs.findByName("release")
         }
     }
 

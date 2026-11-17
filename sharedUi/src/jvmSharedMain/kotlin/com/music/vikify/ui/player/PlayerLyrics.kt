@@ -567,11 +567,9 @@ internal fun CurrentLyricStrip(
     // strip level.  This lets us override the parent Column's forced
     // CenterHorizontally alignment and flush RTL lines to the right edge.
     val isSynced = remember(lines) { lines.any { it.timeMs > 0L } }
-    var stripRtl by remember { mutableStateOf(false) }
-    var activeText by remember { mutableStateOf("") }
-    if (isSynced) {
-        val clock = rememberLyricClock(trackKey, playhead, isPlaying)
-        val index by remember(lines) {
+    val stripRtl = if (isSynced) {
+        val clock = rememberPlaybackClock(trackKey, playhead, isPlaying)
+        val index by remember(lines, clock) {
             derivedStateOf { lines.indexOfLast { it.timeMs <= clock.longValue } }
         }
         val current = lines.getOrNull(index)
@@ -580,15 +578,15 @@ internal fun CurrentLyricStrip(
         val intro = instrumental && firstSung >= 0 && index < firstSung
         val introLines = stringArrayResource(Res.array.lyrics_intro_lines)
         val introLine = remember(trackKey) { introLines.random() }
-        activeText = when {
+        val activeText = when {
             intro -> introLine
             instrumental -> stringResource(Res.string.instrumental)
             else -> current.text
         }
-        stripRtl = isRtl(activeText)
-    }
+        isRtl(activeText)
+    } else false
 
-    val align: Alignment = if (stripRtl) Alignment.CenterStart else Alignment.CenterStart
+    val align: Alignment = Alignment.CenterStart
 
     CompositionLocalProvider(LocalLayoutDirection provides if (stripRtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
         Box(
@@ -680,7 +678,7 @@ private fun nanosToMs(nanos: Long): Double = nanos / 1_000_000.0
  * whole line would recompose sixty times a second.
  */
 @Composable
-private fun rememberLyricClock(
+internal fun rememberPlaybackClock(
     trackKey: Any,
     playhead: LyricPlayhead,
     isPlaying: Boolean,
@@ -1775,7 +1773,7 @@ internal fun LyricsPanel(
     modifier: Modifier = Modifier,
 ) {
     val panelPlaying = isPlaying && active
-    val clock = rememberLyricClock(trackKey, playhead, panelPlaying)
+    val clock = rememberPlaybackClock(trackKey, playhead, panelPlaying)
     val subReveal = rememberSubLyricsReveal(subLines, trackKey)
 
     val isSynced = remember(lines) { lines.any { it.timeMs > 0L } }
@@ -2789,7 +2787,7 @@ private fun CurrentLyricLine(
         return
     }
 
-    val clock = rememberLyricClock(trackKey, playhead, isPlaying)
+    val clock = rememberPlaybackClock(trackKey, playhead, isPlaying)
 
     val index by remember(lines) {
         derivedStateOf { lines.indexOfLast { it.timeMs <= clock.longValue } }

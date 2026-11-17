@@ -106,6 +106,30 @@ object LocalPlaylistStore {
         return _playlists.value.firstOrNull { it.id == cleanId || it.id == id || it.browseId == id }
     }
 
+    fun addSongToPlaylist(id: String, song: Song) {
+        val cleanId = id.removePrefix("local:playlist:").removePrefix("VL")
+        val updated = _playlists.value.map {
+            if (it.id == cleanId || it.id == id || it.browseId == id) {
+                if (it.songs.none { s -> s.videoId == song.videoId }) {
+                    it.copy(songs = it.songs + song)
+                } else it
+            } else it
+        }
+        _playlists.value = updated
+        persist(updated)
+    }
+
+    fun removeSongFromPlaylist(id: String, videoId: String) {
+        val cleanId = id.removePrefix("local:playlist:").removePrefix("VL")
+        val updated = _playlists.value.map {
+            if (it.id == cleanId || it.id == id || it.browseId == id) {
+                it.copy(songs = it.songs.filterNot { s -> s.videoId == videoId })
+            } else it
+        }
+        _playlists.value = updated
+        persist(updated)
+    }
+
     fun mergeRemote(remoteList: List<LocalPlaylist>) {
         val current = _playlists.value.toMutableList()
         var changed = false

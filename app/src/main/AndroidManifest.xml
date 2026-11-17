@@ -55,6 +55,11 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <queries>
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+        <intent><action android:name="android.speech.action.RECOGNIZE_SPEECH" /></intent>
+    </queries>
+
     <application
         android:name=".VikifyApplication"
         android:allowBackup="true"
@@ -112,6 +117,12 @@
           uiMode is deliberately *not* in the list: a day/night change should
           still recreate the Activity so the theme is rebuilt from resources.
         -->
+        <activity
+            android:name=".auth.GoogleSignInActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.Vikify" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -211,8 +222,32 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:scheme="https"
-                    android:host="vikify.app"
+                    android:host="vikify.web.app"
                     android:pathPattern="/invite/......" />
+                <data
+                    android:scheme="https"
+                    android:host="vikify-95144.web.app"
+                    android:pathPattern="/invite/......" />
+            </intent-filter>
+
+            <!-- Vikify in-app song share links -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="vikify.web.app" android:pathPrefix="/track/" />
+                <data android:scheme="https" android:host="vikify.web.app" android:pathPrefix="/song/" />
+                <data android:scheme="https" android:host="vikify-95144.web.app" android:pathPrefix="/track/" />
+                <data android:scheme="https" android:host="vikify-95144.web.app" android:pathPrefix="/song/" />
+            </intent-filter>
+
+            <!-- Custom scheme for Vikify song sharing -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vikify" android:host="track" />
+                <data android:scheme="vikify" android:host="song" />
             </intent-filter>
 
             <!-- Custom scheme for Listen Together invites on custom server deployments. -->

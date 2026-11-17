@@ -21,12 +21,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 
-private const val MUSIC_ORIGIN = "https://music.youtube.com"
-
-private const val LOGIN_URL =
-    "https://accounts.google.com/ServiceLogin" +
-        "?ltmpl=music&service=youtube&prompt=select_account" +
-    "&continue=https%3A%2F%2Fmusic.youtube.com%2F"
+private const val MUSIC_ORIGIN = YOUTUBE_MUSIC_ORIGIN
 
 private const val TAG = "Vikify"
 
@@ -40,23 +35,22 @@ private const val TAG = "Vikify"
  * Google redirects back to music.youtube.com the listener confirms the profile
  * shown by the live page. This deliberately leaves a multiple-channel account
  * enough time to choose its Personal or Brand identity before anything is
- * saved. The browser's local Google cookies are cleared on the way in without
- * visiting Google's logout endpoint, so adding an account cannot invalidate a
- * previously saved session.
+ * saved.
+ *
+ * [loginHint] targets the selected Google account. It does not turn an ID token
+ * into a website session. Browser state is retained between visits; an account
+ * snapshot can also reopen an existing YouTube session directly.
  *
  * [WebSessionMode.SWITCH_CHANNEL] keeps those cookies and opens YouTube Music
  * itself, so the listener can use the avatar menu's own Accounts list — the one
  * screen that authoritatively knows which channels exist and which is which.
- * Nothing is taken automatically there: the session is read when they say so,
- * by raising [captureRequest].
- *
- * Either way what is read is the page's own `ytcfg`, not a guess made later
- * from a server-side fetch. The credential itself never passes through app code.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun YtMusicLoginScreen(
     mode: WebSessionMode,
+    /** Email hint to prefill / target the Google sign in */
+    loginHint: String? = null,
     /** Cookie snapshot to install before opening an existing account's channel picker. */
     initialCookie: String? = null,
     onCaptured: (CapturedSession) -> Unit,
@@ -72,6 +66,8 @@ fun YtMusicLoginScreen(
     onPageReady: (Boolean) -> Unit = {},
     /** For a host that needs the WebView set up differently — the TV app, for its remote. */
     configureWebView: (WebView) -> Unit = {},
+    /** Uses a separate persistent browser session for each saved Google account. */
+    browserAccountId: String? = null,
 ) {
     var webView by remember { mutableStateOf<WebView?>(null) }
     val currentOnCaptured by rememberUpdatedState(onCaptured)
@@ -82,39 +78,48 @@ fun YtMusicLoginScreen(
         if (captureRequest == 0) return@LaunchedEffect
         val view = webView
         if (view == null) currentOnUnavailable()
-        else captureFrom(view, currentOnCaptured, currentOnUnavailable)
+        else captureFrom(view, currentOnCaptured, currentOnUnavailable) { webView === view }
     }
 
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { context ->
-            if (mode == WebSessionMode.SIGN_IN) {
-                BrowserSession.clearGoogleCookies()
-            } else initialCookie?.let(BrowserSession::installGoogleCookies)
             WebView(context).apply {
-                if (mode == WebSessionMode.SIGN_IN) {
-                    clearCache(true)
-                    clearHistory()
-                    clearFormData()
-                }
+                val profileName = youtubeBrowserProfile(browserAccountId)
+                val cookies = BrowserProfiles.attach(this, profileName)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                cookies.setAcceptCookie(true)
                 configureWebView(this)
 
                 webViewClient = object : WebViewClient() {
+                    override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                        currentOnPageReady(false)
+                    }
                     override fun onPageFinished(view: WebView?, url: String?) {
-                        // Reaching the Music origin only enables confirmation.
-                        // A multi-channel login can still be waiting for the
-                        // listener to choose an identity on this very page.
-                        // Capturing automatically here is the race that used to
-                        // create a fake "Personal" profile and close too soon.
-                        currentOnPageReady(url?.startsWith(MUSIC_ORIGIN) == true)
+                        currentOnPageReady(isYouTubeMusicPage(url))
                     }
                 }
 
                 webView = this
-                loadUrl(if (mode == WebSessionMode.SIGN_IN) LOGIN_URL else "$MUSIC_ORIGIN/")
+                val destination = youtubeLoginUrl(loginHint,
+                    resumeSavedSession = mode == WebSessionMode.SWITCH_CHANNEL || !initialCookie.isNullOrBlank())
+                BrowserProfiles.whenReady(profileName) {
+                    if (webView === this) {
+                        if (!initialCookie.isNullOrBlank()) {
+                            BrowserSession.installGoogleCookies(initialCookie, cookies) {
+                                if (webView === this) loadUrl(destination)
+                            }
+                        } else loadUrl(destination)
+                    }
+                }
             }
+        },
+        onRelease = {
+            BrowserProfiles.cookies(it).flush()
+            webView = null
+            it.stopLoading()
+            it.destroy()
         },
     )
 }
@@ -131,8 +136,14 @@ private fun captureFrom(
     view: WebView,
     onCaptured: (CapturedSession) -> Unit,
     onUnavailable: () -> Unit,
+    isCurrent: () -> Boolean,
 ) {
-    val cookies = CookieManager.getInstance().getCookie(MUSIC_ORIGIN)
+    if (!isYouTubeMusicPage(view.url)) {
+        onUnavailable()
+        return
+    }
+    val capturedUrl = view.url
+    val cookies = BrowserProfiles.cookies(view).getCookie(MUSIC_ORIGIN)
     if (cookies == null || !AuthStore.hasApiSid(cookies)) {
         onUnavailable()
         return
@@ -140,9 +151,16 @@ private fun captureFrom(
     // Flushed here rather than left to the WebView's own schedule: the screen
     // is usually closing in the next frame, and a cookie jar written after
     // that is a jar the next sign-in reads instead of this one.
-    CookieManager.getInstance().flush()
+    BrowserProfiles.cookies(view).flush()
 
     view.evaluateJavascript(YTCFG_PROBE) { raw ->
+        if (!isCurrent()) return@evaluateJavascript
+        if (view.url != capturedUrl || !isYouTubeMusicPage(view.url) ||
+            BrowserProfiles.cookies(view).getCookie(MUSIC_ORIGIN) != cookies
+        ) {
+            onUnavailable()
+            return@evaluateJavascript
+        }
         val config = raw.parseConfig()
         val loggedIn = config?.get("loggedIn").let {
             it is JsonPrimitive && it.content == "true"

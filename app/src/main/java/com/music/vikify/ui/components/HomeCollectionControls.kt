@@ -1,6 +1,7 @@
 package com.music.vikify.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +31,7 @@ import com.music.vikify.data.personalization.HomeCollectionPreferences
 fun HomeCollectionControls(
     collectionId: String?, preferences: HomeCollectionPreferences, saving: Boolean,
     onPin: (String, Boolean) -> Unit, onHide: (String, Boolean) -> Unit,
+    onOpen: (String) -> Unit = {},
 ) {
     val collections = MoodGenreRepository.allMoods.filter { collectionId == null || it.id == collectionId }
     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp)) {
@@ -46,10 +48,12 @@ fun HomeCollectionControls(
                 val pinLabel = stringResource(if (pinned) R.string.home_collection_unpin_named else R.string.home_collection_pin_named, collection.title)
                 val visibilityLabel = stringResource(if (hidden) R.string.home_collection_show_named else R.string.home_collection_hide_named, collection.title)
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
+                    Column(Modifier.weight(1f).clickable(enabled = !saving,
+                        onClickLabel = stringResource(R.string.home_collection_open_named, collection.title)) { onOpen(collection.id) }
+                        .padding(vertical = 8.dp)) {
                         Text(collection.title, style = MaterialTheme.typography.titleSmall)
                         Text(stringResource(if (hidden) R.string.home_collection_hidden else if (pinned)
-                            R.string.home_collection_pinned else R.string.home_collection_visible),
+                            R.string.home_collection_pinned else R.string.home_collection_available),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Spacer(Modifier.width(4.dp))

@@ -35,6 +35,39 @@ class MixCopyStore(private val directory: File, private val clock: () -> Long = 
     suspend fun list(baseScope: String): List<SavedMixCopy> = update(baseScope) { it }.copies.map { it.copy() }
     suspend fun get(baseScope: String, browseId: String): SavedMixCopy? = list(baseScope).firstOrNull { it.browseId == browseId }
 
+    suspend fun exportCloud(baseScope: String): Map<String, String> = cloudEntries(update(baseScope) { it })
+
+    /** Imports a resolved library only if no save, rename, track edit or deletion raced the pull. */
+    suspend fun applyCloud(baseScope: String, expected: Map<String, String>, desired: Map<String, String>): Boolean {
+        CloudMixPayload.bounded(desired, 100, 500_000)
+        val copies = desired.map { (id, payload) ->
+            json.decodeFromString(StoredCopy.serializer(), payload).also { copy ->
+                require(id == copy.id && CloudMixPayload.sessionId(id) && copy.title.isNotBlank() &&
+                    copy.title.length <= 120 && copy.sourceVersion > 0 && copy.createdAt > 0 &&
+                    copy.tracks.size <= LocalMixGenerator.MAX_TRACKS && copy.tracks.all(CloudMixPayload::valid))
+            }
+        }.sortedWith(compareByDescending<StoredCopy> { it.createdAt }.thenBy { it.id })
+        var applied = false
+        update(baseScope) { old ->
+            if (cloudEntries(old) != expected) return@update old
+            val localOnly = old.copies.filterNot { portable(it) }
+            require((localOnly.map { it.id } intersect desired.keys).isEmpty()) { "Cloud copy conflicts with a local-file playlist" }
+            check(copies.size + localOnly.size <= 100) { "Saved copy limit reached" }
+            val restored = copies.map { copy ->
+                val localTracks = old.copies.firstOrNull { it.id == copy.id }?.tracks.orEmpty().associateBy { it.id }
+                copy.copy(tracks = copy.tracks.map { CloudMixPayload.retainDeviceLocation(it, localTracks[it.id]) })
+            }
+            applied = true
+            old.copy(copies = (localOnly + restored).sortedWith(compareByDescending<StoredCopy> { it.createdAt }.thenBy { it.id }))
+        }
+        return applied
+    }
+
+    private fun portable(copy: StoredCopy) = copy.tracks.all { CloudMixPayload.trackId(it.id) }
+    private fun cloudEntries(file: CopyFile): Map<String, String> = file.copies.filter(::portable).associate { copy ->
+        copy.id to json.encodeToString(StoredCopy.serializer(), copy.copy(tracks = copy.tracks.map(CloudMixPayload::portable)))
+    }.toSortedMap()
+
     suspend fun save(baseScope: String, title: String, kind: LocalMixKind, sourceVersion: Long, songs: List<Song>): SavedMixCopy {
         val name = title.trim()
         require(name.isNotEmpty() && name.length <= 120 && sourceVersion > 0)

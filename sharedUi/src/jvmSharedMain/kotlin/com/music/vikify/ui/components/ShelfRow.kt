@@ -52,6 +52,9 @@ fun ShelfRow(
             contentPadding = contentPadding,
             horizontalArrangement = horizontalArrangement,
             flingBehavior = rememberSnapFlingBehavior(lazyListState = state),
+            // Let the parent feed own vertical drags over artwork. The app's
+            // custom two-axis overscroll is unnecessary on horizontal shelves.
+            overscrollEffect = null,
             content = content,
         )
     }

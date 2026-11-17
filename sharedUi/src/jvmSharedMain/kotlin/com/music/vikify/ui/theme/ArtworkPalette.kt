@@ -31,6 +31,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.pow
 import kotlin.math.sqrt
+import java.util.Collections
 
 /**
  * The colours an album, playlist or artist page paints itself in.
@@ -218,13 +219,13 @@ private fun rememberArtworkSeed(imageUrl: String?, artPx: Int): Seed? {
  * Colours already read, keyed by artwork URL.
  *
  * Reading them again costs a decode and a quantise for an answer that cannot
- * have changed — the artwork at a URL is the artwork at that URL. Access is
- * from composition and from the resumption of [rememberArtworkPalette]'s
- * effect, both on the main thread, so it needs no locking of its own.
+ * have changed — the artwork at a URL is the artwork at that URL. The
+ * access-ordered map also mutates on reads, so guard both reads and writes
+ * when compositions on different UI threads share this cache.
  */
-private val seedCache = object : LinkedHashMap<String, Seed>(0, 0.75f, true) {
+private val seedCache: MutableMap<String, Seed> = Collections.synchronizedMap(object : LinkedHashMap<String, Seed>(0, 0.75f, true) {
     override fun removeEldestEntry(eldest: Map.Entry<String, Seed>) = size > SEED_CACHE_ENTRIES
-}
+})
 
 /** Deep enough to cover a session's browsing without holding a screenful of colours. */
 private const val SEED_CACHE_ENTRIES = 128

@@ -297,6 +297,9 @@ fun SongActionsSheet(
                 accent = palette.accent,
                 onClick = onAddToPlaylist,
             )
+            onShare?.let {
+                ActionRow(Icons.Rounded.Share, stringResource(R.string.share), accent = palette.accent, onClick = it)
+            }
             onRemoveFromPlaylist?.let {
                 ActionRow(
                     icon = Icons.Rounded.PlaylistRemove,
@@ -306,6 +309,12 @@ fun SongActionsSheet(
                 )
             }
             GroupSeparator(palette)
+        }
+
+        if (!signedIn || isOffline) {
+            onShare?.let {
+                ActionRow(Icons.Rounded.Share, stringResource(R.string.share), accent = palette.accent, onClick = it)
+            }
         }
 
         onRecommendationPreference?.let { submit ->
@@ -399,11 +408,6 @@ fun SongActionsSheet(
                 accent = palette.accent,
                 onClick = it,
             )
-        }
-        if (!isOffline) {
-            onShare?.let {
-                ActionRow(Icons.Rounded.Share, stringResource(R.string.share), accent = palette.accent, onClick = it)
-            }
         }
         // Last, and only from the player: it is about the track playing right
         // now rather than about the song as a thing in a library, and it is

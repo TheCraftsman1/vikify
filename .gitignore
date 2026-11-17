@@ -39,6 +39,10 @@ keystore.properties
 .shots/
 .tmp_verify/
 .debug/
+/tmp/
+/dist/
+.firebase/
+project-brief.txt
 
 # AI agent configuration
 AGENTS.md

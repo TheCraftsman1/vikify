@@ -4,6 +4,7 @@ import com.music.vikify.auth.clearSpotifyWebSession
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.HorizontalDivider
 import com.music.vikify.sharedui.resources.Res
+import com.music.vikify.sharedui.resources.ic_google_g
 import com.music.vikify.sharedui.resources.spotify_logo
 import org.jetbrains.compose.resources.painterResource
 import androidx.compose.foundation.layout.PaddingValues
@@ -33,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.vikify.R
+import com.music.vikify.data.firebase.FirebaseSyncManager
 import com.music.vikify.data.model.Account
 import com.music.vikify.data.settings.AppSettings
 import kotlin.math.roundToInt
@@ -45,6 +47,8 @@ fun AccountAndScrobblingScreen(
     onSignIn: () -> Unit,
     onSwitchChannel: () -> Unit,
     onSignOut: () -> Unit,
+    onGoogleSignIn: () -> Unit = {},
+    onGoogleSignOut: () -> Unit = {},
     onOpenListenBrainzLogin: () -> Unit,
     onOpenLastfmLogin: () -> Unit,
     onOpenDiscord: () -> Unit,
@@ -52,6 +56,12 @@ fun AccountAndScrobblingScreen(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
+    val firebaseUserEmail by FirebaseSyncManager.userEmail.collectAsStateWithLifecycle()
+    val firebaseUserName by FirebaseSyncManager.userDisplayName.collectAsStateWithLifecycle()
+    val firebaseSyncState by FirebaseSyncManager.syncState.collectAsStateWithLifecycle()
+    val isAnonymousFirebase by FirebaseSyncManager.isAnonymous.collectAsStateWithLifecycle()
+    val hasGoogleAccount = !isAnonymousFirebase && !firebaseUserEmail.isNullOrBlank()
+
     val lastfmEnabled by AppSettings.lastfmEnabled.collectAsStateWithLifecycle()
     val lastfmUsername by AppSettings.lastfmUsername.collectAsStateWithLifecycle()
     val lastfmSessionKey by AppSettings.lastfmSessionKey.collectAsStateWithLifecycle()
@@ -82,11 +92,56 @@ fun AccountAndScrobblingScreen(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 14.dp),
         )
 
-        // One card: who is signed in, which profile is listening, and the way
-        // out, with the explanation of profiles underneath.
+        // 1. Google & Vikify Cloud Sync Section
         SettingsGroup(
-            footer = if (signedIn) stringResource(R.string.account_profiles_help) else null,
+            header = stringResource(R.string.vikify_google_account),
+            footer = if (hasGoogleAccount) {
+                "Playlists, favorites, and history sync with your Google account. Your data is preserved across devices and re-installs."
+            } else {
+                stringResource(R.string.google_device_account_hint)
+            },
             topSpacing = 0.dp,
+        ) {
+            if (hasGoogleAccount) {
+                SettingsRow(
+                    iconPainter = painterResource(Res.drawable.ic_google_g),
+                    title = firebaseUserName ?: "Google Account",
+                    subtitle = "$firebaseUserEmail • Status: $firebaseSyncState",
+                    onClick = { FirebaseSyncManager.pullRemoteAll() },
+                )
+                FullWidthDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Cloud,
+                    title = "Sync Now",
+                    subtitle = "Manually refresh cloud playlists & favorites",
+                    onClick = { FirebaseSyncManager.pullRemoteAll() },
+                )
+                FullWidthDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.SwitchAccount,
+                    title = stringResource(R.string.google_change_device_account),
+                    subtitle = stringResource(R.string.google_device_account_hint),
+                    onClick = onGoogleSignIn,
+                )
+                FullWidthDivider()
+                DestructiveRow(
+                    label = "Disconnect Google Account",
+                    onClick = onGoogleSignOut,
+                )
+            } else {
+                SettingsRow(
+                    iconPainter = painterResource(Res.drawable.ic_google_g),
+                    title = "Sign in with Google",
+                    subtitle = "Safeguard playlists & favorites across devices",
+                    onClick = onGoogleSignIn,
+                )
+            }
+        }
+
+        // 2. YouTube Music Account Section
+        SettingsGroup(
+            header = "YouTube Music",
+            footer = if (signedIn) stringResource(R.string.account_profiles_help) else "Connect your YouTube Music account to stream recommendations and your library.",
         ) {
             AccountCard(
                 signedIn = signedIn,
@@ -108,6 +163,7 @@ fun AccountAndScrobblingScreen(
             }
         }
 
+        // 3. Spotify Integration Section
         SettingsGroup(
             header = stringResource(R.string.spotify),
             footer = stringResource(R.string.spotify_connect_subtitle),
@@ -127,6 +183,7 @@ fun AccountAndScrobblingScreen(
                     onClick = {
                         clearSpotifyWebSession()
                         AppSettings.setSpotifySpdcToken("")
+                        FirebaseSyncManager.syncSpotifyStatus(false)
                     },
                 )
             }
@@ -328,9 +385,6 @@ fun AccountAndScrobblingScreen(
                 }
             }
         } else {
-            // Left in place rather than dropped: a section that simply vanishes
-            // reads as a feature that never existed, and this one is coming back.
-            // The rows are dimmed and inert via `enabled = false`.
             SettingsGroup(
                 header = stringResource(R.string.scrobbling),
                 footer = stringResource(R.string.scrobbling_paused_footer),

@@ -147,7 +147,7 @@ class GeneratedMixRepositoryTest {
         val entered = CompletableDeferred<Unit>()
         try {
             val repository = repo(dir, related = { entered.complete(Unit); CompletableDeferred<List<Song>>().await() })
-            val pending = async { repository.load("a", LocalMixKind.DAILY_MIX) }
+            val pending = async { repository.load("a", LocalMixKind.DAILY_MIX, force = true) }
             entered.await(); pending.cancelAndJoin()
             assertTrue(dir.listFiles().isNullOrEmpty())
         } finally { dir.deleteRecursively() }
@@ -230,7 +230,7 @@ class GeneratedMixRepositoryTest {
             repository.load("a", LocalMixKind.DAILY_MIX)
             preferences = MixFeedback(1, mapOf(history().single().song.videoId to TrackPreference.HIDE))
             offline = true
-            val retained = repository.load("a", LocalMixKind.DAILY_MIX)
+            val retained = repository.load("a", LocalMixKind.DAILY_MIX, force = true)
             assertEquals(MixFailure.REFRESH_FAILED, retained.failure)
             assertEquals("Favorite 2", retained.mix?.songs?.single()?.title)
         } finally { dir.deleteRecursively() }
@@ -259,9 +259,25 @@ class GeneratedMixRepositoryTest {
                 preferences = MixFeedback(1, mapOf(history().single().song.videoId to TrackPreference.HIDE))
                 emptyList()
             }, clock = { now }, zone = { zone }, feedback = { preferences })
-            val result = repository.load("a", LocalMixKind.DAILY_MIX)
+            val result = repository.load("a", LocalMixKind.DAILY_MIX, force = true)
             assertEquals("Favorite 2", result.mix?.songs?.single()?.title)
             assertEquals(1, result.mix?.feedbackRevision)
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun familiarMixesOpenFromRecordedHistoryWithoutAnyCatalogRequests() = runBlocking {
+        val dir = temp()
+        val calls = AtomicInteger()
+        try {
+            val repository = repo(dir, related = { calls.incrementAndGet(); error("offline") })
+            listOf(LocalMixKind.ON_REPEAT, LocalMixKind.DAILY_MIX, LocalMixKind.COMFORT_ZONE, LocalMixKind.ARTIST_ORBIT)
+                .forEach { kind ->
+                    val loaded = repository.load("a", kind)
+                    val mix = assertNotNull(loaded.mix, kind.id)
+                    assertNull(loaded.failure, kind.id)
+                    assertEquals(history().map { it.song.videoId }, mix.songs.map { it.videoId })
+                }
+            assertEquals(0, calls.get())
         } finally { dir.deleteRecursively() }
     }
 }

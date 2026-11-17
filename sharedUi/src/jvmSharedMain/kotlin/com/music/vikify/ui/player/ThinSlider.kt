@@ -42,13 +42,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.abs
 
 /**
  * Apple Music's scrubber: a hairline capsule with no thumb knob, which
@@ -68,8 +72,34 @@ fun ThinSlider(
     activeHeight: Dp = 12.dp,
     activeColor: Color = Color.White.copy(alpha = 0.92f),
     inactiveColor: Color = Color.White.copy(alpha = 0.26f),
+) = ThinSlider(
+    value = { value },
+    onValueChange = onValueChange,
+    modifier = modifier,
+    onValueChangeFinished = onValueChangeFinished,
+    loading = loading,
+    idleHeight = idleHeight,
+    activeHeight = activeHeight,
+    activeColor = activeColor,
+    inactiveColor = inactiveColor,
+)
+
+/** Read [value] while drawing so a moving playhead never invalidates the layout. */
+@Composable
+fun ThinSlider(
+    value: () -> Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    onValueChangeFinished: (() -> Unit)? = null,
+    loading: Boolean = false,
+    idleHeight: Dp = 7.dp,
+    activeHeight: Dp = 12.dp,
+    activeColor: Color = Color.White.copy(alpha = 0.92f),
+    inactiveColor: Color = Color.White.copy(alpha = 0.26f),
 ) {
     var dragging by remember { mutableStateOf(false) }
+    val currentOnValueChange by rememberUpdatedState(onValueChange)
+    val currentOnValueChangeFinished by rememberUpdatedState(onValueChangeFinished)
     val height by animateDpAsState(
         targetValue = if (dragging) activeHeight else idleHeight,
         animationSpec = spring(
@@ -111,30 +141,48 @@ fun ThinSlider(
             .fillMaxWidth()
             // Generous invisible touch target — the visible bar is only ~7dp.
             .height(activeHeight + 22.dp)
-            // One gesture loop for both taps and drags. Two separate detectors
-            // — a drag one plus a tap one — meant taps never landed: the drag
-            // detector took the pointer and a tap has no drag to report.
+            .semantics {
+                progressBarRangeInfo = ProgressBarRangeInfo(value().coerceIn(0f, 1f), 0f..1f)
+                setProgress { target ->
+                    currentOnValueChange(target.coerceIn(0f, 1f))
+                    currentOnValueChangeFinished?.invoke()
+                    true
+                }
+            }
+            // A tap seeks on release. A drag claims the pointer only after
+            // horizontal slop, so pulling down the player never seeks first.
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    dragging = true
-                    onValueChange((down.position.x / size.width).coerceIn(0f, 1f))
-
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val pointer = event.changes.firstOrNull { it.id == down.id } ?: break
-                        if (!pointer.pressed) {
-                            pointer.consume()
-                            break
+                    val down = awaitFirstDown()
+                    var started = false
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val pointer = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (pointer.isConsumed) break
+                            val delta = pointer.position - down.position
+                            if (!started && abs(delta.y) > viewConfiguration.touchSlop &&
+                                abs(delta.y) >= abs(delta.x)
+                            ) break
+                            if (!pointer.pressed) {
+                                // An unclaimed release is a tap; a claimed
+                                // release lands at the final drag position.
+                                currentOnValueChange((pointer.position.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f))
+                                started = true
+                                pointer.consume()
+                                break
+                            }
+                            if (started || abs(delta.x) > viewConfiguration.touchSlop) {
+                                started = true
+                                dragging = true
+                                currentOnValueChange((pointer.position.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f))
+                                pointer.consume()
+                            }
                         }
-                        if (pointer.positionChanged()) {
-                            onValueChange((pointer.position.x / size.width).coerceIn(0f, 1f))
-                            pointer.consume()
-                        }
+                    } finally {
+                        dragging = false
+                        if (started) currentOnValueChangeFinished?.invoke()
                     }
-
-                    dragging = false
-                    onValueChangeFinished?.invoke()
                 }
             },
         contentAlignment = Alignment.Center,
@@ -156,7 +204,7 @@ fun ThinSlider(
             // brightest on each beat, easing down between them over the unplayed
             // track colour. A drag in progress always shows the finger.
 
-            val base = value.coerceIn(0f, 1f)
+            val base = value().coerceIn(0f, 1f)
             val fraction = base
             // Scaled by [fillFactor]: retracted to nothing while the sheen
             // runs (two white signals on one bar would read as progress

@@ -1,0 +1,1254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="An accessible, metadata-only AI DJ web studio with an original synthesized demonstration beat.">
+  <title>Afterhours — AI DJ Web Studio</title>
+  <style>
+    :root {
+      --bg: #0a0d12; --panel: #11161f; --panel-2: #171e29; --line: #293240;
+      --text: #f2f5fa; --muted: #a9b5c6; --mint: #9cf2ce; --blue: #95baff;
+      --amber: #ffd18b; --rose: #ff9aab; --purple: #c5abff; --radius: 18px;
+      font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+      font-synthesis: none; color: var(--text); background: var(--bg);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 22px; }
+    body { margin: 0; min-width: 320px; background: radial-gradient(ellipse at 15% 0%, #17332b55, transparent 45%), var(--bg); }
+    button, input, select, textarea { font: inherit; }
+    button, summary, input[type="checkbox"], input[type="range"] { cursor: pointer; }
+    button { min-height: 42px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: #1b2431; color: var(--text); font-weight: 650; transition: background .15s, border-color .15s; }
+    button:hover:not(:disabled) { background: #29384a; border-color: #6c7f95; }
+    button:disabled { opacity: .43; cursor: not-allowed; }
+    button.primary { color: #10261d; background: var(--mint); border-color: var(--mint); }
+    button.primary:hover:not(:disabled) { background: #c4ffe6; }
+    button.dj { background: #2b2441; border-color: #70598f; color: #e7dbff; }
+    button.dj:hover:not(:disabled) { background: #41325e; }
+    button.small { min-height: 34px; padding: 6px 10px; font-size: .75rem; }
+    button.ghost { background: transparent; }
+    :focus-visible { outline: 3px solid var(--amber); outline-offset: 4px; }
+    a { color: var(--mint); text-underline-offset: 4px; }
+    .skip-link { position: absolute; top: -70px; left: 16px; z-index: 20; background: var(--mint); color: #10261d; padding: 12px; border-radius: 8px; }
+    .skip-link:focus { top: 12px; }
+    .shell { max-width: 1570px; padding: 0 36px 30px; margin: auto; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; min-height: 88px; gap: 24px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; font-size: 1.05rem; font-weight: 800; letter-spacing: -.04em; }
+    .brand-mark { width: 37px; height: 37px; border: 1px solid #608a77; border-radius: 11px; display: grid; place-items: center; color: var(--mint); background: #193027; }
+    .brand small { display: block; font-size: .57rem; text-transform: uppercase; color: var(--muted); letter-spacing: .21em; margin-top: 3px; }
+    nav { display: flex; gap: 24px; font-size: .8rem; }
+    nav a { color: var(--muted); text-decoration: none; padding: 12px 0; }
+    nav a:first-child { color: var(--mint); }
+    nav a:hover { color: var(--text); }
+    .pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 99px; font-size: .69rem; font-weight: 650; letter-spacing: .02em; white-space: nowrap; background: #131b24; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #7b8797; display: inline-block; flex: 0 0 auto; }
+    [data-state="connected"] .dot { background: var(--mint); box-shadow: 0 0 9px #9cf2ce40; }
+    [data-state="error"] .dot { background: var(--rose); }
+    [data-state="busy"] .dot { background: var(--amber); }
+    .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 35px 0 26px; }
+    .eyebrow { font-size: .63rem; letter-spacing: .19em; font-weight: 750; text-transform: uppercase; color: var(--mint); margin: 0 0 10px; }
+    h1 { font-size: clamp(1.8rem, 3.4vw, 2.75rem); letter-spacing: -.055em; font-weight: 650; margin: 0 0 9px; line-height: 1.13; }
+    h1 em { color: var(--mint); font-style: normal; }
+    .hero p { color: var(--muted); font-size: .84rem; margin: 0; line-height: 1.6; max-width: 690px; }
+    .hero-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+    .disclosure { padding: 12px 16px; border: 1px solid #3e483b; border-left: 3px solid var(--amber); border-radius: 10px; color: #d4d6c9; font-size: .73rem; line-height: 1.6; background: #28291c45; margin-bottom: 23px; }
+    .disclosure strong { color: var(--amber); }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 22px; align-items: start; }
+    .main-column, .side-column { display: grid; gap: 20px; min-width: 0; }
+    .panel { background: linear-gradient(145deg, #141b25, #10151d 65%); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+    .panel-head { padding: 18px 21px; display: flex; gap: 12px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+    h2, h3, p { overflow-wrap: anywhere; }
+    h2 { margin: 0; font-size: .9rem; font-weight: 650; letter-spacing: -.015em; }
+    h3 { margin: 0; font-size: .82rem; font-weight: 650; }
+    .section-number { color: #8595a8; font: .65rem ui-monospace, SFMono-Regular, Consolas, monospace; margin-right: 9px; }
+    .muted { color: var(--muted); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .tiny { font-size: .66rem; line-height: 1.6; }
+    .label { font-size: .61rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+    .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .between { justify-content: space-between; }
+    .decks { display: grid; grid-template-columns: 1fr 1fr; }
+    .deck { min-width: 0; padding: 20px 22px 15px; position: relative; }
+    .deck + .deck { border-left: 1px solid var(--line); }
+    .deck[data-active="true"] { background: radial-gradient(ellipse at 20% 30%, #9cf2ce0b, transparent 75%); }
+    .deck[data-deck="b"][data-active="true"] { background: radial-gradient(ellipse at 20% 30%, #95baff0c, transparent 75%); }
+    .deck-id { color: var(--mint); border: 1px solid #4a7d68; padding: 3px 7px; border-radius: 5px; font: 700 .7rem ui-monospace, monospace; }
+    [data-deck="b"] .deck-id { color: var(--blue); border-color: #4b628b; }
+    .deck-status { font-size: .61rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+    .platter-row { display: flex; align-items: center; gap: 18px; margin: 23px 0 20px; }
+    .record { position: relative; width: 112px; height: 112px; border-radius: 50%; flex: 0 0 auto; background: repeating-radial-gradient(circle, #151c23 0 2px, #29333c 3px, #141a22 4px 6px); box-shadow: 0 8px 22px #0008, 0 0 0 1px #3c4b57; display: grid; place-items: center; }
+    .record::before { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: conic-gradient(transparent 0 22%, #b8c8d92b 28%, transparent 34% 70%, #b8c8d91b 77%, transparent 82%); }
+    .record::after { content: ""; position: absolute; width: 6px; height: 6px; background: #111820; border: 2px solid #d1e5dc; border-radius: 50%; }
+    .record-label { border-radius: 50%; width: 43px; height: 43px; display: grid; place-items: center; background: var(--mint); color: #173428; font: 700 .55rem ui-monospace, monospace; transform: rotate(-25deg); }
+    [data-deck="b"] .record-label { background: var(--blue); color: #172e50; }
+    .turning .record { animation: spin 5s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .deck-track { min-width: 0; }
+    .deck-track h3 { font-size: 1.02rem; line-height: 1.3; letter-spacing: -.025em; margin-bottom: 6px; }
+    .deck-track p { font-size: .74rem; line-height: 1.5; color: var(--muted); margin: 0 0 9px; }
+    .track-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+    .tag { font: .6rem ui-monospace, monospace; border: 1px solid #35404f; padding: 4px 6px; border-radius: 5px; color: #cad3df; }
+    canvas.waveform { width: 100%; height: 66px; display: block; border-radius: 7px; background: #0b1119; }
+    .deck-foot { display: flex; justify-content: space-between; margin-top: 8px; font-size: .6rem; color: #95a7b9; gap: 10px; }
+    .deck-foot span:last-child { text-align: right; }
+    .mix-strip { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 15px 22px; display: grid; grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr); gap: 25px; background: #0d131c; }
+    .fader-labels { display: flex; justify-content: space-between; font-size: .64rem; margin-bottom: 8px; }
+    input[type="range"] { accent-color: var(--mint); width: 100%; min-height: 25px; margin: 0; }
+    #crossfader { accent-color: #c2cfdd; }
+    .gain-bars { display: flex; height: 6px; gap: 5px; margin-top: 4px; }
+    .gain-bars i { display: block; height: 100%; border-radius: 2px; background: var(--mint); min-width: 0; transition: width .06s; }
+    .gain-bars i + i { background: var(--blue); }
+    .duck-title { display: flex; align-items: center; justify-content: space-between; font-size: .64rem; margin-bottom: 6px; }
+    #duckPlot { width: 100%; height: 38px; display: block; background: #111b21; border-radius: 5px; }
+    .transport { padding: 20px 22px 18px; }
+    .playhead-top { display: flex; justify-content: space-between; gap: 12px; font-size: .7rem; margin-bottom: 10px; }
+    .timeline { height: 8px; background: #283342; border-radius: 10px; overflow: hidden; }
+    .timeline-fill { width: 0; background: linear-gradient(90deg, #639a83, var(--mint)); height: 100%; border-radius: inherit; }
+    .timeline-times { display: flex; justify-content: space-between; font-size: .63rem; color: var(--muted); margin: 8px 0 16px; }
+    .transport-buttons { display: flex; gap: 7px; flex-wrap: wrap; }
+    .transport-buttons button { font-size: .73rem; flex: 1 0 auto; }
+    .transport-buttons .dj { flex-grow: 2; }
+    .audio-options { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }
+    .volume-control { display: flex; align-items: center; gap: 9px; font-size: .65rem; width: 165px; }
+    .volume-control input { width: 80px; }
+    .check { display: flex; align-items: center; gap: 8px; font-size: .72rem; line-height: 1.5; min-height: 32px; }
+    input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--mint); flex: 0 0 auto; }
+    .cue-panel { padding: 17px 21px; border-top: 1px solid var(--line); background: #161d29; }
+    .cue-panel .label { color: var(--purple); }
+    #cueScript { margin: 9px 0 8px; color: #e2e7f0; font-size: .82rem; line-height: 1.65; max-height: 160px; overflow: auto; }
+    .cue-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .61rem; color: var(--muted); }
+    .command-body { padding: 18px 21px; }
+    .command-form { display: flex; gap: 8px; margin: 12px 0; }
+    .command-form input { flex: 1; min-width: 0; }
+    .command-form button { flex: 0 0 auto; font-size: .75rem; }
+    .command-examples { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0; }
+    .command-examples button { font-size: .65rem; min-height: 31px; padding: 5px 9px; border-radius: 99px; color: #c7d4e5; }
+    #micButton[data-listening="true"] { border-color: var(--rose); color: var(--rose); background: #35212b; }
+    .command-state { min-height: 20px; font-size: .69rem; line-height: 1.6; color: var(--muted); }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; border-bottom: 1px solid var(--line); background: var(--line); }
+    .metric { background: #111822; padding: 14px 17px; }
+    .metric span { display: block; font-size: .56rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+    .metric strong { font: 500 .94rem ui-monospace, monospace; }
+    .event-log { margin: 0; padding: 7px 20px; list-style: none; height: 219px; overflow: auto; scrollbar-color: #49566c transparent; }
+    .event-log li { display: grid; grid-template-columns: 63px 1fr auto; gap: 9px; padding: 10px 0; font-size: .65rem; line-height: 1.5; border-bottom: 1px solid #25303c; align-items: start; }
+    .event-log time { color: #8c9eb4; font-family: ui-monospace, monospace; }
+    .event-log .log-detail { color: #a9b8cc; font-family: ui-monospace, monospace; text-align: right; white-space: nowrap; }
+    .event-log li[data-level="error"] .log-message { color: var(--rose); }
+    .event-log li[data-level="good"] .log-message { color: var(--mint); }
+    .event-log li[data-level="warn"] .log-message { color: var(--amber); }
+    .side-body { padding: 18px; }
+    .session-context { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .session-context dt { font-size: .58rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
+    .session-context dd { margin: 0; font-size: .75rem; }
+    #sessionId { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vibe { background: #182a23; border: 1px solid #334d40; border-radius: 9px; padding: 11px 12px; margin-top: 16px; color: #c4f6dd; font-size: .73rem; }
+    #tasteRadar { display: block; width: 100%; height: auto; max-height: 265px; }
+    .radar-legend { display: flex; justify-content: center; gap: 17px; font-size: .63rem; color: var(--muted); }
+    .legend-line { display: inline-block; width: 13px; height: 3px; background: var(--mint); vertical-align: middle; margin-right: 4px; }
+    .legend-line.track { background: var(--blue); }
+    .taste-stats { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin: 17px -18px 0; }
+    .taste-stats div { text-align: center; padding: 13px 5px; }
+    .taste-stats div + div { border-left: 1px solid var(--line); }
+    .taste-stats strong { display: block; font: .95rem ui-monospace, monospace; margin-bottom: 4px; }
+    .taste-stats span { color: var(--muted); font-size: .58rem; }
+    .priors-title { margin: 18px 0 11px; display: flex; justify-content: space-between; align-items: center; }
+    .priors-title span { font-size: .59rem; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: .65rem; }
+    th { text-align: left; font-weight: 500; color: var(--muted); font-size: .58rem; padding-bottom: 8px; }
+    td { padding: 9px 4px 9px 0; border-top: 1px solid #293240; vertical-align: top; overflow-wrap: anywhere; }
+    td:nth-child(2) { white-space: nowrap; font-family: ui-monospace, monospace; }
+    td:last-child { min-width: 88px; text-align: right; font-family: ui-monospace, monospace; }
+    .posterior { height: 4px; position: relative; background: #293342; border-radius: 3px; margin-top: 7px; }
+    .posterior .interval { position: absolute; height: 4px; background: #657d74; border-radius: 3px; }
+    .posterior .mean { position: absolute; width: 4px; height: 8px; top: -2px; background: var(--mint); border-radius: 2px; }
+    .empty { color: var(--muted); font-size: .72rem; line-height: 1.7; padding: 8px 0; }
+    #tasteDelta { color: var(--mint); font-size: .66rem; line-height: 1.6; margin-top: 12px; }
+    details { border-top: 1px solid var(--line); }
+    summary { font-size: .69rem; padding: 14px 0; color: #ced8e6; line-height: 1.5; }
+    details p { margin: 0 0 12px; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; background: #0b1018; border-radius: 8px; padding: 12px; color: #bacac1; font-size: .61rem; }
+    .queue { list-style: none; padding: 0; margin: 0; }
+    .queue li { display: flex; gap: 11px; padding: 13px 0; border-bottom: 1px solid #26313e; }
+    .queue li:last-child { border-bottom: 0; }
+    .queue-number { font: .62rem ui-monospace, monospace; color: #8b9bad; padding-top: 4px; }
+    .queue-copy { min-width: 0; flex: 1; }
+    .queue-copy strong { display: block; font-size: .72rem; line-height: 1.5; font-weight: 550; }
+    .queue-copy span { color: var(--muted); font-size: .63rem; line-height: 1.6; }
+    .queue-key { color: var(--blue); font: .6rem ui-monospace, monospace; padding-top: 5px; }
+    .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 22px; padding: 21px; }
+    fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
+    legend { font-size: .73rem; font-weight: 650; margin-bottom: 14px; color: #dae5f3; }
+    .field { display: block; margin-bottom: 13px; }
+    .field > span:first-child, .field > label { display: block; font-size: .67rem; font-weight: 550; margin-bottom: 7px; }
+    input:not([type="checkbox"]):not([type="range"]), select, textarea { width: 100%; min-height: 42px; border: 1px solid #3a4657; border-radius: 8px; color: var(--text); background: #0c121b; padding: 10px 11px; font-size: .75rem; }
+    textarea { min-height: 85px; resize: vertical; line-height: 1.6; }
+    select { padding-right: 25px; }
+    input::placeholder, textarea::placeholder { color: #8c9bae; opacity: 1; }
+    .help { color: var(--muted); display: block; font-size: .62rem; line-height: 1.65; margin-top: 6px; }
+    .setup-footer { padding: 14px 21px; border-top: 1px solid var(--line); display: flex; gap: 15px; align-items: center; justify-content: space-between; }
+    .setup-footer p { font-size: .65rem; line-height: 1.7; color: var(--muted); margin: 0; }
+    .alert { display: flex; align-items: center; justify-content: space-between; gap: 15px; border: 1px solid #885061; background: #2b1c27; color: #ffd0da; padding: 14px 17px; border-radius: 11px; margin-bottom: 20px; font-size: .76rem; line-height: 1.6; }
+    .alert[hidden], [hidden] { display: none !important; }
+    .footer { display: flex; align-items: center; justify-content: space-between; gap: 15px; color: #8e9cb0; font-size: .62rem; line-height: 1.7; border-top: 1px solid var(--line); padding-top: 20px; margin-top: 25px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    @media (min-width: 1400px) { .workspace { grid-template-columns: minmax(0, 1fr) 370px; } .record { width: 126px; height: 126px; } }
+    @media (max-width: 1150px) { .shell { padding-inline: 22px; } .workspace { grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; } .platter-row { gap: 13px; } .record { width: 80px; height: 80px; } .record-label { width: 33px; height: 33px; } .deck { padding-inline: 17px; } .hero-actions { flex-direction: column; align-items: stretch; } }
+    @media (max-width: 950px) { .workspace { grid-template-columns: 1fr; } .side-column { grid-template-columns: 1fr 1fr; } #taste { grid-row: span 2; } .hero-actions { flex-direction: row; } .record { width: 112px; height: 112px; } nav { gap: 17px; } }
+    @media (max-width: 650px) { .shell { padding-inline: 14px; } .topbar { min-height: 75px; flex-wrap: wrap; padding: 16px 0; gap: 14px; } nav { order: 3; width: 100%; justify-content: space-between; gap: 12px; } nav a { padding: 3px 0; } .hero { align-items: flex-start; flex-direction: column; padding-top: 25px; } .hero-actions { width: 100%; } .hero-actions .primary { flex: 1; } .decks { grid-template-columns: 1fr; } .deck + .deck { border-left: 0; border-top: 1px solid var(--line); } .platter-row { margin: 17px 0; } .deck-track h3 { font-size: 1.1rem; } .side-column { grid-template-columns: 1fr; } .setup-grid { grid-template-columns: 1fr; } .mix-strip { gap: 18px; grid-template-columns: 1fr; } .metrics { grid-template-columns: 1fr 1fr; } .command-form { flex-wrap: wrap; } .command-form input { flex-basis: 100%; } .command-form button { flex: 1; } .footer, .setup-footer { align-items: flex-start; flex-direction: column; } .alert { align-items: flex-start; flex-direction: column; } }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the studio</a>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="#studio" aria-label="Afterhours AI DJ studio">
+        <span class="brand-mark" aria-hidden="true"><svg width="23" height="23" viewBox="0 0 24 24" fill="none"><path d="M3 10v4m4-8v12m5-15v18m5-15v12m4-8v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+        <span>afterhours<span aria-hidden="true">.</span><small>DJ brain / web studio</small></span>
+      </a>
+      <nav aria-label="Studio sections"><a href="#studio">The studio</a><a href="#taste">Your taste</a><a href="#activity">Activity</a><a href="#setup">Connection & setup</a></nav>
+      <span id="apiBadge" class="pill" data-state="idle" role="status"><span class="dot" aria-hidden="true"></span><span id="apiStatus">API not connected</span></span>
+    </header>
+    <main id="main">
+      <section class="hero" aria-labelledby="pageTitle">
+        <div><p class="eyebrow">A little intelligence. A lot of feeling.</p><h1 id="pageTitle">Your taste. <em>In the mix.</em></h1><p>A live window into your AI DJ: two decks, a learning taste profile, and a voice you can interrupt.</p></div>
+        <div class="hero-actions"><span class="pill"><span class="dot" aria-hidden="true" style="background:var(--amber)"></span>Synthetic audio demo</span><button type="button" class="primary" id="startButton">▶ Start a session</button></div>
+      </section>
+      <div class="disclosure"><strong>Not catalog playback.</strong> You hear an original, quiet, procedurally synthesized instrumental beat—not the named tracks. Catalog durations, BPM, keys, vectors, and vocal/outro cues are estimated metadata. The media clock runs at an accelerated rate; feedback reports <em>simulated media dwell</em>, not real listening analytics. No copyrighted recordings are loaded.</div>
+      <div id="errorBox" class="alert" role="alert" hidden><span id="errorText"></span><div class="row"><button type="button" id="retryButton" class="small" hidden>Retry same request</button><button type="button" id="dismissError" class="small ghost" aria-label="Dismiss error">Dismiss</button></div></div>
+      <div class="workspace">
+        <div class="main-column">
+          <section id="studio" class="panel" aria-labelledby="studioTitle">
+            <div class="panel-head"><h2 id="studioTitle"><span class="section-number">01 /</span>The mixing room</h2><span id="transportState" class="pill">Ready when you are</span></div>
+            <div class="decks">
+              <article class="deck" data-deck="a" data-active="false" id="deckA" aria-labelledby="titleA">
+                <div class="row between"><span class="deck-id">DECK A</span><span class="deck-status" id="statusA">No track loaded</span></div>
+                <div class="platter-row"><div class="record" aria-hidden="true"><span class="record-label">A / 01</span></div><div class="deck-track"><h3 id="titleA">The floor is yours</h3><p id="artistA">Start a session for a real backend selection.</p><div class="track-tags" id="tagsA"><span class="tag">No local recommendations</span></div></div></div>
+                <canvas class="waveform" id="waveA" width="540" height="90" role="img" aria-label="Deck A live synthesized waveform, not a catalog recording">Live synthetic waveform</canvas>
+                <div class="deck-foot"><span id="cueA">Estimated metadata cues</span><span id="durationA">—</span></div>
+              </article>
+              <article class="deck" data-deck="b" data-active="false" id="deckB" aria-labelledby="titleB">
+                <div class="row between"><span class="deck-id">DECK B</span><span class="deck-status" id="statusB">Standby</span></div>
+                <div class="platter-row"><div class="record" aria-hidden="true"><span class="record-label">B / 02</span></div><div class="deck-track"><h3 id="titleB">Room for what’s next</h3><p id="artistB">Prefetch stages metadata without advancing playback.</p><div class="track-tags" id="tagsB"><span class="tag">Awaiting backend</span></div></div></div>
+                <canvas class="waveform" id="waveB" width="540" height="90" role="img" aria-label="Deck B live synthesized waveform, not a catalog recording">Live synthetic waveform</canvas>
+                <div class="deck-foot"><span id="cueB">Standby stays silent until commit</span><span id="durationB">—</span></div>
+              </article>
+            </div>
+            <div class="mix-strip">
+              <div><div class="fader-labels"><label for="crossfader">A <span class="muted">/ equal-power crossfade</span> B</label><output id="mixReadout" for="crossfader" class="mono">100 / 0</output></div><input type="range" id="crossfader" min="0" max="100" value="0" aria-label="Equal-power crossfader, deck A to deck B"><div class="gain-bars" aria-hidden="true"><i id="gainA" style="width:100%"></i><i id="gainB" style="width:0%"></i></div><p class="help">Auto-fades on a committed transition. Drag to mix live synth decks; an uncommitted deck is silent.</p></div>
+              <div><div class="duck-title"><span>Music envelope / voice ducking</span><output id="duckReadout" class="mono">100%</output></div><canvas id="duckPlot" width="540" height="68" role="img" aria-label="Music gain envelope; no ducking active">Music ducking envelope</canvas><p class="help" id="duckState">Music at full relative gain · quiet master output</p></div>
+            </div>
+            <div class="transport">
+              <div class="playhead-top"><span id="nowPlaying">No server selection yet</span><span id="speedLabel" class="mono">6× synthetic clock</span></div>
+              <div id="timeline" class="timeline" role="progressbar" aria-label="Simulated current track position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="No track"><div id="timelineFill" class="timeline-fill"></div></div>
+              <div class="timeline-times mono"><span id="positionLabel">0:00</span><span id="wallLabel">0.0 s of real elapsed playback</span><span id="lengthLabel">—</span></div>
+              <div class="transport-buttons"><button type="button" id="pauseButton" disabled>Ⅱ Pause</button><button type="button" id="likeButton" disabled>♡ Like</button><button type="button" id="skipButton" disabled>↠ Skip</button><button type="button" id="completeButton" disabled title="Advance and report only the simulated dwell actually observed; this does not fabricate a full listen.">✓ Complete</button><button type="button" id="replayButton" disabled>↺ Replay</button><button type="button" id="djButton" class="dj" disabled>✦ DJ, take the wheel</button></div>
+              <div class="audio-options"><div class="row"><button type="button" id="muteButton" class="small ghost" aria-pressed="false">Mute beat</button><label class="volume-control" for="volume">Quiet master <input id="volume" type="range" min="0" max="40" value="18" aria-label="Quiet synthesized beat master volume"><output id="volumeValue" for="volume">18%</output></label></div><label class="check"><input type="checkbox" id="voiceEnabled" checked>DJ voice</label></div>
+              <p class="help" id="audioStatus">WebAudio starts only after your gesture. The beat keeps running during requests and speech.</p>
+            </div>
+            <div class="cue-panel"><div class="row between"><span class="label">The DJ booth</span><span id="voiceState" class="tiny muted" role="status">Voice idle</span></div><p id="cueScript">The DJ’s actual script will appear here. A silent cue stays silent.</p><div class="cue-footer"><span id="cueTiming">Cues respect estimated outro and first-vocal boundaries.</span><button type="button" id="cancelVoice" class="small ghost" disabled>Interrupt voice</button></div></div>
+          </section>
+
+          <section class="panel" aria-labelledby="commandTitle">
+            <div class="panel-head"><h2 id="commandTitle"><span class="section-number">02 /</span>Talk to your DJ</h2><span class="label">Barge-in ready</span></div>
+            <div class="command-body"><p class="tiny muted" style="margin:0">Interrupt the overlay with the microphone or send a text command. Only a backend transport action changes the active track.</p>
+              <form id="commandForm" class="command-form"><label class="sr-only" for="commandInput">DJ command, up to 500 characters</label><input id="commandInput" type="text" maxlength="500" autocomplete="off" placeholder="Try “less energy” or “what’s playing?”" aria-describedby="micStatus"><button type="button" id="micButton" disabled aria-pressed="false" aria-describedby="micPrivacy">◉ Microphone</button><button type="submit" id="sendCommand" disabled>Send ↗</button></form>
+              <div id="micStatus" class="command-state" role="status">Checking browser speech recognition…</div><div class="command-examples" aria-label="Fill a sample command"><button type="button" class="ghost" data-command="What's playing?">What’s playing?</button><button type="button" class="ghost" data-command="Less energy, please">Less energy</button><button type="button" class="ghost" data-command="I like this">I like this</button><button type="button" class="ghost" data-command="Skip this track">Skip this</button></div>
+              <p id="commandResult" class="tiny muted">No command sent. Suggestions only fill the input; they do not execute locally.</p><p id="micPrivacy" class="help">Microphone recognition may send audio to your browser’s speech service; this page does not record or upload audio. Only the final transcript is sent to your configured API. Text commands always work without microphone support.</p>
+            </div>
+          </section>
+
+          <section id="activity" class="panel" aria-labelledby="activityTitle"><div class="panel-head"><h2 id="activityTitle"><span class="section-number">03 /</span>Signal & activity</h2><button type="button" class="small ghost" id="clearLog">Clear log</button></div><div class="metrics"><div class="metric"><span>Last API round trip</span><strong id="apiLatency">—</strong></div><div class="metric"><span>Prefetch round trip</span><strong id="prefetchLatency">—</strong></div><div class="metric"><span>Next commit</span><strong id="nextLatency">—</strong></div><div class="metric"><span>Voice onset · client</span><strong id="voiceLatency">—</strong></div></div><ol class="event-log" id="eventLog" aria-label="Bounded event log, newest first" aria-live="off"></ol></section>
+
+          <section id="setup" class="panel" aria-labelledby="setupTitle"><div class="panel-head"><h2 id="setupTitle"><span class="section-number">04 /</span>Connection & session setup</h2><span class="label">No provider keys</span></div>
+            <div class="setup-grid">
+              <fieldset><legend>API source & identity</legend><label class="field"><span>API origin</span><input id="apiOrigin" type="url" spellcheck="false" autocomplete="off" maxlength="300" aria-describedby="originHelp"><span class="help" id="originHelp">Use the backend’s origin, not a /v1 URL. HTTP(S) pages default to this page’s origin; file: defaults to http://localhost:8000. A separate host needs backend CORS permission.</span></label><div class="row" style="margin-bottom:14px"><button type="button" id="useLocalhost" class="small ghost">Use localhost:8000</button><button type="button" id="usePageOrigin" class="small ghost">Use page origin</button></div><label class="field"><span>X-Dev-User-Id</span><input id="devUser" type="text" value="demo_user" maxlength="128" autocomplete="off" spellcheck="false"><span class="help">Explicit demo identity; the backend must enable development authentication. No implicit unauthenticated requests.</span></label><label class="field"><span>Firebase bearer token <span class="muted">(optional)</span></span><input id="bearerToken" type="password" autocomplete="off" spellcheck="false" maxlength="8192" aria-describedby="tokenHelp"><span class="help" id="tokenHelp">If provided, sends Authorization: Bearer instead of the dev-user header. Kept in memory only—never localStorage, URLs, or logs. Sent only to the origin you choose; prefer HTTPS except loopback development.</span></label><button type="button" id="connectButton" class="small">Test connection & load profile</button></fieldset>
+              <fieldset><legend>Next session’s starting point</legend><label class="field"><span>DJ persona</span><select id="persona"><option value="midnight_fm">Midnight FM · warm & understated</option><option value="hype_coach">Hype Coach · bright & energetic</option><option value="deep_crate_digger">Deep Crate Digger · curious & eclectic</option></select></label><label class="field"><span>Seed genres <span class="muted">(comma-separated, up to 12)</span></span><input id="seedGenres" type="text" value="electronic, jazz" maxlength="780"></label><label class="field"><span>Seed artists <span class="muted">(optional, comma-separated)</span></span><input id="seedArtists" type="text" maxlength="1500" placeholder="A few artists you love"></label><label class="field"><span>Client inventory IDs <span class="muted">(optional JSON)</span></span><textarea id="inventory" maxlength="68000" spellcheck="false" placeholder='["trk_001", "trk_002"]' aria-describedby="inventoryHelp"></textarea><span class="help" id="inventoryHelp"><strong>Blank:</strong> omit available_track_ids; the backend may use its catalog. <strong>[]:</strong> send an explicit empty allowlist—there are no playable tracks. Unknown IDs never create playable inventory. Up to 500 nonempty string IDs.</span></label></fieldset>
+              <fieldset><legend>Voice engine</legend><label class="field"><span>Browser speech voice</span><select id="voiceSelect"><option value="">System default</option></select><span class="help" id="voiceSupport">Loading available browser voices…</span></label><label class="check"><input type="checkbox" id="serverVoice">Prefer server-proxied Gnani WAV</label><p class="help">Optional authenticated POST /v1/tts with session_id and cue_id. Prefetch can cache a WAV; HTTP 503, unavailable files, or blocked media playback fall back to browser speech. Provider keys belong only on the server.</p><p id="serverVoiceStatus" class="tiny muted">Browser speech is the zero-key default.</p><p class="help">Web Speech cannot pre-synthesize an audio file or buffer (unlike the Kotlin client). It starts at the scheduled safe window; voice startup and completion vary. System voices may use a remote speech service.</p></fieldset>
+              <fieldset><legend>Simulation & timing</legend><label class="field"><span>Media clock acceleration</span><select id="simulationSpeed"><option value="2">2× · more room for speech</option><option value="4">4× · relaxed demo</option><option value="6" selected>6× · studio default</option><option value="10">10× · fast learning loop</option></select></label><p class="help">Prefetch begins at the earlier of 75% played or 20 catalog seconds remaining. /next commits only at an actual transition, with the prefetched revision and one stable request UUID across retries.</p><p class="help">The absolute outro timestamp and first-vocal cue bound speech. Deadlines scale with the accelerated clock, so speech can be deliberately cut short. Fixed opening lead uses a live synthetic bed, never a network/TTS pause.</p><p class="help">Complete reports observed simulated dwell; it does not invent completion credit. Timing is best in a foreground tab. Pausing stops the simulated clock and cancels the overlay.</p></fieldset>
+            </div><div class="setup-footer"><p>Connection, identity, inventory, seeds, and persona are snapshotted when you start a session. Edits apply to the next session. All backend traffic uses authenticated /v1 paths.</p><button type="button" id="stopButton" class="small ghost" disabled>End local session</button></div>
+          </section>
+        </div>
+        <aside class="side-column" aria-label="Session, taste, and queue">
+          <section class="panel" aria-labelledby="contextTitle"><div class="panel-head"><h2 id="contextTitle">Right here, right now</h2><span class="dot" aria-hidden="true" style="background:var(--mint)"></span></div><div class="side-body"><dl class="session-context"><div><dt>Local time</dt><dd id="localTime" class="mono">—</dd></div><div><dt>Client timezone</dt><dd id="timezone">—</dd></div><div><dt>Session bucket</dt><dd id="bucketLabel">—</dd></div><div><dt>Persona</dt><dd id="personaLabel">Midnight FM</dd></div><div><dt>Session ID</dt><dd id="sessionId" class="mono">Not started</dd></div><div><dt>Playback revision</dt><dd id="revisionLabel" class="mono">—</dd></div></dl><div id="vibeLabel" class="vibe">A new session starts with your local hour and seed genres.</div></div></section>
+          <section id="taste" class="panel" aria-labelledby="tasteTitle"><div class="panel-head"><h2 id="tasteTitle">Your taste, taking shape</h2><button type="button" id="refreshProfile" class="small ghost" aria-label="Refresh taste profile from API">↻ Refresh</button></div><div class="side-body"><p id="profileSource" class="help" style="margin-top:0">Awaiting GET /v1/me/profile. No sample taste data.</p><svg id="tasteRadar" viewBox="0 0 320 260" role="img" aria-labelledby="radarTitle radarDescription"><title id="radarTitle">Five-dimensional taste radar</title><desc id="radarDescription">No profile or track vectors loaded. Rings show the zero to one scale only.</desc><g id="radarGrid"></g><polygon id="trackPolygon" fill="#95baff20" stroke="#95baff" stroke-width="1.5" hidden/><polygon id="targetPolygon" fill="#9cf2ce22" stroke="#9cf2ce" stroke-width="2" hidden/></svg><div class="radar-legend"><span><i class="legend-line"></i>Bucket target</span><span><i class="legend-line track"></i>Current metadata</span></div><div class="taste-stats"><div><strong id="profileEvents">—</strong><span>Feedback events</span></div><div><strong id="profileEpisodes">—</strong><span>Stored episodes</span></div><div><strong id="profileListened">—</strong><span>Profile listened</span></div></div><div class="priors-title"><h3>Top genres</h3><span>Global Beta posteriors</span></div><table><caption class="sr-only">Actual server genre priors and credible intervals</caption><thead><tr><th scope="col">Genre</th><th scope="col">α / β</th><th scope="col" style="text-align:right">Mean · interval</th></tr></thead><tbody id="genreRows"><tr><td colspan="3" class="empty">Connect to see actual learned priors.</td></tr></tbody></table><p id="tasteDelta">No feedback in this view yet.</p><details><summary>Top artists & raw global priors</summary><div id="topArtists" class="tiny muted">No profile loaded.</div><pre id="globalPriors">No global priors loaded.</pre><p class="help">Intervals describe the server’s heuristic Beta posterior, not objective recommendation accuracy. No observations may mean no ranked genres yet—not a fabricated 50% preference.</p></details></div></section>
+          <section class="panel" aria-labelledby="queueTitle"><div class="panel-head"><h2 id="queueTitle">Coming into focus</h2><span class="label" id="queueCount">0 tracks</span></div><div class="side-body"><div class="row between"><span class="tiny muted" id="prefetchState" role="status">Prefetch waiting for a session</span><button type="button" id="prefetchButton" class="small ghost" disabled>Check prefetch</button></div><ol class="queue" id="queueList"><li class="empty">Your queue comes from the backend, never a local canned playlist.</li></ol><p class="help">The staged deck is a non-advancing server selection, not a playing track. A successful advance response is authoritative.</p><details><summary>Current track metadata</summary><p class="tiny muted" id="trackDetails">No track loaded.</p><ul id="artistFacts" class="tiny muted"></ul></details></div></section>
+        </aside>
+      </div>
+    </main>
+    <footer class="footer"><span>AFTERHOURS / AI DJ WEB STUDIO <span class="muted">· no recordings · no provider keys · no build step</span></span><span>Serve this file at backend GET / for same-origin access, or open it from disk and configure CORS.</span></footer>
+  </div>
+  <noscript><p style="padding:24px;color:#ffd18b">This studio requires JavaScript for authenticated API requests, the synthetic playback clock, and audio controls.</p></noscript>
+  <script>
+  (() => {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const VECTOR_KEYS = ["energy", "valence", "danceability", "acousticness", "tempo_norm"];
+    const PERSONAS = { midnight_fm: "Midnight FM", hype_coach: "Hype Coach", deep_crate_digger: "Deep Crate Digger" };
+    const MAX_JSON_BYTES = 1024 * 1024;
+    const MAX_WAV_BYTES = 6 * 1024 * 1024;
+    const controllers = new Map();
+    const ttsCache = new Map();
+    const duckReasons = new Map();
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const recognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const hasSpeech = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+    const hasMic = Boolean(recognitionClass) && Boolean(window.isSecureContext);
+    const state = {
+      generation: 0, sessionId: null, config: null, revision: null, bucket: null, vibe: "",
+      current: null, currentDeck: "a", decks: { a: null, b: null }, serial: 0,
+      positionMs: 0, listenedMs: 0, wallMs: 0, leadMs: 0, playing: false, wantsPlayback: false,
+      speed: 6, muted: false, fader: 0, mixTween: null, busy: null, runningJob: null, pendingAction: null,
+      prefetched: null, prefetchToken: 0, prefetchPending: false, prefetchAttempts: 0, lastPrefetchAt: -Infinity,
+      profile: null, profileSequence: 0, voiceJob: null, pendingCue: null, currentCue: null,
+      spoken: new Set(), recognition: null, micController: null, micListening: false, queue: [],
+      lastFrame: performance.now(), lastDraw: 0, lastLabels: 0, autoBlocked: false, closed: false,
+      duckHistory: Array(90).fill(1), logCount: 0
+    };
+
+    const finite = (v) => typeof v === "number" && Number.isFinite(v);
+    const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+    const text = (v, max = 240) => typeof v === "string" ? v.slice(0, max) : "";
+    const abortError = () => new DOMException("Operation cancelled", "AbortError");
+    const isAbort = (e) => e && e.name === "AbortError";
+    const otherDeck = () => state.currentDeck === "a" ? "b" : "a";
+    const sessionPath = (suffix) => "/v1/sessions/" + encodeURIComponent(state.sessionId) + suffix;
+    const roundMs = (v) => Math.max(0, Math.floor(v));
+    function uuid() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
+      if (!window.crypto || !window.crypto.getRandomValues) throw new Error("Secure random UUIDs are unavailable in this browser.");
+      const bytes = window.crypto.getRandomValues(new Uint8Array(16));
+      bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+      const hex = Array.from(bytes, (v) => v.toString(16).padStart(2, "0")).join("");
+      return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join("-");
+    }
+    function duration(ms) {
+      const seconds = Math.floor(Math.max(0, ms) / 1000);
+      return Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+    }
+    function number(v) { return finite(v) ? v.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"; }
+    function localBucket(hour) { return hour >= 5 && hour <= 11 ? "morning" : hour <= 16 && hour >= 12 ? "afternoon" : hour >= 17 && hour <= 21 ? "evening" : "late_night"; }
+    function timezone() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch (_) { return "UTC"; } }
+    function make(tag, value, className) {
+      const node = document.createElement(tag);
+      if (value !== undefined) node.textContent = String(value);
+      if (className) node.className = className;
+      return node;
+    }
+    function log(message, detail = "", level = "info") {
+      if (state.closed) return;
+      const item = make("li"); item.dataset.level = level;
+      const now = new Date(); const time = make("time", now.toLocaleTimeString([], { hour12: false })); time.dateTime = now.toISOString();
+      item.append(time, make("span", text(message, 300), "log-message"), make("span", text(detail, 40), "log-detail"));
+      $("eventLog").prepend(item);
+      while ($("eventLog").children.length > 60) $("eventLog").lastElementChild.remove();
+      state.logCount += 1;
+    }
+    function errorMessage(e) {
+      let message = text(e && e.message, 700) || "The request could not be completed.";
+      const token = state.config && state.config.token;
+      if (token) message = message.split(token).join("[redacted]");
+      const enteredToken = $("bearerToken").value.trim();
+      if (enteredToken) message = message.split(enteredToken).join("[redacted]");
+      return message;
+    }
+    function showError(message, retry = false) {
+      $("errorText").textContent = text(message, 800); $("errorBox").hidden = false;
+      $("retryButton").hidden = !retry;
+    }
+    function clearError() { $("errorBox").hidden = true; $("errorText").textContent = ""; $("retryButton").hidden = true; }
+    function apiState(label, kind) { $("apiStatus").textContent = label; $("apiBadge").dataset.state = kind; }
+    function abortLane(lane) {
+      const previous = controllers.get(lane);
+      if (previous) { previous.abort(); controllers.delete(lane); }
+    }
+    function abortAll() { for (const controller of controllers.values()) controller.abort(); controllers.clear(); }
+
+    class ApiError extends Error {
+      constructor(message, status = 0) { super(message); this.name = "ApiError"; this.status = status; }
+    }
+    async function limitedBody(response, limit, signal) {
+      const declared = Number(response.headers.get("content-length"));
+      if (Number.isFinite(declared) && declared > limit) throw new ApiError("API response exceeds the demo's size limit.");
+      if (!response.body || !response.body.getReader) {
+        const buffer = await response.arrayBuffer();
+        if (buffer.byteLength > limit) throw new ApiError("API response exceeds the demo's size limit.");
+        return new Uint8Array(buffer);
+      }
+      const reader = response.body.getReader(); const chunks = []; let size = 0;
+      try {
+        while (true) {
+          if (signal.aborted) throw abortError();
+          const part = await reader.read(); if (part.done) break;
+          size += part.value.byteLength;
+          if (size > limit) throw new ApiError("API response exceeds the demo's size limit.");
+          chunks.push(part.value);
+        }
+      } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+      const bytes = new Uint8Array(size); let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      return bytes;
+    }
+    async function api(path, { method = "GET", body, lane = "mutation", config = state.config, binary = false } = {}) {
+      if (!config) throw new ApiError("Choose an API origin and identity first.");
+      if (!path.startsWith("/v1/")) throw new ApiError("Only /v1 API paths are allowed.");
+      abortLane(lane);
+      const controller = new AbortController(); controllers.set(lane, controller);
+      const generation = state.generation; const started = performance.now(); let timedOut = false;
+      const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, binary ? 18000 : 14000);
+      const headers = new Headers({ Accept: binary ? "audio/wav" : "application/json" });
+      if (config.token) headers.set("Authorization", "Bearer " + config.token);
+      else headers.set("X-Dev-User-Id", config.devUser);
+      if (body !== undefined) headers.set("Content-Type", "application/json");
+      try {
+        const response = await fetch(new URL(path, config.base).href, {
+          method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal,
+          credentials: "omit", cache: "no-store", redirect: "error", referrerPolicy: "no-referrer"
+        });
+        const bytes = await limitedBody(response, binary && response.ok ? MAX_WAV_BYTES : MAX_JSON_BYTES, controller.signal);
+        let data = null;
+        if (!binary || !response.ok) {
+          try { data = bytes.length ? JSON.parse(new TextDecoder().decode(bytes)) : {}; }
+          catch (_) { if (response.ok) throw new ApiError("The API returned invalid JSON.", response.status); }
+        }
+        if (!response.ok) {
+          const detail = typeof data?.detail === "string" ? text(data.detail, 400) : "";
+          let message = "API returned HTTP " + response.status + (detail ? ": " + detail : ".");
+          if (response.status === 401 || response.status === 403) message += " Check the Firebase token or backend dev-auth mode and X-Dev-User-Id.";
+          if (response.status === 409) message += " Playback revision conflict; no local advance was invented. A new session can resynchronize.";
+          throw new ApiError(message, response.status);
+        }
+        if (binary) {
+          const type = (response.headers.get("content-type") || "").toLowerCase();
+          if (!type.includes("audio/") && !type.includes("application/octet-stream")) throw new ApiError("TTS did not return audio.");
+          if (bytes.length < 12 || new TextDecoder().decode(bytes.subarray(0, 4)) !== "RIFF" || new TextDecoder().decode(bytes.subarray(8, 12)) !== "WAVE") throw new ApiError("TTS response is not a valid RIFF/WAVE file.");
+          data = new Blob([bytes], { type: "audio/wav" });
+        }
+        const elapsed = Math.round(performance.now() - started);
+        if (generation === state.generation && !state.closed) {
+          $("apiLatency").textContent = elapsed + " ms";
+          if (lane === "prefetch") $("prefetchLatency").textContent = elapsed + " ms";
+          if (path.includes("/next") || path.endsWith("/dj-button")) $("nextLatency").textContent = elapsed + " ms";
+          apiState("API connected", "connected");
+          log(method + " " + path.split("?")[0], elapsed + " ms · " + response.status, "good");
+        }
+        return data;
+      } catch (e) {
+        if (controller.signal.aborted && !timedOut) throw abortError();
+        const failure = timedOut ? new ApiError("Request timed out. The beat continues; retry keeps the same event/request IDs.") : e instanceof ApiError ? e : new ApiError("Cannot reach the API. Check the server, origin, CORS, HTTPS/mixed-content policy, and authentication.");
+        if (generation === state.generation && !state.closed) {
+          if (!binary) apiState(failure.status ? "API HTTP " + failure.status : "API connection error", "error");
+          log(method + " " + path.split("?")[0], failure.status ? "HTTP " + failure.status : timedOut ? "timeout" : "failed", binary ? "warn" : "error");
+        }
+        throw failure;
+      } finally { clearTimeout(timeout); if (controllers.get(lane) === controller) controllers.delete(lane); }
+    }
+
+    function connectionSettings() {
+      const raw = $("apiOrigin").value.trim(); let url;
+      try { url = new URL(raw); } catch (_) { throw new Error("Enter a full API origin, for example http://localhost:8000."); }
+      if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) throw new Error("API source must be an HTTP(S) origin without credentials, a path, query, or fragment.");
+      const token = $("bearerToken").value.trim(); const devUser = $("devUser").value.trim();
+      if (/[\r\n]/.test(token) || /[\x00-\x1f\x7f]/.test(devUser)) throw new Error("Authentication fields cannot contain control characters.");
+      if (!token && !devUser) throw new Error("Provide an explicit X-Dev-User-Id or a Firebase bearer token.");
+      if (token.length > 8192 || devUser.length > 128) throw new Error("Authentication value exceeds the demo limit.");
+      if (token && url.protocol !== "https:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) throw new Error("Use HTTPS before sending a bearer token to a non-loopback API.");
+      return { base: url.origin, token, devUser };
+    }
+    function seeds(id, maxLength) {
+      const values = $(id).value.split(",").map((v) => v.trim()).filter(Boolean);
+      if (values.length > 12 || values.some((v) => v.length > maxLength)) throw new Error("Use at most 12 seeds, each no longer than " + maxLength + " characters.");
+      return [...new Set(values)];
+    }
+    function sessionSettings() {
+      const config = connectionSettings(); const persona = $("persona").value;
+      if (!Object.hasOwn(PERSONAS, persona)) throw new Error("Choose a supported DJ persona.");
+      config.persona = persona;
+      const now = new Date();
+      const payload = { client_tz: timezone(), local_hour: now.getHours(), seed_genres: seeds("seedGenres", 64), seed_artists: seeds("seedArtists", 120), persona_id: persona };
+      const inventory = $("inventory").value.trim();
+      if (inventory !== "") {
+        let ids; try { ids = JSON.parse(inventory); } catch (_) { throw new Error("Inventory must be a JSON array of track IDs. Leave it blank to omit the allowlist."); }
+        if (!Array.isArray(ids) || ids.length > 500 || ids.some((v) => typeof v !== "string" || !v.trim() || v.length > 128)) throw new Error("Inventory must contain at most 500 nonempty string IDs (128 characters each). [] intentionally permits no tracks.");
+        payload.available_track_ids = [...new Set(ids)];
+      }
+      return { config, payload };
+    }
+    function sameConnection(a, b) { return a && b && a.base === b.base && a.token === b.token && (a.token || a.devUser === b.devUser); }
+    function revision(value) { if (!Number.isSafeInteger(value) || value < 0) throw new Error("The server returned a missing or invalid playback_revision; local playback was not advanced."); return value; }
+    function track(raw) {
+      if (!raw || typeof raw !== "object" || typeof raw.id !== "string" || !raw.id || raw.id.length > 256 || !Number.isSafeInteger(raw.duration_ms) || raw.duration_ms <= 0 || raw.duration_ms > 21600000) throw new Error("The server did not return valid, bounded track metadata.");
+      const vector = {}; for (const key of VECTOR_KEYS) vector[key] = finite(raw.vector?.[key]) ? clamp(raw.vector[key], 0, 1) : null;
+      const intro = raw.cues?.intro_vocal_ms; const outro = raw.cues?.outro_ramp_ms;
+      return {
+        id: raw.id, title: text(raw.title, 220) || "Untitled metadata", artist: text(raw.artist, 180) || "Unknown artist",
+        album: text(raw.album, 220), duration_ms: raw.duration_ms, genre: text(raw.genre, 90), era: text(raw.era, 60),
+        bpm: finite(raw.bpm) ? clamp(raw.bpm, 20, 300) : null, camelot_key: text(raw.camelot_key, 8), vector,
+        subgenres: Array.isArray(raw.subgenres) ? raw.subgenres.slice(0, 8).map((v) => text(v, 60)).filter(Boolean) : [],
+        moods: Array.isArray(raw.moods) ? raw.moods.slice(0, 8).map((v) => text(v, 60)).filter(Boolean) : [],
+        cues: { intro_vocal_ms: finite(intro) ? clamp(intro, 0, raw.duration_ms) : null, outro_ramp_ms: finite(outro) ? clamp(outro, 0, raw.duration_ms) : raw.duration_ms },
+        artist_facts: Array.isArray(raw.artist_facts) ? raw.artist_facts.slice(0, 6).map((v) => text(v, 500)).filter(Boolean) : [],
+        metadata_quality: text(raw.metadata_quality, 180)
+      };
+    }
+    function tracks(raw) { return Array.isArray(raw) ? raw.slice(0, 30).map(track) : []; }
+    function cue(raw, topId) {
+      const source = raw && typeof raw === "object" ? raw : {};
+      const timing = source.timing && typeof source.timing === "object" ? source.timing : {};
+      const bounded = (key, fallback, min, max) => finite(timing[key]) ? clamp(timing[key], min, max) : fallback;
+      const mode = text(source.speech_mode, 60).toLowerCase(); const script = text(source.script, 1600).trim();
+      return { cue_id: text(source.cue_id, 256) || text(topId, 256), should_speak: source.should_speak === true && Boolean(script) && !["silent", "silence", "none", "off"].includes(mode), script, speech_mode: mode,
+        timing: { start_on_prev_outro_ms: finite(timing.start_on_prev_outro_ms) ? clamp(timing.start_on_prev_outro_ms, 0, 21600000) : null,
+          max_talk_over_next_intro_ms: bounded("max_talk_over_next_intro_ms", 10000, 0, 20000), duck_music_volume_to: bounded("duck_music_volume_to", .18, 0, 1),
+          ramp_duration_ms: bounded("ramp_duration_ms", 600, 100, 2000), opening_lead_ms: bounded("opening_lead_ms", 1500, 0, 3000) }
+      };
+    }
+    function snapshot() { return { generation: state.generation, sessionId: state.sessionId, revision: state.revision, trackId: state.current?.id, serial: state.serial }; }
+    function currentSnapshot(s, checkRevision = true) { return s.generation === state.generation && s.sessionId === state.sessionId && s.trackId === state.current?.id && s.serial === state.serial && (!checkRevision || s.revision === state.revision); }
+    function validateSessionResponse(data, expectedSession) {
+      if (!data || typeof data !== "object") throw new Error("The server returned an invalid response.");
+      if (expectedSession && data.session_id !== undefined && data.session_id !== expectedSession) throw new Error("Ignored a response for a different session.");
+      const active = track(data.track); const rev = revision(data.playback_revision);
+      return { ...data, track: active, playback_revision: rev, dj_cue: cue(data.dj_cue, data.cue_id), up_next_preview: tracks(data.up_next_preview), mini_set: tracks(data.mini_set) };
+    }
+
+    // Every oscillator is original procedural audio; catalog titles never resolve to recordings.
+    class SynthMixer {
+      constructor() { this.context = null; this.running = false; this.timer = null; this.nextBeat = 0; this.step = 0; this.bpm = 108; this.decks = {}; this.volume = .18; this.muted = false; this.duck = 1; this.fader = 0; }
+      async unlock() {
+        if (!this.context) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) throw new Error("WebAudio unavailable; the visual simulation and text commands still work.");
+          const ctx = new AudioContextClass(); this.context = ctx;
+          this.music = ctx.createGain(); this.music.gain.value = this.duck;
+          this.transport = ctx.createGain(); this.transport.gain.value = 0;
+          this.master = ctx.createGain(); this.master.gain.value = this.muted ? 0 : this.volume;
+          this.output = ctx.createAnalyser(); this.output.fftSize = 256;
+          this.music.connect(this.transport); this.transport.connect(this.master); this.master.connect(this.output); this.output.connect(ctx.destination);
+          for (const key of ["a", "b"]) {
+            const input = ctx.createGain(); const analyser = ctx.createAnalyser(); analyser.fftSize = 256;
+            const gain = ctx.createGain(); gain.gain.value = 0;
+            input.connect(analyser); analyser.connect(gain); gain.connect(this.music);
+            this.decks[key] = { input, analyser, gain, audible: false, seed: 0 };
+          }
+          this.noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * .055), ctx.sampleRate);
+          const samples = this.noise.getChannelData(0); for (let i = 0; i < samples.length; i += 1) samples[i] = Math.random() * 2 - 1;
+          for (const key of ["a", "b"]) if (state.decks[key]) this.setTrack(key, state.decks[key].track, state.decks[key].kind !== "staged");
+          this.timer = setInterval(() => this.schedule(), 30);
+        }
+        if (this.context.state === "suspended") await this.context.resume();
+        this.setVolume(this.volume, this.muted); this.setFader(this.fader);
+        this.setRunning(state.playing); return this.context.state === "running";
+      }
+      ramp(param, value, seconds) {
+        if (!this.context) return;
+        const time = this.context.currentTime;
+        if (typeof param.cancelAndHoldAtTime === "function") param.cancelAndHoldAtTime(time);
+        else { const previous = param.value; param.cancelScheduledValues(time); param.setValueAtTime(previous, time); }
+        param.linearRampToValueAtTime(value, time + Math.max(.012, seconds));
+      }
+      setVolume(value, muted) { this.volume = clamp(value, 0, .4); this.muted = muted; if (this.master) this.ramp(this.master.gain, muted ? 0 : this.volume, .06); }
+      setRunning(value) {
+        if (this.running === value && this.transport) return;
+        this.running = value;
+        if (this.transport) this.ramp(this.transport.gain, value ? 1 : 0, .1);
+        if (value && this.context) { this.nextBeat = this.context.currentTime + .035; this.schedule(); }
+      }
+      setTrack(key, value, audible = false) {
+        if (!this.context) return;
+        const deck = this.decks[key]; deck.seed = Array.from(value.id).reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 7); deck.audible = audible;
+        if (key === state.currentDeck && value.bpm) this.bpm = clamp(value.bpm, 70, 150);
+        this.setFader(this.fader);
+      }
+      setAudible(key, value) { if (this.decks[key]) { this.decks[key].audible = value; this.setFader(this.fader); } }
+      setFader(value) {
+        this.fader = clamp(value, 0, 1); if (!this.context) return;
+        for (const key of ["a", "b"]) { const deck = this.decks[key]; const gain = key === "a" ? Math.cos(this.fader * Math.PI / 2) : Math.sin(this.fader * Math.PI / 2); this.ramp(deck.gain.gain, deck.audible ? gain : 0, .025); }
+      }
+      setDuck(value, milliseconds) { this.duck = value; if (this.music) this.ramp(this.music.gain, value, milliseconds / 1000); }
+      tone(deck, when, frequency, length, volume, type = "sine", endFrequency = null) {
+        const ctx = this.context; const oscillator = ctx.createOscillator(); const envelope = ctx.createGain();
+        oscillator.type = type; oscillator.frequency.setValueAtTime(frequency, when);
+        if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(endFrequency, when + length * .8);
+        envelope.gain.setValueAtTime(.0001, when); envelope.gain.exponentialRampToValueAtTime(volume, when + .008); envelope.gain.exponentialRampToValueAtTime(.0001, when + length);
+        oscillator.connect(envelope); envelope.connect(deck.input); oscillator.start(when); oscillator.stop(when + length + .01);
+        oscillator.onended = () => { oscillator.disconnect(); envelope.disconnect(); };
+      }
+      hat(deck, when, volume) {
+        const ctx = this.context; const source = ctx.createBufferSource(); const highpass = ctx.createBiquadFilter(); const envelope = ctx.createGain();
+        source.buffer = this.noise; highpass.type = "highpass"; highpass.frequency.value = 7200;
+        envelope.gain.setValueAtTime(volume, when); envelope.gain.exponentialRampToValueAtTime(.0001, when + .045);
+        source.connect(highpass); highpass.connect(envelope); envelope.connect(deck.input); source.start(when); source.stop(when + .055);
+        source.onended = () => { source.disconnect(); highpass.disconnect(); envelope.disconnect(); };
+      }
+      schedule() {
+        if (!this.running || !this.context || this.context.state !== "running" || state.closed) return;
+        const now = this.context.currentTime;
+        if (this.nextBeat < now) this.nextBeat = now + .025;
+        let scheduled = 0;
+        while (this.nextBeat < now + .18 && scheduled < 8) {
+          for (const key of ["a", "b"]) {
+            const deck = this.decks[key]; if (!deck.audible) continue;
+            if (this.step % 4 === 0) this.tone(deck, this.nextBeat, 120, .2, .32, "sine", 43);
+            this.hat(deck, this.nextBeat, this.step % 2 ? .035 : .055);
+            if (this.step % 2 === 0) { const notes = [0, 3, 5, 7, 10]; const midi = 43 + deck.seed % 5 + notes[(Math.floor(this.step / 2) + deck.seed) % notes.length]; this.tone(deck, this.nextBeat, 440 * 2 ** ((midi - 69) / 12), .22, .075, "triangle"); }
+            if (this.step % 16 === 0) { const root = 110 * 2 ** ((deck.seed % 5) / 12); this.tone(deck, this.nextBeat, root * 2, .85, .026); this.tone(deck, this.nextBeat, root * 3, .85, .018); }
+          }
+          this.step += 1; this.nextBeat += 60 / this.bpm / 2; scheduled += 1;
+        }
+      }
+      actualDuck() { return this.music ? this.music.gain.value : this.duck; }
+      close() { clearInterval(this.timer); this.running = false; if (this.context && this.context.state !== "closed") this.context.close().catch(() => {}); }
+    }
+    const mixer = new SynthMixer();
+    function unlockAudio() {
+      mixer.unlock().then((running) => { $("audioStatus").textContent = running ? "Live original synth · quiet output · beat continues during network and speech. Mute affects the beat only." : "Audio is suspended by the browser. Press Resume or any audio control to unlock it."; }).catch((e) => { $("audioStatus").textContent = errorMessage(e); });
+    }
+    function updateDuck(ramp = 600) {
+      const multiplier = duckReasons.size ? Math.min(...duckReasons.values()) : 1;
+      mixer.setDuck(multiplier, ramp);
+      $("duckState").textContent = duckReasons.size ? "Ducked under " + (state.micListening ? "microphone barge-in" : "DJ overlay") + " · beat never stopped" : "Music restored · quiet master output";
+      $("duckPlot").setAttribute("aria-label", "Music relative gain target " + Math.round(multiplier * 100) + " percent. " + (duckReasons.size ? "Ducking active." : "No ducking active."));
+    }
+
+    function cacheKey(c) { return state.generation + ":" + state.sessionId + ":" + c.cue_id; }
+    function revokeEntry(entry) { if (entry.url) { URL.revokeObjectURL(entry.url); entry.url = null; } }
+    function clearTTS(keepCueId = "") {
+      for (const [key, entry] of ttsCache) {
+        if (keepCueId && entry.cueId === keepCueId && entry.generation === state.generation) continue;
+        entry.invalid = true; abortLane(entry.lane); ttsCache.delete(key);
+        if (!entry.active) revokeEntry(entry);
+      }
+    }
+    function trimTTS() {
+      for (const [key, entry] of ttsCache) { if (ttsCache.size <= 3) break; if (!entry.active) { entry.invalid = true; abortLane(entry.lane); revokeEntry(entry); ttsCache.delete(key); } }
+    }
+    function warmServerVoice(c) {
+      if (!$("serverVoice").checked || !$("voiceEnabled").checked || !c.should_speak || !c.cue_id || !state.sessionId) return Promise.resolve(null);
+      const key = cacheKey(c); const existing = ttsCache.get(key);
+      if (existing) return existing.promise;
+      const entry = { cueId: c.cue_id, generation: state.generation, sessionId: state.sessionId, lane: "tts:" + key, active: 0, invalid: false, url: null, status: "loading", promise: null };
+      ttsCache.set(key, entry); trimTTS();
+      $("serverVoiceStatus").textContent = "Fetching authenticated cue WAV; music is not waiting.";
+      entry.promise = (async () => {
+        try {
+          const blob = await api("/v1/tts", { method: "POST", body: { session_id: entry.sessionId, cue_id: entry.cueId }, lane: entry.lane, binary: true });
+          if (entry.invalid || entry.generation !== state.generation || entry.sessionId !== state.sessionId || !$("serverVoice").checked) return null;
+          entry.url = URL.createObjectURL(blob); entry.status = "ready";
+          $("serverVoiceStatus").textContent = "Cue WAV cached in memory · " + Math.round(blob.size / 1024) + " KB · no provider keys in browser.";
+          return entry;
+        } catch (e) {
+          entry.status = "unavailable";
+          if (!isAbort(e) && entry.generation === state.generation && !entry.invalid) {
+            $("serverVoiceStatus").textContent = e.status === 503 ? "Server voice unavailable / local mode (503). Browser speech fallback is active." : "Server WAV unavailable. Falling back to browser speech without stopping the beat.";
+            log("Server voice fallback", e.status ? "HTTP " + e.status : "browser TTS", "warn");
+          }
+          return null;
+        }
+      })();
+      return entry.promise;
+    }
+    function speakKey(c) { return state.sessionId + ":" + (c.cue_id || state.revision + ":" + c.script); }
+    function safeIntro(value, c) { return Math.min(value.duration_ms, c.timing.max_talk_over_next_intro_ms, value.cues.intro_vocal_ms === null ? c.timing.max_talk_over_next_intro_ms : value.cues.intro_vocal_ms); }
+    function showCue(c, status = "Cue received") {
+      $("cueScript").textContent = c.should_speak ? c.script : "Silent cue · music only. No speech synthesis requested.";
+      $("cueTiming").textContent = c.cue_id ? "Cue " + c.cue_id.slice(0, 32) + " · " + (c.speech_mode || "server timing") : "Estimated cue boundaries · no pre-synthesized browser buffer";
+      if (!state.voiceJob) $("voiceState").textContent = c.should_speak ? status : "Silent cue";
+    }
+    function cancelVoice(reason = "Interrupted", clearPending = true) {
+      if (clearPending) state.pendingCue = null;
+      const job = state.voiceJob;
+      if (job && !job.controller.signal.aborted) { job.reason = reason; job.controller.abort(); }
+    }
+    function speechAllowed(job) {
+      return !job.controller.signal.aborted && job.generation === state.generation && job.sessionId === state.sessionId && state.playing && !state.micListening && $("voiceEnabled").checked && ((state.serial === job.sourceSerial && state.current?.id === job.sourceId) || (state.serial === job.targetSerial && state.current?.id === job.targetId));
+    }
+    function noteVoiceStart(job, engine) {
+      if (!speechAllowed(job)) { job.controller.abort(); return; }
+      $("voiceLatency").textContent = Math.round(performance.now() - job.armedAt) + " ms";
+      $("voiceState").textContent = engine + " speaking · music ducked";
+      log("DJ overlay started", engine, "good");
+    }
+    function browserSpeech(job, c) {
+      if (!hasSpeech) { job.reason = "Browser speech unavailable · captions only"; $("voiceState").textContent = job.reason; log("Speech unavailable; script remains visible", "captions", "warn"); return Promise.resolve(); }
+      return new Promise((resolve, reject) => {
+        if (!speechAllowed(job)) { resolve(); return; }
+        const utterance = new SpeechSynthesisUtterance(c.script); job.utterance = utterance;
+        const selected = window.speechSynthesis.getVoices().find((v) => v.voiceURI === $("voiceSelect").value);
+        if (selected) { utterance.voice = selected; utterance.lang = selected.lang; } else utterance.lang = navigator.language || "en-US";
+        utterance.volume = .8; utterance.rate = state.config?.persona === "hype_coach" ? 1.12 : 1.02;
+        let settled = false;
+        const finish = (error) => { if (settled) return; settled = true; clearTimeout(timer); job.controller.signal.removeEventListener("abort", onAbort); utterance.onstart = utterance.onend = utterance.onerror = null; error ? reject(error) : resolve(); };
+        const onAbort = () => { window.speechSynthesis.cancel(); finish(); };
+        const timer = setTimeout(() => { job.reason = "Speech deadline / vocal boundary"; window.speechSynthesis.cancel(); finish(); }, Math.max(0, job.deadline - performance.now()));
+        utterance.onstart = () => noteVoiceStart(job, "Browser"); utterance.onend = () => finish();
+        utterance.onerror = (event) => { if (["canceled", "interrupted"].includes(event.error)) finish(); else finish(new Error("Browser speech failed (" + text(event.error, 50) + "). Captions remain available.")); };
+        job.controller.signal.addEventListener("abort", onAbort, { once: true });
+        duckReasons.set(job.duckKey, c.timing.duck_music_volume_to); updateDuck(c.timing.ramp_duration_ms);
+        try { window.speechSynthesis.speak(utterance); } catch (e) { finish(e); }
+      });
+    }
+    function wavSpeech(job, c, entry) {
+      return new Promise((resolve, reject) => {
+        if (!entry.url || entry.invalid || !speechAllowed(job)) { reject(new Error("Cached WAV is no longer available.")); return; }
+        const audio = new Audio(); job.audio = audio; entry.active += 1; job.entry = entry;
+        audio.preload = "auto"; audio.volume = .8; audio.src = entry.url;
+        let settled = false;
+        const finish = (error) => {
+          if (settled) return; settled = true; clearTimeout(timer); job.controller.signal.removeEventListener("abort", onAbort);
+          audio.onplaying = audio.onended = audio.onerror = null; audio.pause(); audio.removeAttribute("src"); audio.load();
+          entry.active = Math.max(0, entry.active - 1); if (entry.invalid) revokeEntry(entry); job.audio = null; job.entry = null;
+          error ? reject(error) : resolve();
+        };
+        const onAbort = () => finish();
+        const timer = setTimeout(() => { job.reason = "WAV deadline / vocal boundary"; finish(); }, Math.max(0, job.deadline - performance.now()));
+        audio.onplaying = () => noteVoiceStart(job, "Server WAV"); audio.onended = () => finish(); audio.onerror = () => finish(new Error("Server WAV could not play."));
+        job.controller.signal.addEventListener("abort", onAbort, { once: true });
+        duckReasons.set(job.duckKey, c.timing.duck_music_volume_to); updateDuck(c.timing.ramp_duration_ms);
+        try { const play = audio.play(); if (play && play.catch) play.catch((e) => finish(e)); } catch (e) { finish(e); }
+      });
+    }
+    async function speakCue(c, { sourceId, targetId, availableMs, introLimit, future = false }) {
+      if (!c.should_speak || !state.playing || state.micListening || !$("voiceEnabled").checked || state.spoken.has(speakKey(c))) return;
+      if (availableMs < 250) { state.spoken.add(speakKey(c)); showCue(c, "Safe window too short · captions only"); return; }
+      state.spoken.add(speakKey(c)); if (state.spoken.size > 100) state.spoken.delete(state.spoken.values().next().value);
+      cancelVoice("Replaced by a newer cue", false);
+      const job = { controller: new AbortController(), generation: state.generation, sessionId: state.sessionId, sourceId, targetId,
+        sourceSerial: state.serial, targetSerial: state.serial + (future ? 1 : 0), introLimit, cueId: c.cue_id, armedAt: performance.now(), deadline: performance.now() + Math.min(14000, availableMs), duckKey: "voice:" + uuid(), reason: "Overlay finished", audio: null, entry: null };
+      state.voiceJob = job; $("cancelVoice").disabled = false; showCue(c, "Arming voice inside safe window"); $("voiceState").textContent = "Arming voice inside safe window";
+      try {
+        let entry = null;
+        if ($("serverVoice").checked && c.cue_id) {
+          const pending = warmServerVoice(c); const cached = ttsCache.get(cacheKey(c));
+          if (cached?.status === "ready") entry = cached;
+          else {
+            let timer; const shortWait = new Promise((resolve) => { timer = setTimeout(() => resolve(null), Math.min(450, Math.max(0, availableMs - 300))); });
+            entry = await Promise.race([pending, shortWait]); clearTimeout(timer);
+          }
+        }
+        if (!speechAllowed(job) || performance.now() >= job.deadline) return;
+        if (entry && entry.url && !entry.invalid) {
+          try { await wavSpeech(job, c, entry); }
+          catch (e) { if (speechAllowed(job) && job.deadline - performance.now() > 250) { log("WAV playback blocked; browser fallback", "no beat pause", "warn"); await browserSpeech(job, c); } }
+        } else await browserSpeech(job, c);
+      } catch (e) {
+        if (!isAbort(e) && job.generation === state.generation) { job.reason = "Voice unavailable · captions only"; log(errorMessage(e), "voice", "warn"); $("voiceState").textContent = job.reason; }
+      } finally {
+        if (job.audio) { job.audio.pause(); job.audio.removeAttribute("src"); job.audio.load(); }
+        duckReasons.delete(job.duckKey); updateDuck(c.timing.ramp_duration_ms);
+        if (job.entry) { job.entry.active = Math.max(0, job.entry.active - 1); if (job.entry.invalid) revokeEntry(job.entry); }
+        if (state.voiceJob === job) { state.voiceJob = null; $("cancelVoice").disabled = true; $("voiceState").textContent = job.reason + " · music restored"; }
+        const entry = c.cue_id ? ttsCache.get(cacheKey(c)) : null;
+        if (entry && entry.status !== "loading" && !entry.active && state.current?.id === job.targetId) { revokeEntry(entry); ttsCache.delete(cacheKey(c)); }
+      }
+    }
+    function armCurrentCue(c, opening = false) {
+      state.currentCue = c; showCue(c, state.playing ? "Armed for a safe speech window" : "Waiting for requested playback");
+      if (!c.should_speak) return;
+      void warmServerVoice(c);
+      if (state.spoken.has(speakKey(c))) return;
+      state.pendingCue = { cue: c, generation: state.generation, sessionId: state.sessionId, serial: state.serial, opening };
+      scheduleCues();
+    }
+    function scheduleCues() {
+      if (!state.current || !state.playing || state.micListening || !$("voiceEnabled").checked) return;
+      const pending = state.pendingCue;
+      if (pending && pending.generation === state.generation && pending.sessionId === state.sessionId && pending.serial === state.serial) {
+        const c = pending.cue; const intro = safeIntro(state.current, c); let available = 0;
+        if (state.positionMs < intro || (pending.opening && state.leadMs > 0)) available = state.leadMs + Math.max(0, intro - state.positionMs) / state.speed;
+        else if (state.positionMs >= state.current.cues.outro_ramp_ms) available = Math.max(0, state.current.duration_ms - state.positionMs) / state.speed;
+        if (available > 0) { state.pendingCue = null; void speakCue(c, { sourceId: state.current.id, targetId: state.current.id, availableMs: available, introLimit: state.positionMs < intro ? intro : null }); }
+      }
+      const p = state.prefetched;
+      if (p && p.revision === state.revision && !p.cueHandled && !state.voiceJob && !state.pendingAction) {
+        const start = Math.max(state.current.cues.outro_ramp_ms, p.cue.timing.start_on_prev_outro_ms ?? state.current.cues.outro_ramp_ms);
+        if (state.positionMs >= start && state.positionMs < state.current.duration_ms) {
+          p.cueHandled = true;
+          const intro = safeIntro(p.track, p.cue);
+          showCue(p.cue, "Scheduled on the current outro");
+          void speakCue(p.cue, { sourceId: state.current.id, targetId: p.track.id, availableMs: (state.current.duration_ms - state.positionMs + intro) / state.speed, introLimit: intro, future: true });
+        }
+      }
+    }
+
+    function stopMic(reason = "Microphone stopped") {
+      const controller = state.micController;
+      if (controller) controller.abort();
+      state.micController = null; state.recognition = null; state.micListening = false;
+      $("micButton").dataset.listening = "false"; $("micButton").setAttribute("aria-pressed", "false"); $("micButton").textContent = "◉ Microphone";
+      duckReasons.delete("microphone"); updateDuck();
+      if (hasMic) $("micStatus").textContent = reason;
+    }
+    function startMic() {
+      if (state.micListening) { stopMic(); return; }
+      if (!hasMic || !state.sessionId || state.busy || state.pendingAction) return;
+      unlockAudio(); cancelVoice("Microphone barge-in");
+      const controller = new AbortController(); state.micController = controller;
+      const recognition = new recognitionClass(); state.recognition = recognition; state.micListening = true;
+      recognition.lang = navigator.language || "en-US"; recognition.continuous = false; recognition.interimResults = true; recognition.maxAlternatives = 1;
+      const generation = state.generation; let finalSent = false;
+      const timeout = setTimeout(() => stopMic("Listening timed out. You can retry or type your command."), 12000);
+      controller.signal.addEventListener("abort", () => { clearTimeout(timeout); recognition.onresult = recognition.onerror = recognition.onend = recognition.onstart = recognition.onspeechstart = null; try { recognition.abort(); } catch (_) {} }, { once: true });
+      $("micButton").dataset.listening = "true"; $("micButton").setAttribute("aria-pressed", "true"); $("micButton").textContent = "■ Stop listening";
+      $("micStatus").textContent = "Requesting microphone permission…";
+      duckReasons.set("microphone", .18); updateDuck(180);
+      recognition.onstart = () => { $("micStatus").textContent = "Listening · speak now. The DJ overlay has been interrupted."; };
+      recognition.onspeechstart = () => cancelVoice("Speech barge-in");
+      recognition.onresult = (event) => {
+        if (generation !== state.generation || controller.signal.aborted) return;
+        let transcript = ""; let finalTranscript = "";
+        for (let i = 0; i < Math.min(event.results.length, 20); i += 1) {
+          const part = event.results[i][0].transcript; transcript += part + " ";
+          if (event.results[i].isFinal) finalTranscript += part + " ";
+        }
+        $("commandInput").value = transcript.trim().slice(0, 500); finalTranscript = finalTranscript.trim().slice(0, 500);
+        if (finalTranscript && !finalSent) { finalSent = true; stopMic("Transcript ready · sending the command to the API."); submitVoice(finalTranscript); }
+      };
+      recognition.onerror = (event) => {
+        const messages = { "not-allowed": "Microphone permission denied. Use the text command instead.", "service-not-allowed": "The browser speech service is unavailable. Use text commands.", "audio-capture": "No available microphone. Text commands still work.", "no-speech": "No speech detected. Try again or type a command.", "network": "The browser transcription service could not connect. Text commands still work." };
+        stopMic(messages[event.error] || "Speech recognition stopped. Use a text command or try again.");
+      };
+      recognition.onend = () => { if (!finalSent) stopMic("Listening ended without a final transcript. Try again or use text."); };
+      try { recognition.start(); } catch (_) { stopMic("Could not start microphone recognition. Type a command instead."); }
+    }
+
+    function dropPrefetch(reason, keepCueId = state.currentCue?.cue_id || "") {
+      state.prefetchToken += 1; abortLane("prefetch"); state.prefetchPending = false; state.prefetched = null;
+      state.prefetchAttempts = 0; state.lastPrefetchAt = -Infinity;
+      const standby = otherDeck();
+      if (state.decks[standby]?.kind === "staged") { state.decks[standby] = null; mixer.setAudible(standby, false); }
+      if (state.voiceJob && state.voiceJob.targetSerial !== state.serial) cancelVoice("Future cue invalidated", false);
+      clearTTS(keepCueId);
+      $("prefetchState").textContent = reason; renderDecks(); renderQueue();
+    }
+    function paintStaged() {
+      const p = state.prefetched; if (!p || p.revision !== state.revision || state.mixTween) return;
+      const key = otherDeck(); state.decks[key] = { track: p.track, kind: "staged" }; mixer.setTrack(key, p.track, false); renderDecks();
+    }
+    async function prefetch(force = false) {
+      if (!state.sessionId || !state.current || state.prefetchPending || state.busy || state.pendingAction) return;
+      if (!force && (state.prefetched || state.prefetchAttempts >= 3 || performance.now() - state.lastPrefetchAt < 3500)) return;
+      const s = snapshot(); const token = ++state.prefetchToken; const previous = state.prefetched;
+      state.prefetchPending = true; state.prefetchAttempts += 1; state.lastPrefetchAt = performance.now();
+      $("prefetchState").textContent = "Fetching a non-advancing selection…"; updateControls();
+      try {
+        const raw = await api(sessionPath("/prefetch"), { lane: "prefetch" });
+        if (!currentSnapshot(s) || token !== state.prefetchToken) return;
+        const rev = revision(raw.playback_revision); if (rev !== s.revision) throw new Error("Ignored prefetch for a different playback revision.");
+        const nextTrack = track(raw.track); const nextCue = cue(raw.dj_cue, raw.cue_id);
+        if (previous && previous.revision === rev && (previous.track.id !== nextTrack.id || previous.cue.cue_id !== nextCue.cue_id)) throw new Error("The server changed its prefetch at the same revision. No staged selection was trusted; /next remains authoritative.");
+        state.prefetched = { track: nextTrack, cue: nextCue, revision: rev, cueHandled: previous?.cueHandled || false, preview: tracks(raw.up_next_preview) };
+        state.queue = state.prefetched.preview;
+        $("prefetchState").textContent = "Staged · revision " + rev + " · not advanced";
+        paintStaged(); renderQueue(); void warmServerVoice(nextCue); scheduleCues();
+        log("Future selection staged; playback unchanged", "rev " + rev, "good");
+      } catch (e) {
+        if (!isAbort(e) && currentSnapshot(s) && token === state.prefetchToken) {
+          state.prefetched = null;
+          const standby = otherDeck();
+          if (state.decks[standby]?.kind === "staged") { state.decks[standby] = null; mixer.setAudible(standby, false); }
+          if (state.voiceJob?.targetSerial !== state.serial) cancelVoice("Untrusted prefetch discarded", false);
+          clearTTS(state.currentCue?.cue_id || ""); renderDecks(); renderQueue();
+          $("prefetchState").textContent = "Prefetch unavailable · " + state.prefetchAttempts + "/3 automatic attempts";
+          log(errorMessage(e), "prefetch", "warn");
+        }
+      } finally { if (token === state.prefetchToken && s.generation === state.generation) { state.prefetchPending = false; updateControls(); } }
+    }
+
+    function feedbackBody(eventType, historical = false) {
+      const body = { track_id: state.current.id, event_type: eventType, listened_ms: roundMs(Math.min(state.listenedMs, state.current.duration_ms)), track_duration_ms: state.current.duration_ms, event_id: uuid() };
+      if (!historical) body.playback_revision = state.revision;
+      return body;
+    }
+    function beginJob(kind, extra = {}) {
+      if (!state.current || !state.sessionId || state.busy || state.pendingAction) return null;
+      const job = { kind, generation: state.generation, snapshot: snapshot(), requestId: uuid(), phase: "request", ...extra };
+      state.pendingAction = job; state.autoBlocked = false; clearError(); return job;
+    }
+    function beginTransition(eventType) {
+      const job = beginJob("transition", { eventType, expectedRevision: state.prefetched?.revision ?? state.revision,
+        staged: state.prefetched, feedback: null });
+      if (!job) return;
+      job.feedback = feedbackBody(eventType, true);
+      abortLane("prefetch"); state.prefetchToken += 1; state.prefetchPending = false;
+      if (job.staged) { $("prefetchState").textContent = "Staged incoming deck · commit requested"; renderDecks(); }
+      log("Actual transition requested", eventType + " · rev " + job.expectedRevision);
+      void executeJob(job);
+    }
+    function beginFeedback(eventType) {
+      const job = beginJob("feedback", { eventType, feedback: feedbackBody(eventType), phase: "feedback" });
+      if (!job) return;
+      dropPrefetch("Feedback invalidates the previous future selection"); void executeJob(job);
+    }
+    function beginDJ() {
+      const job = beginJob("dj"); if (!job) return;
+      cancelVoice("DJ-button pivot"); dropPrefetch("DJ is choosing a new active track"); void executeJob(job);
+    }
+    function submitVoice(transcript) {
+      const value = transcript.trim(); if (!value || value.length > 500) { showError("Enter a command of 1–500 characters."); return; }
+      cancelVoice("Text/voice command barge-in"); stopMic("Text command ready. You can interrupt again after the request.");
+      const job = beginJob("voice", { transcript: value, position: roundMs(state.positionMs) });
+      if (!job) { showError(state.pendingAction ? "Resolve the pending request with Retry same request, or start a new session. No second command was sent." : "Start a session before sending a DJ command.", Boolean(state.pendingAction)); return; }
+      dropPrefetch("Command invalidates the future selection"); $("commandResult").textContent = "Command sent to the server. The synthetic beat continues.";
+      void executeJob(job);
+    }
+    function applyFeedback(data, expected) {
+      if (!currentSnapshot(expected)) throw new Error("Ignored stale feedback for a different session, track, or revision.");
+      const rev = revision(data.playback_revision); if (rev < state.revision) throw new Error("Ignored feedback with an older playback revision.");
+      state.revision = rev;
+      const delta = data.taste_delta; const reward = delta?.reward;
+      $("tasteDelta").textContent = finite(reward) ? "Last evidence: " + (reward > 0 ? "+" : "") + number(reward) + " reward · " + (Array.isArray(delta.changed_priors) ? delta.changed_priors.length : 0) + " prior updates" : "Feedback acknowledged by the server.";
+      if (data.should_auto_pivot) log("Server requested a taste pivot; future selection will be refetched", "feedback", "good");
+      renderContext();
+    }
+    function applyAdvance(data, { initial = false, keepSpeech = false } = {}) {
+      const oldDeck = state.currentDeck; const incoming = state.current ? otherDeck() : "a"; const old = state.current;
+      const keepId = data.dj_cue.cue_id;
+      if (!keepSpeech || state.voiceJob?.targetId !== data.track.id) cancelVoice("Track changed");
+      state.prefetched = null; state.prefetchToken += 1; abortLane("prefetch"); state.prefetchPending = false; state.prefetchAttempts = 0; state.lastPrefetchAt = -Infinity;
+      clearTTS(keepId);
+      if (old) state.decks[oldDeck] = { track: old, kind: "outgoing" };
+      state.currentDeck = incoming; state.current = data.track; state.revision = data.playback_revision; state.serial += 1;
+      state.positionMs = 0; state.listenedMs = 0; state.wallMs = 0; state.autoBlocked = false; state.pendingCue = null;
+      state.currentCue = data.dj_cue;
+      state.leadMs = initial && data.dj_cue.should_speak && $("voiceEnabled").checked ? data.dj_cue.timing.opening_lead_ms : 0;
+      state.decks[incoming] = { track: data.track, kind: "current" };
+      state.queue = (data.up_next_preview.length ? data.up_next_preview : data.mini_set).filter((v) => v.id !== data.track.id);
+      state.vibe = text(data.vibe_label, 180) || state.vibe; state.bucket = text(data.bucket, 40) || state.bucket;
+      state.playing = state.wantsPlayback;
+      mixer.setTrack(incoming, data.track, true); mixer.setRunning(state.playing);
+      const target = incoming === "a" ? 0 : 1;
+      if (old) state.mixTween = { from: state.fader, to: target, started: performance.now(), duration: data.dj_cue.timing.ramp_duration_ms, outgoing: oldDeck };
+      else { state.fader = target; mixer.setFader(target); $("crossfader").value = String(target * 100); }
+      $("prefetchState").textContent = "Waiting for the prefetch threshold";
+      renderAll(); armCurrentCue(data.dj_cue, initial);
+      log("Backend track active: " + data.track.title, "rev " + state.revision, "good");
+    }
+    async function executeJob(job) {
+      if (state.busy || state.pendingAction !== job || job.generation !== state.generation) return;
+      state.busy = job.kind; state.runningJob = job; updateControls();
+      try {
+        if (job.phase === "request") {
+          if (!currentSnapshot(job.snapshot)) throw new Error("This operation belongs to an older playback state. Start a new session to resynchronize.");
+          if (job.kind === "transition" || job.kind === "dj") {
+            const path = job.kind === "transition" ? sessionPath("/next") + "?" + new URLSearchParams({ expected_revision: String(job.expectedRevision), request_id: job.requestId }).toString() : sessionPath("/dj-button");
+            const raw = await api(path, { method: job.kind === "transition" ? "GET" : "POST", body: job.kind === "dj" ? { request_id: job.requestId } : undefined });
+            if (!currentSnapshot(job.snapshot)) throw abortError();
+            const data = validateSessionResponse(raw, job.snapshot.sessionId);
+            if (data.playback_revision <= job.snapshot.revision) throw new Error("Advance did not return a newer revision; the local timeline was preserved.");
+            if (job.kind === "transition") job.feedback.listened_ms = roundMs(Math.min(state.listenedMs, state.current.duration_ms));
+            if (job.staged && job.staged.track.id !== data.track.id) log("Server replaced the staged track; using its committed response", "authoritative", "warn");
+            applyAdvance(data, { keepSpeech: job.kind === "transition" && job.staged?.cue.cue_id === data.dj_cue.cue_id });
+            // Learn the outgoing track after commit. Historical feedback omits playback_revision,
+            // so a completed prior track cannot accidentally target the newly active revision.
+            job.phase = job.kind === "transition" ? "feedback" : "done"; job.appliedSnapshot = snapshot();
+          } else if (job.kind === "voice") {
+            const raw = await api(sessionPath("/voice"), { method: "POST", body: { transcript: job.transcript, current_track_id: job.snapshot.trackId, current_position_ms: job.position, request_id: job.requestId } });
+            if (!currentSnapshot(job.snapshot)) throw abortError();
+            if (raw.session_id !== state.sessionId) throw new Error("Ignored a voice response for a different session.");
+            const rev = revision(raw.playback_revision); if (rev < state.revision) throw new Error("Ignored a stale voice revision.");
+            const action = text(raw.action, 60).toUpperCase(); const nextCue = cue(raw.dj_cue, raw.cue_id); const queue = tracks(raw.queue);
+            const transportAction = ["SKIP", "VIBE_SWITCH", "SET_VIBE", "QUEUE_REFERENCE"].includes(action);
+            if (transportAction && raw.updated_queue_head) {
+              const data = { track: track(raw.updated_queue_head), playback_revision: rev, dj_cue: nextCue, up_next_preview: queue, mini_set: [], vibe_label: text(raw.vibe_label, 180) };
+              applyAdvance(data);
+            } else {
+              state.revision = rev; state.queue = queue.filter((v) => v.id !== state.current.id);
+              armCurrentCue(nextCue); renderContext(); renderQueue();
+              if (transportAction) log("No playable updated queue head; current timeline preserved", action, "warn");
+            }
+            $("commandResult").textContent = "Server action: " + (action || "unspecified") + (transportAction && raw.updated_queue_head ? " · updated queue head is now active." : " · current timeline preserved.");
+            log("Voice/text action acknowledged", action || "unknown", "good"); job.phase = "done";
+          }
+        }
+        if (job.phase === "feedback") {
+          const expected = job.appliedSnapshot || job.snapshot;
+          if (!currentSnapshot(expected)) throw new Error("Feedback retry belongs to a different playback state. Start a new session to resynchronize.");
+          dropPrefetch("Feedback invalidated prior prefetch; refetching after acknowledgement");
+          const result = await api(sessionPath("/feedback"), { method: "POST", body: job.feedback });
+          if (!currentSnapshot(expected)) throw abortError();
+          applyFeedback(result, expected); job.phase = "done";
+          if (job.eventType === "replay") {
+            cancelVoice("Replay requested"); state.positionMs = 0; state.listenedMs = 0; state.wallMs = 0; state.leadMs = 0; state.serial += 1; state.autoBlocked = false;
+            log("Current synthetic timeline restarted", "replay", "good");
+          }
+        }
+        if (job.phase === "done" && job.generation === state.generation) {
+          state.pendingAction = null; state.autoBlocked = false; clearError(); renderAll();
+          void loadProfile(state.config, true);
+        }
+      } catch (e) {
+        if (!isAbort(e) && job.generation === state.generation) {
+          state.autoBlocked = true;
+          const committed = job.appliedSnapshot ? " The next track is already active; retry will send only the pending feedback, not advance again." : " No local track advance was assumed.";
+          showError(errorMessage(e) + committed + " Retry reuses the same UUID(s), or start a new session.", true);
+          log("Action needs an explicit retry", job.kind + " / " + job.phase, "warn");
+          $("transportState").textContent = "Request pending · beat continues";
+        }
+      } finally {
+        if (job.generation === state.generation && state.runningJob === job) {
+          state.busy = null; state.runningJob = null; updateControls();
+          if (!state.pendingAction) void prefetch(true);
+        }
+      }
+    }
+
+    async function createSession() {
+      if (state.busy === "start") return;
+      let settings; try { settings = sessionSettings(); } catch (e) { showError(errorMessage(e)); $("setup").scrollIntoView({ behavior: reducedMotion.matches ? "instant" : "smooth", block: "start" }); return; }
+      unlockAudio(); state.wantsPlayback = true; state.generation += 1; abortAll(); cancelVoice("New session"); stopMic("Microphone idle. Start listening when you want to interrupt."); clearTTS();
+      state.pendingAction = null; state.runningJob = null; state.busy = "start"; state.autoBlocked = false;
+      dropPrefetch("Starting a new server session", ""); clearError(); updateControls(); apiState("Connecting to API…", "busy");
+      const generation = state.generation;
+      try {
+        const raw = await api("/v1/sessions", { method: "POST", body: settings.payload, lane: "start", config: settings.config });
+        if (generation !== state.generation) return;
+        const data = validateSessionResponse(raw);
+        if (typeof raw.session_id !== "string" || !raw.session_id || raw.session_id.length > 256) throw new Error("The server returned an invalid session_id.");
+        if (!sameConnection(state.config, settings.config)) state.profile = null;
+        state.config = settings.config; state.sessionId = raw.session_id; state.bucket = text(raw.bucket, 40); state.vibe = text(raw.vibe_label, 180); state.spoken.clear();
+        applyAdvance(data, { initial: true }); log("Session created · inventory " + (Object.hasOwn(settings.payload, "available_track_ids") ? settings.payload.available_track_ids.length + " explicit IDs" : "allowlist omitted"), PERSONAS[settings.config.persona], "good");
+        void loadProfile(state.config, true);
+      } catch (e) {
+        if (!isAbort(e) && generation === state.generation) { showError(errorMessage(e) + " No fallback recommendations were invented. Check connection/setup and start again."); state.autoBlocked = true; }
+      } finally { if (generation === state.generation) { state.busy = null; updateControls(); } }
+    }
+    function endSession() {
+      state.generation += 1; abortAll(); cancelVoice("Session ended"); stopMic("Microphone idle."); clearTTS();
+      state.sessionId = null; state.current = null; state.config = null; state.revision = null; state.bucket = null; state.vibe = ""; state.playing = false; state.wantsPlayback = false;
+      state.positionMs = 0; state.listenedMs = 0; state.wallMs = 0; state.leadMs = 0; state.decks = { a: null, b: null }; state.currentDeck = "a";
+      state.pendingAction = null; state.runningJob = null; state.busy = null; state.pendingCue = null; state.currentCue = null; state.mixTween = null; state.queue = []; state.profile = null;
+      state.prefetched = null; state.prefetchPending = false; state.prefetchToken += 1; state.spoken.clear(); state.autoBlocked = false;
+      mixer.setAudible("a", false); mixer.setAudible("b", false); mixer.setRunning(false);
+      $("bearerToken").value = ""; $("prefetchState").textContent = "Prefetch waiting for a session"; $("cueScript").textContent = "Local session ended. Backend profile data is not deleted."; $("voiceState").textContent = "Voice idle";
+      clearError(); renderAll(); apiState("Local session ended", "idle"); log("Local playback ended; credentials cleared from session memory", "no server delete");
+    }
+    function pauseOrResume() {
+      if (!state.current) return;
+      if (state.playing) { state.playing = false; state.wantsPlayback = false; cancelVoice("Playback paused"); stopMic("Playback paused. Text commands remain available."); mixer.setRunning(false); }
+      else { state.playing = true; state.wantsPlayback = true; state.lastFrame = performance.now(); unlockAudio(); mixer.setRunning(true); scheduleCues(); }
+      renderDecks(); updateControls(); log(state.playing ? "Synthetic clock resumed" : "Synthetic clock paused", "user gesture");
+    }
+    async function loadProfile(config, quiet = false) {
+      const generation = state.generation; const sequence = ++state.profileSequence;
+      try {
+        const raw = await api("/v1/me/profile", { lane: "profile", config });
+        if (generation !== state.generation || sequence !== state.profileSequence) return;
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("The server returned an invalid profile.");
+        state.profile = raw; state.profileIdentity = config.token ? "Firebase bearer identity" : "X-Dev-User-Id: " + config.devUser; renderTaste();
+      } catch (e) { if (!isAbort(e) && generation === state.generation && !quiet) showError(errorMessage(e)); }
+    }
+    function connect() {
+      let config; try { config = connectionSettings(); } catch (e) { showError(errorMessage(e)); return; }
+      if (state.sessionId && !sameConnection(config, state.config)) { showError("The running session has a locked API origin and identity. Start a new session to apply the edited connection settings."); return; }
+      clearError(); apiState("Testing authenticated API…", "busy"); void loadProfile(config);
+    }
+
+    function renderDecks() {
+      for (const key of ["a", "b"]) {
+        const suffix = key.toUpperCase(); const deck = state.decks[key]; const active = Boolean(deck && key === state.currentDeck && state.current);
+        $("deck" + suffix).dataset.active = String(active); $("deck" + suffix).classList.toggle("turning", active && state.playing);
+        if (!deck) {
+          $("title" + suffix).textContent = key === "a" ? "The floor is yours" : "Room for what’s next";
+          $("artist" + suffix).textContent = "Awaiting authenticated backend metadata.";
+          $("status" + suffix).textContent = "Standby"; $("cue" + suffix).textContent = "No catalog recording is loaded"; $("duration" + suffix).textContent = "—";
+          $("tags" + suffix).replaceChildren(make("span", "Synthetic instrumental only", "tag")); continue;
+        }
+        const value = deck.track;
+        $("title" + suffix).textContent = value.title; $("artist" + suffix).textContent = value.artist + (value.album ? " · " + value.album : "");
+        $("status" + suffix).textContent = active ? state.playing ? "Active · synthetic playback" : "Active · paused" : deck.kind === "staged" ? state.pendingAction?.kind === "transition" ? "Incoming · awaiting commit" : "Prefetched · not playing" : "Last played · fading / idle";
+        $("tags" + suffix).replaceChildren(...[value.genre, value.bpm ? number(value.bpm) + " BPM ≈" : "", value.camelot_key, value.era].filter(Boolean).map((v) => make("span", v, "tag")));
+        $("cue" + suffix).textContent = (value.cues.intro_vocal_ms === null ? "No vocal cue" : "Vocal ≈" + duration(value.cues.intro_vocal_ms)) + " · outro @" + duration(value.cues.outro_ramp_ms);
+        $("duration" + suffix).textContent = duration(value.duration_ms) + " ≈";
+      }
+    }
+    function renderContext() {
+      const now = new Date(); $("localTime").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }); $("timezone").textContent = timezone();
+      $("bucketLabel").textContent = (state.bucket || localBucket(now.getHours())).replaceAll("_", " ") + (state.bucket ? " · server" : " · client");
+      $("personaLabel").textContent = PERSONAS[state.config?.persona || $("persona").value];
+      $("sessionId").textContent = state.sessionId || "Not started"; $("sessionId").title = state.sessionId || ""; $("revisionLabel").textContent = state.revision === null ? "—" : String(state.revision);
+      $("vibeLabel").textContent = state.vibe || "A new session starts with your local hour and seed genres.";
+    }
+    function renderQueue() {
+      const source = state.queue || []; const list = source.filter((v) => v.id !== state.current?.id);
+      const selected = state.prefetched?.track;
+      const queue = selected ? [selected, ...list.filter((v) => v.id !== selected.id)] : list;
+      $("queueCount").textContent = queue.length + " track" + (queue.length === 1 ? "" : "s");
+      if (!queue.length) { $("queueList").replaceChildren(make("li", "No future tracks supplied by the server yet.", "empty")); return; }
+      $("queueList").replaceChildren(...queue.slice(0, 8).map((value, index) => {
+        const item = make("li"); const copy = make("div", undefined, "queue-copy"); copy.append(make("strong", value.title), make("span", value.artist + " · " + (selected?.id === value.id ? "staged, not playing" : value.genre || "server queue")));
+        item.append(make("span", String(index + 1).padStart(2, "0"), "queue-number"), copy, make("span", value.camelot_key || "—", "queue-key")); return item;
+      }));
+    }
+    function renderMetadata() {
+      const value = state.current;
+      $("trackDetails").textContent = value ? "ID: " + value.id + " · " + (value.metadata_quality || "Estimated catalog metadata") + ". Moods: " + (value.moods.join(", ") || "not supplied") + ". Subgenres: " + (value.subgenres.join(", ") || "not supplied") + ". Outro is an absolute timestamp. Audio is an unrelated generated beat." : "No track loaded.";
+      $("artistFacts").replaceChildren(...(value?.artist_facts || []).map((v) => make("li", v)));
+    }
+    function radarPoints(vector, scale = 1) {
+      return VECTOR_KEYS.map((key, index) => { const angle = -Math.PI / 2 + index * Math.PI * 2 / 5; const value = vector ? vector[key] : 1; const radius = 86 * scale * (finite(value) ? clamp(value, 0, 1) : 0); return (160 + Math.cos(angle) * radius).toFixed(2) + "," + (126 + Math.sin(angle) * radius).toFixed(2); }).join(" ");
+    }
+    function buildRadar() {
+      const ns = "http://www.w3.org/2000/svg"; const grid = $("radarGrid");
+      for (const scale of [.25, .5, .75, 1]) { const ring = document.createElementNS(ns, "polygon"); ring.setAttribute("points", radarPoints(null, scale)); ring.setAttribute("fill", "none"); ring.setAttribute("stroke", "#35414e"); ring.setAttribute("stroke-width", ".7"); grid.append(ring); }
+      const labels = ["Energy", "Valence", "Danceability", "Acousticness", "Tempo"];
+      for (let i = 0; i < 5; i += 1) {
+        const angle = -Math.PI / 2 + i * Math.PI * 2 / 5; const line = document.createElementNS(ns, "line"); line.setAttribute("x1", "160"); line.setAttribute("y1", "126"); line.setAttribute("x2", String(160 + Math.cos(angle) * 86)); line.setAttribute("y2", String(126 + Math.sin(angle) * 86)); line.setAttribute("stroke", "#35414e"); line.setAttribute("stroke-width", ".7"); grid.append(line);
+        const label = document.createElementNS(ns, "text"); label.setAttribute("x", String(160 + Math.cos(angle) * 116)); label.setAttribute("y", String(130 + Math.sin(angle) * 108)); label.setAttribute("text-anchor", "middle"); label.setAttribute("fill", "#a9b5c6"); label.setAttribute("font-size", "10"); label.textContent = labels[i]; grid.append(label);
+      }
+    }
+    function renderTaste() {
+      const profile = state.profile; const target = profile?.circadian_vectors?.[state.bucket || localBucket(new Date().getHours())]; const current = state.current?.vector;
+      const valid = (v) => v && VECTOR_KEYS.every((key) => finite(v[key]));
+      $("targetPolygon").toggleAttribute("hidden", !valid(target)); $("trackPolygon").toggleAttribute("hidden", !valid(current));
+      if (valid(target)) $("targetPolygon").setAttribute("points", radarPoints(target)); if (valid(current)) $("trackPolygon").setAttribute("points", radarPoints(current));
+      $("radarDescription").textContent = [valid(target) ? "Server bucket target: " + VECTOR_KEYS.map((key) => key + " " + number(target[key])).join(", ") : "No server target loaded.", valid(current) ? "Estimated current metadata: " + VECTOR_KEYS.map((key) => key + " " + number(current[key])).join(", ") : "No current vector loaded."].join(" ");
+      $("profileSource").textContent = profile ? "Live GET /v1/me/profile · " + (state.profileIdentity || "authenticated profile") : "Awaiting GET /v1/me/profile. No sample taste data.";
+      $("profileEvents").textContent = number(profile?.stats?.events); $("profileEpisodes").textContent = profile ? String(Array.isArray(profile.episodes) ? profile.episodes.length : Array.isArray(profile.episodic_log) ? profile.episodic_log.length : 0) : "—";
+      $("profileListened").textContent = finite(profile?.total_listen_sec) ? number(profile.total_listen_sec / 60) + "m" : "—";
+      const genres = Array.isArray(profile?.top_genres) ? profile.top_genres.slice(0, 6) : [];
+      if (!genres.length) { const row = make("tr"); const cell = make("td", profile ? "No learned genre priors yet. Feedback will add evidence." : "Connect to see actual learned priors.", "empty"); cell.colSpan = 3; row.append(cell); $("genreRows").replaceChildren(row); }
+      else $("genreRows").replaceChildren(...genres.map((prior) => {
+        const row = make("tr"); const estimate = make("td");
+        const interval = prior.credible_interval; const lower = Array.isArray(interval) ? interval[0] : interval?.lower; const upper = Array.isArray(interval) ? interval[1] : interval?.upper;
+        estimate.append(make("span", (finite(prior.mean) ? Math.round(prior.mean * 100) + "%" : "—") + (finite(lower) && finite(upper) ? " · " + Math.round(lower * 100) + "–" + Math.round(upper * 100) + "%" : "")));
+        const bar = make("div", undefined, "posterior"); bar.setAttribute("aria-hidden", "true");
+        if (finite(lower) && finite(upper)) { const span = make("i", undefined, "interval"); span.style.left = clamp(lower * 100, 0, 100) + "%"; span.style.width = clamp((upper - lower) * 100, 0, 100) + "%"; bar.append(span); }
+        if (finite(prior.mean)) { const point = make("i", undefined, "mean"); point.style.left = clamp(prior.mean * 100, 0, 98) + "%"; bar.append(point); }
+        estimate.append(bar); row.append(make("td", text(prior.name, 90)), make("td", number(prior.alpha) + " / " + number(prior.beta)), estimate); return row;
+      }));
+      const artists = Array.isArray(profile?.top_artists) ? profile.top_artists.slice(0, 5) : [];
+      $("topArtists").replaceChildren(...(artists.length ? artists.map((prior) => make("p", text(prior.name, 140) + " · Beta(" + number(prior.alpha) + ", " + number(prior.beta) + ") · mean " + number(prior.mean))) : [make("p", "No learned artist priors supplied.")]));
+      $("globalPriors").textContent = profile ? JSON.stringify(profile.global_affinities || {}, null, 2).slice(0, 18000) : "No global priors loaded.";
+    }
+    function updateControls() {
+      const active = Boolean(state.current && state.sessionId); const locked = Boolean(state.busy || state.pendingAction);
+      for (const id of ["likeButton", "skipButton", "completeButton", "replayButton", "djButton", "sendCommand"]) $(id).disabled = !active || locked;
+      $("pauseButton").disabled = !active; $("pauseButton").textContent = state.playing ? "Ⅱ Pause" : "▶ Resume";
+      $("micButton").disabled = !hasMic || !active || locked;
+      $("startButton").disabled = state.busy === "start"; $("startButton").textContent = state.busy === "start" ? "Connecting…" : active ? "↗ New session" : "▶ Start a session";
+      $("stopButton").disabled = !active && !state.busy; $("prefetchButton").disabled = !active || locked || state.prefetchPending;
+      $("retryButton").disabled = Boolean(state.busy); $("connectButton").disabled = Boolean(state.busy); $("refreshProfile").disabled = Boolean(state.busy === "start");
+      if (!active) $("transportState").textContent = state.busy === "start" ? "Waiting for backend" : "Ready when you are";
+      else $("transportState").textContent = state.busy ? state.busy === "transition" ? "Committing · beat continues" : "Requesting · beat continues" : state.pendingAction ? "Retry needed · beat continues" : state.playing ? "Live synthetic playback" : "Paused";
+    }
+    function renderAll() { renderDecks(); renderContext(); renderQueue(); renderMetadata(); renderTaste(); updateControls(); renderPlayhead(); }
+    function renderPlayhead() {
+      const value = state.current; const percent = value ? clamp(state.positionMs / value.duration_ms * 100, 0, 100) : 0;
+      $("timelineFill").style.width = percent + "%"; $("timeline").setAttribute("aria-valuenow", percent.toFixed(1));
+      $("timeline").setAttribute("aria-valuetext", value ? duration(state.positionMs) + " of " + duration(value.duration_ms) + ", synthetic " + state.speed + " times speed" : "No track");
+      $("positionLabel").textContent = duration(state.positionMs); $("lengthLabel").textContent = value ? duration(value.duration_ms) + " estimated" : "—";
+      $("wallLabel").textContent = (state.wallMs / 1000).toFixed(1) + " s real · " + (state.leadMs > 0 ? "opening bed" : "simulated media dwell");
+      $("nowPlaying").textContent = value ? (state.positionMs >= value.duration_ms ? "End reached · live bed while transition resolves" : "Now simulating · " + value.title) : "No server selection yet";
+      $("speedLabel").textContent = state.speed + "× synthetic clock";
+    }
+    const analyserBytes = { a: new Uint8Array(256), b: new Uint8Array(256) };
+    function drawWave(key) {
+      const canvas = $(key === "a" ? "waveA" : "waveB"); const ctx = canvas.getContext("2d"); if (!ctx) return;
+      const width = canvas.width; const height = canvas.height; ctx.clearRect(0, 0, width, height);
+      ctx.strokeStyle = "#253240"; ctx.lineWidth = 1;
+      for (let x = 0; x < width; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
+      const deck = mixer.decks[key]; const data = analyserBytes[key];
+      if (deck && state.playing && !state.muted && deck.audible && !reducedMotion.matches) deck.analyser.getByteTimeDomainData(data); else data.fill(128);
+      ctx.beginPath(); ctx.strokeStyle = key === "a" ? "#9cf2ce" : "#95baff"; ctx.lineWidth = 1.8;
+      for (let i = 0; i < data.length; i += 1) { const x = i / (data.length - 1) * width; const y = height / 2 + (data[i] - 128) / 128 * height * .9; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+    function drawDuck() {
+      const value = clamp(mixer.actualDuck(), 0, 1); state.duckHistory.push(value); state.duckHistory.shift();
+      const canvas = $("duckPlot"); const ctx = canvas.getContext("2d"); if (!ctx) return;
+      const width = canvas.width; const height = canvas.height; ctx.clearRect(0, 0, width, height);
+      ctx.strokeStyle = "#516052"; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.moveTo(0, height - .18 * (height - 12) - 6); ctx.lineTo(width, height - .18 * (height - 12) - 6); ctx.stroke(); ctx.setLineDash([]);
+      const points = reducedMotion.matches ? Array(90).fill(value) : state.duckHistory;
+      ctx.beginPath(); points.forEach((point, index) => { const x = index / (points.length - 1) * width; const y = height - 6 - point * (height - 12); if (!index) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.strokeStyle = "#9cf2ce"; ctx.lineWidth = 2; ctx.stroke();
+      $("duckReadout").textContent = Math.round(value * 100) + "%";
+      const enabled = state.playing && !state.muted;
+      const a = enabled && mixer.decks.a?.audible ? mixer.decks.a.gain.gain.value : 0;
+      const b = enabled && mixer.decks.b?.audible ? mixer.decks.b.gain.gain.value : 0;
+      $("mixReadout").textContent = Math.round(a * 100) + " / " + Math.round(b * 100);
+      $("gainA").style.width = a * 100 + "%"; $("gainB").style.width = b * 100 + "%";
+    }
+    function tick(now) {
+      if (state.closed) return;
+      // Long background-tab gaps are not invented listening; only bounded observed time accrues.
+      const elapsed = clamp(now - state.lastFrame, 0, 1000); state.lastFrame = now;
+      if (state.current && state.playing) {
+        state.wallMs += elapsed;
+        const leadUsed = Math.min(state.leadMs, elapsed); state.leadMs -= leadUsed;
+        const mediaElapsed = Math.min((elapsed - leadUsed) * state.speed, Math.max(0, state.current.duration_ms - state.positionMs));
+        state.positionMs += mediaElapsed; state.listenedMs = Math.min(state.current.duration_ms, state.listenedMs + mediaElapsed);
+        if (!state.busy && !state.pendingAction) {
+          const threshold = Math.max(0, Math.min(state.current.duration_ms * .75, state.current.duration_ms - 20000));
+          if (state.positionMs >= threshold) void prefetch();
+          scheduleCues();
+          if (state.positionMs >= state.current.duration_ms && !state.autoBlocked) beginTransition("complete");
+        }
+        const voice = state.voiceJob;
+        if (voice && voice.targetSerial === state.serial && voice.targetId === state.current.id && voice.introLimit !== null && state.leadMs <= 0 && state.positionMs >= voice.introLimit) cancelVoice("First-vocal safety boundary", false);
+      }
+      if (state.mixTween) {
+        const tween = state.mixTween; const fraction = clamp((now - tween.started) / tween.duration, 0, 1); const eased = fraction * fraction * (3 - 2 * fraction);
+        state.fader = tween.from + (tween.to - tween.from) * eased; mixer.setFader(state.fader); $("crossfader").value = String(state.fader * 100);
+        if (fraction >= 1) { mixer.setAudible(tween.outgoing, false); state.mixTween = null; paintStaged(); renderDecks(); }
+      }
+      if (now - state.lastDraw > (reducedMotion.matches ? 200 : 65)) { state.lastDraw = now; drawWave("a"); drawWave("b"); drawDuck(); }
+      if (now - state.lastLabels > 200) { state.lastLabels = now; renderPlayhead(); }
+      window.requestAnimationFrame(tick);
+    }
+    function loadVoices() {
+      if (!hasSpeech) { $("voiceSupport").textContent = "Browser TTS unsupported. Captions remain available; optional server WAV may work."; $("voiceSelect").disabled = true; return; }
+      const selected = $("voiceSelect").value; const voices = window.speechSynthesis.getVoices().slice(0, 80);
+      $("voiceSelect").replaceChildren(new Option("System default", ""), ...voices.map((v) => new Option(v.name.slice(0, 90) + " · " + v.lang + (v.localService ? " · local" : " · service"), v.voiceURI)));
+      if (voices.some((v) => v.voiceURI === selected)) $("voiceSelect").value = selected;
+      $("voiceSupport").textContent = voices.length ? voices.length + " browser voices available. No file/buffer pre-synthesis; silent cues never call TTS." : "Browser voices may load after your first gesture. System default will be requested; captions always remain.";
+    }
+
+    $("apiOrigin").value = ["http:", "https:"].includes(window.location.protocol) ? window.location.origin : "http://localhost:8000";
+    $("usePageOrigin").disabled = !["http:", "https:"].includes(window.location.protocol);
+    $("usePageOrigin").addEventListener("click", () => { $("apiOrigin").value = window.location.origin; });
+    $("useLocalhost").addEventListener("click", () => { $("apiOrigin").value = "http://localhost:8000"; });
+    $("startButton").addEventListener("click", () => void createSession());
+    $("connectButton").addEventListener("click", connect);
+    $("refreshProfile").addEventListener("click", () => { if (state.config) void loadProfile(state.config); else connect(); });
+    $("pauseButton").addEventListener("click", pauseOrResume);
+    $("likeButton").addEventListener("click", () => { unlockAudio(); beginFeedback("like"); });
+    $("replayButton").addEventListener("click", () => { unlockAudio(); beginFeedback("replay"); });
+    $("skipButton").addEventListener("click", () => { unlockAudio(); beginTransition("skip"); });
+    $("completeButton").addEventListener("click", () => { unlockAudio(); beginTransition("complete"); });
+    $("djButton").addEventListener("click", () => { unlockAudio(); beginDJ(); });
+    $("prefetchButton").addEventListener("click", () => void prefetch(true));
+    $("stopButton").addEventListener("click", endSession);
+    $("retryButton").addEventListener("click", () => { if (state.pendingAction && !state.busy) { unlockAudio(); clearError(); void executeJob(state.pendingAction); } });
+    $("dismissError").addEventListener("click", () => { if (state.pendingAction) showError("This action is still pending. Retry the same request to resolve its outcome, or start a new session. The beat can continue safely.", true); else $("errorBox").hidden = true; });
+    $("clearLog").addEventListener("click", () => { $("eventLog").replaceChildren(); state.logCount = 0; });
+    $("muteButton").addEventListener("click", () => { unlockAudio(); state.muted = !state.muted; mixer.setVolume(Number($("volume").value) / 100, state.muted); $("muteButton").setAttribute("aria-pressed", String(state.muted)); $("muteButton").textContent = state.muted ? "Unmute beat" : "Mute beat"; });
+    $("volume").addEventListener("input", () => { unlockAudio(); const value = Number($("volume").value); mixer.setVolume(value / 100, state.muted); $("volumeValue").textContent = value + "%"; });
+    $("crossfader").addEventListener("input", () => { unlockAudio(); state.mixTween = null; state.fader = Number($("crossfader").value) / 100; mixer.setFader(state.fader); });
+    $("simulationSpeed").addEventListener("change", () => { state.speed = Number($("simulationSpeed").value); cancelVoice("Clock speed changed; safe window recalculated"); renderPlayhead(); log("Synthetic clock changed", state.speed + "×"); });
+    $("persona").addEventListener("change", renderContext);
+    $("voiceEnabled").addEventListener("change", () => { if (!$("voiceEnabled").checked) { cancelVoice("DJ voice disabled"); clearTTS(); } });
+    $("serverVoice").addEventListener("change", () => { if ($("serverVoice").checked) { $("serverVoiceStatus").textContent = "Server WAV preferred when a cue ID is available; browser fallback enabled."; if (state.prefetched) void warmServerVoice(state.prefetched.cue); } else { if (state.voiceJob?.audio) cancelVoice("Server voice disabled"); clearTTS(); $("serverVoiceStatus").textContent = "Browser speech is the zero-key default."; } });
+    $("cancelVoice").addEventListener("click", () => cancelVoice("User interrupted the DJ"));
+    $("micButton").addEventListener("click", startMic);
+    $("commandForm").addEventListener("submit", (event) => { event.preventDefault(); unlockAudio(); submitVoice($("commandInput").value); });
+    for (const button of document.querySelectorAll("[data-command]")) button.addEventListener("click", () => { $("commandInput").value = button.dataset.command; $("commandInput").focus(); });
+    if (hasSpeech) window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
+    window.addEventListener("pagehide", () => {
+      state.closed = true; state.generation += 1; abortAll(); cancelVoice("Page closed"); stopMic();
+      for (const entry of ttsCache.values()) revokeEntry(entry); ttsCache.clear();
+      if (state.voiceJob?.entry) revokeEntry(state.voiceJob.entry); mixer.close(); $("bearerToken").value = ""; state.config = null;
+    }, { once: true });
+    window.addEventListener("pageshow", (event) => { if (event.persisted) window.location.reload(); });
+    $("micStatus").textContent = hasMic ? "Microphone ready after session start. Click to interrupt the DJ; recognition is one-shot." : recognitionClass ? "Microphone requires a secure context (HTTPS or localhost). Use the text command fallback." : "Speech recognition is unsupported in this browser. Use the text command bar for the same backend actions.";
+    buildRadar(); loadVoices(); renderAll();
+    log("Studio ready · synthetic audio only", "no auto-play");
+    if (window.location.protocol === "file:") log("Disk mode: API defaults to localhost:8000; server must permit CORS", "file:", "warn");
+    setInterval(renderContext, 1000);
+    window.requestAnimationFrame(tick);
+  })();
+  </script>
+</body>
+</html>

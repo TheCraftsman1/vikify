@@ -34,7 +34,12 @@ class AuthStore(context: Context) {
      */
     var sessions: List<GoogleAccountSession>
         get() {
-            val saved = sessionsFromJson(prefs.getString(KEY_SESSIONS, null))
+            val raw = prefs.getString(KEY_SESSIONS, null)
+            val saved = synchronized(registryLock) {
+                val cached = cachedRegistry
+                if (cached != null && cached.first == raw) cached.second
+                else sessionsFromJson(raw).also { cachedRegistry = raw to it }
+            }
             if (saved.isNotEmpty()) return saved
             val legacy = cookie ?: return emptyList()
             val profile = YouTubeProfile(
@@ -65,7 +70,11 @@ class AuthStore(context: Context) {
             ?: sessions.firstOrNull()
 
     fun replaceSessions(value: List<GoogleAccountSession>) {
-        prefs.edit().putString(KEY_SESSIONS, value.toJson()).apply()
+        synchronized(registryLock) {
+            val raw = value.toJson()
+            prefs.edit().putString(KEY_SESSIONS, raw).apply()
+            cachedRegistry = raw to value.toList()
+        }
     }
 
     fun upsertSession(session: GoogleAccountSession, activate: Boolean = true) {
@@ -81,16 +90,18 @@ class AuthStore(context: Context) {
     }
 
     fun select(accountId: String, profileId: String?) {
-        activeAccountId = accountId
-        activeProfileId = profileId
+        prefs.edit().putString(KEY_ACTIVE_ACCOUNT, accountId)
+            .putString(KEY_ACTIVE_PROFILE, profileId).apply()
     }
 
     fun removeAccount(accountId: String): GoogleAccountSession? {
+        val previousActive = activeAccountId
         val remaining = sessions.filterNot { it.accountId == accountId }
         replaceSessions(remaining)
-        val fallback = remaining.firstOrNull()
+        val fallback = remaining.firstOrNull { it.accountId == previousActive } ?: remaining.firstOrNull()
         select(fallback?.accountId.orEmpty(), fallback?.activeProfileId)
         prefs.edit().putString(KEY_COOKIE, fallback?.cookie).apply()
+        BrowserSession.clearGoogleCookies(accountId)
         BrowserSession.clearGoogleCookies()
         return fallback
     }
@@ -186,9 +197,12 @@ class AuthStore(context: Context) {
      * Signs out of YouTube Music only — the Discord login is a separate account.
      */
     fun signOut() {
+        val accountIds = sessions.map { it.accountId }
         prefs.edit().remove(KEY_COOKIE).remove(KEY_SESSIONS)
             .remove(KEY_ACTIVE_ACCOUNT).remove(KEY_ACTIVE_PROFILE).apply()
         clearChannel()
+        synchronized(registryLock) { cachedRegistry = null }
+        accountIds.forEach { BrowserSession.clearGoogleCookies(it) }
         // The in-app browser keeps its own copy of the Google login, and a
         // sign-out that leaves it in place is not one: the next sign-in is
         // waved straight through as the account just signed out of, with no
@@ -197,6 +211,8 @@ class AuthStore(context: Context) {
     }
 
     companion object {
+        private val registryLock = Any()
+        private var cachedRegistry: Pair<String?, List<GoogleAccountSession>>? = null
         /**
          * Whether a cookie header carries a secret Innertube requests can be
          * signed with.

@@ -23,6 +23,12 @@ val localProps = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use { load(it) }
 }
+val gnaniApiKey: String = (
+    localProps.getProperty("GNANI_API_KEY")
+        ?: System.getenv("GNANI_API_KEY")
+        ?: ""
+    ).trim()
+
 val lastfmApiKey: String = (
     localProps.getProperty("LASTFM_API_KEY")
         ?: System.getenv("LASTFM_API_KEY")
@@ -57,6 +63,8 @@ val updateRepo: String = (
         ?: System.getenv("UPDATE_REPO")
         ?: "vishnukanchipati/vikify"
     ).trim()
+// Public service address only. NVIDIA credentials are never part of the APK.
+val vmieBaseUrl = (localProps.getProperty("VMIE_BASE_URL") ?: System.getenv("VMIE_BASE_URL") ?: "").trim().trimEnd('/')
 val updateUrl: String = (
     localProps.getProperty("UPDATE_URL")
         ?: System.getenv("UPDATE_URL")
@@ -113,6 +121,8 @@ android {
         // AppUpdateChecker.apkAssetUrl.
         buildConfigField("String", "UPDATE_RELEASE_URL", "\"${updateUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "UPDATE_APK_PREFIX", "\"VikifyTV-\"")
+        buildConfigField("String", "VMIE_BASE_URL", "\"${vmieBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField("String", "GNANI_API_KEY", "\"${gnaniApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
 
     splits {
@@ -305,6 +315,10 @@ dependencies {
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
     implementation("com.google.firebase:firebase-auth")
+    implementation("androidx.webkit:webkit:1.14.0")
+    implementation("androidx.credentials:credentials:1.6.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("com.google.firebase:firebase-firestore") {
         exclude(group = "com.google.firebase", module = "protolite-well-known-types")
     }

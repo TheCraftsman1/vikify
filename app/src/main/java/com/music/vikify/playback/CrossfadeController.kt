@@ -28,6 +28,7 @@ class CrossfadeController(
     private val onArmIncoming: (MediaItem, String?) -> Unit = { _, _ -> },
     private val onBlendHeadroom: (Float) -> Unit = {},
     private val onSettled: () -> Unit = {},
+    private val canTransition: () -> Boolean = { true },
 ) {
     private var ticker: Job? = null
     private var outgoing: ExoPlayer? = null
@@ -122,6 +123,7 @@ class CrossfadeController(
     }
 
     private fun considerTransition() {
+        if (!canTransition()) return
         val current = active()
         if (!current.isPlaying || ListenTogether.state.value.inParty ||
             SleepTimer.afterTrack.value || current.repeatMode == Player.REPEAT_MODE_ONE ||

@@ -1,0 +1,32 @@
+{
+  "database": [
+    { "target": "party", "rules": "docs/firebase/party-database.rules.json" }
+  ],
+  "hosting": {
+    "target": "share",
+    "public": "hosting/public",
+    "ignore": ["firebase.json", "**/node_modules/**"],
+    "headers": [
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Cache-Control", "value": "public, max-age=300" }
+        ]
+      },
+      {
+        "source": "**",
+        "headers": [
+          { "key": "X-Content-Type-Options", "value": "nosniff" },
+          { "key": "Referrer-Policy", "value": "no-referrer" },
+          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'" }
+        ]
+      }
+    ],
+    "rewrites": [
+      { "source": "/track/**", "destination": "/index.html" },
+      { "source": "/song/**", "destination": "/index.html" },
+      { "source": "/invite/**", "destination": "/index.html" }
+    ]
+  }
+}

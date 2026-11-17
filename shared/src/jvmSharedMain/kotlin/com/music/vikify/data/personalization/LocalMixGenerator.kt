@@ -39,12 +39,12 @@ data class TrackListeningEvidence(
 
 /** Pure selection rules, independent of the player, storage, and catalog transport. */
 object LocalMixGenerator {
-    const val ALGORITHM_VERSION = 3
+    const val ALGORITHM_VERSION = 4
     const val MAX_TRACKS = 30
     private val youtubeId = Regex("[A-Za-z0-9_-]{11}")
 
     fun eligible(song: Song): Boolean = song.title.isNotBlank() && !song.isVideo &&
-        (youtubeId.matches(song.videoId) || (song.videoId.isNotBlank() && song.localUri != null))
+        (youtubeId.matches(song.videoId) || (song.videoId.isNotBlank() && !song.localUri.isNullOrBlank()))
 
     fun favorites(evidence: List<TrackListeningEvidence>, now: Long, zone: ZoneId,
         preferences: Map<String, TrackPreference> = emptyMap()): List<Song> =

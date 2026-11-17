@@ -266,6 +266,7 @@ internal fun ShareAction(
 internal fun sendIntent(uri: Uri) = Intent(Intent.ACTION_SEND)
     .setType(MIME)
     .putExtra(Intent.EXTRA_STREAM, uri)
+    .apply { clipData = android.content.ClipData.newRawUri("Vikify picture", uri) }
     .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 
 /**

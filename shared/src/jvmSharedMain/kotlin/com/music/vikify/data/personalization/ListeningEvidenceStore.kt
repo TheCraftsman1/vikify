@@ -47,6 +47,63 @@ class ListeningEvidenceStore(private val directory: File, private val clock: () 
         locks.getOrPut(key) { Mutex() }.withLock { read(key) }
     }
 
+    suspend fun exportCloud(scope: String): Map<String, String> = cloudEntries(snapshot(scope))
+
+    /** Atomically restores resolved items without overwriting an edit/checkpoint made during a pull. */
+    suspend fun applyCloud(scope: String, expected: Map<String, String>, desired: Map<String, String>): Boolean {
+        CloudMixPayload.bounded(desired, 10_000 + MAX_SESSIONS, 20_000)
+        val preferences = sortedMapOf<String, TrackPreference>()
+        val sessions = mutableListOf<ListeningSessionRecord>()
+        desired.forEach { (key, payload) ->
+            when {
+                key.startsWith("preference:") -> {
+                    val id = key.removePrefix("preference:")
+                    require(CloudMixPayload.trackId(id))
+                    preferences[id] = json.decodeFromString(TrackPreference.serializer(), payload)
+                }
+                key.startsWith("session:") -> {
+                    val session = json.decodeFromString(ListeningSessionRecord.serializer(), payload)
+                    require(key == "session:${session.id}" && CloudMixPayload.sessionId(session.id) &&
+                        CloudMixPayload.trackId(session.trackId) && session.queueEntryId == null &&
+                        (session.collectionId?.length ?: 0) <= 200 && session.startedAt > 0 &&
+                        session.updatedAt >= session.startedAt && session.revision >= 0 && session.heardMs >= 0 &&
+                        session.uniqueHeardMs in 0..session.heardMs && session.durationMs >= 0)
+                    sessions += session
+                }
+                else -> throw IllegalArgumentException("Unsupported cloud evidence item")
+            }
+        }
+        require(preferences.size <= 10_000 && sessions.size <= MAX_SESSIONS)
+        return withContext(Dispatchers.IO) {
+            val key = key(scope)
+            locks.getOrPut(key) { Mutex() }.withLock {
+                if (key in retired) return@withLock false
+                val old = read(key)
+                if (cloudEntries(old) != expected) return@withLock false
+                val combinedPreferences = old.preferences.filterKeys { !CloudMixPayload.trackId(it) } + preferences
+                check(combinedPreferences.size <= 10_000) { "Recommendation feedback limit reached" }
+                val combinedSessions = (old.sessions.filterNot { CloudMixPayload.trackId(it.trackId) } + sessions)
+                    .filter { it.updatedAt in (clock() - RETENTION_MS)..clock() }
+                    .sortedByDescending { it.updatedAt }.take(MAX_SESSIONS)
+                val feedbackChanged = old.preferences != combinedPreferences
+                val next = old.copy(preferences = combinedPreferences, sessions = combinedSessions,
+                    feedbackRevision = old.feedbackRevision + if (feedbackChanged) 1 else 0)
+                if (next != old) write(key, next)
+                if (feedbackChanged) _feedbackChanges.update { it + 1 }
+                true
+            }
+        }
+    }
+
+    private fun cloudEntries(snapshot: ListeningEvidenceSnapshot): Map<String, String> = sortedMapOf<String, String>().apply {
+        snapshot.preferences.filterKeys(CloudMixPayload::trackId).forEach { (id, preference) ->
+            put("preference:$id", json.encodeToString(TrackPreference.serializer(), preference))
+        }
+        snapshot.sessions.filter { CloudMixPayload.trackId(it.trackId) }.forEach { session ->
+            put("session:${session.id}", json.encodeToString(ListeningSessionRecord.serializer(), session.copy(queueEntryId = null)))
+        }
+    }
+
     suspend fun record(scope: String, session: ListeningSessionRecord) = withContext(Dispatchers.IO) {
         val key = key(scope)
         locks.getOrPut(key) { Mutex() }.withLock {

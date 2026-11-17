@@ -1,0 +1,10 @@
+{
+  "database": {
+    "rules": "rules.generated.json"
+  },
+  "emulators": {
+    "database": { "host": "127.0.0.1", "port": 9004 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  }
+}

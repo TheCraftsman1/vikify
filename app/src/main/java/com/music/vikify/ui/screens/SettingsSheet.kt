@@ -68,6 +68,7 @@ import androidx.compose.material.icons.rounded.MotionPhotosOff
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Draw
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.SignalCellularAlt
 import androidx.compose.material.icons.rounded.SmartDisplay
@@ -191,6 +192,7 @@ fun SettingsScreen(
     clearingPersonalization: Boolean = false,
     personalizationScope: String = "",
     onCoverPreview: (() -> Unit)? = null,
+    onDj: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
 
@@ -226,7 +228,6 @@ fun SettingsScreen(
     val downloadQuality by AppSettings.downloadQuality.collectAsStateWithLifecycle()
     val wifiOnlyDownloads by AppSettings.wifiOnlyDownloads.collectAsStateWithLifecycle()
     val exportDownloads by AppSettings.exportDownloads.collectAsStateWithLifecycle()
-    val stopOnTaskRemoved by AppSettings.stopOnTaskRemoved.collectAsStateWithLifecycle()
     val hideVolumeBar by AppSettings.hideVolumeBar.collectAsStateWithLifecycle()
     val hideStatusBarInPlayer by AppSettings.hideStatusBarInPlayer.collectAsStateWithLifecycle()
     val hideSongStatus by AppSettings.hideSongStatus.collectAsStateWithLifecycle()
@@ -264,6 +265,10 @@ fun SettingsScreen(
     val listenBrainzEnabled by AppSettings.listenBrainzEnabled.collectAsStateWithLifecycle()
     val listenBrainzToken by AppSettings.listenBrainzToken.collectAsStateWithLifecycle()
 
+    val replaySyncEnabled by com.music.vikify.data.stats.ReplayCloudSync.enabled.collectAsStateWithLifecycle(false)
+    val replaySyncAccount by com.music.vikify.data.stats.ReplayCloudSync.account.collectAsStateWithLifecycle(null)
+    val replaySyncFailed by com.music.vikify.data.stats.ReplayCloudSync.failed.collectAsStateWithLifecycle()
+    val curatedSyncStatus by com.music.vikify.data.personalization.CuratedCloudSync.status.collectAsStateWithLifecycle()
     val replayGenres by AppSettings.replayGenres.collectAsStateWithLifecycle()
 
     // Read here so the row can say "In a party · ABC123" rather than making
@@ -413,6 +418,16 @@ fun SettingsScreen(
             // Sits with the account rather than with Playback: a party is up to
             // five signed-in people, and being signed in is the whole of what
             // the row needs before it will do anything.
+            if (onDj != null) {
+                row("Your DJ", "dj", "radio", "personality", "music") {
+                    SettingsRow(
+                        icon = Icons.Rounded.PlayArrow,
+                        title = "Your DJ",
+                        subtitle = "A personal radio set that learns as you listen",
+                        onClick = onDj,
+                    )
+                }
+            }
             val listenTogetherTitle = stringResource(R.string.listen_together)
             row(listenTogetherTitle, "jam", "party", "sync", "friends") {
                 SettingsRow(
@@ -1034,6 +1049,35 @@ fun SettingsScreen(
                     title = replayTitle,
                     subtitle = stringResource(R.string.replay_subtitle),
                     onClick = onOpenReplay,
+                )
+            }
+            val replaySyncTitle = stringResource(R.string.replay_sync)
+            row(replaySyncTitle, "replay", "history", "backup", "restore", "mixes", "playlists") {
+                SettingsRow(
+                    icon = Icons.Rounded.BarChart,
+                    title = replaySyncTitle,
+                    subtitle = stringResource(when {
+                        replaySyncAccount == null -> R.string.replay_sync_sign_in
+                        replaySyncEnabled && replaySyncFailed -> R.string.replay_sync_failed
+                        replaySyncEnabled && curatedSyncStatus == com.music.vikify.data.personalization.CuratedSyncStatus.RETRYING -> R.string.curated_sync_failed
+                        replaySyncEnabled && curatedSyncStatus == com.music.vikify.data.personalization.CuratedSyncStatus.ACCOUNT_MISMATCH -> R.string.curated_sync_account_mismatch
+                        replaySyncEnabled && curatedSyncStatus == com.music.vikify.data.personalization.CuratedSyncStatus.PROFILE_REQUIRED -> R.string.curated_sync_profile_required
+                        replaySyncEnabled && curatedSyncStatus == com.music.vikify.data.personalization.CuratedSyncStatus.SYNCING -> R.string.curated_sync_running
+                        replaySyncEnabled && curatedSyncStatus == com.music.vikify.data.personalization.CuratedSyncStatus.SAVED -> R.string.curated_sync_saved
+                        else -> R.string.replay_sync_description
+                    }),
+                    trailing = {
+                        Switch(
+                            checked = replaySyncEnabled,
+                            enabled = replaySyncAccount != null,
+                            onCheckedChange = com.music.vikify.data.stats.ReplayCloudSync::setEnabled,
+                        )
+                    },
+                    onClick = {
+                        if (replaySyncAccount != null) {
+                            com.music.vikify.data.stats.ReplayCloudSync.setEnabled(!replaySyncEnabled)
+                        }
+                    },
                 )
             }
             val workOutGenresTitle = stringResource(R.string.work_out_genres)

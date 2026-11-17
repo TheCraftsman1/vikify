@@ -4,6 +4,7 @@ import android.app.SearchManager
 import android.content.Intent
 import android.net.Uri
 import android.provider.MediaStore
+import com.music.vikify.data.sharing.VikifyLinks
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -110,6 +111,16 @@ object MusicLink {
         val segments = uri.pathSegments.orEmpty()
         if (host == "youtu.be") {
             return segments.firstOrNull()?.let(::track)
+        }
+        if (uri.scheme == "vikify" && (host == "track" || host == "song")) {
+            return segments.singleOrNull()?.let(::track)
+        }
+        if (uri.scheme == "https" && (host == VikifyLinks.HOST || host == VikifyLinks.LEGACY_HOST || host == "vikify.app")) {
+            val trackId = when (segments.firstOrNull()) {
+                "track", "song", "watch" -> segments.getOrNull(1) ?: uri.getQueryParameter("v")
+                else -> null
+            }
+            if (!trackId.isNullOrBlank()) return track(trackId)
         }
         if (host != "youtube.com" && host != "music.youtube.com" && host != "m.youtube.com") {
             return null

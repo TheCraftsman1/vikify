@@ -1,0 +1,50 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      function ownsReplay() {
+        return isOwner() &&
+          request.auth.token.firebase.sign_in_provider != "anonymous";
+      }
+
+      allow get, create, update: if isOwner();
+
+      match /playlists/{playlistId} {
+        allow read, write: if isOwner();
+      }
+
+      match /library/favorites {
+        allow get, create, update: if isOwner();
+      }
+
+      match /personalization/feedback {
+        allow get, create, update: if isOwner();
+      }
+
+      match /replayMonths/{snapshot} {
+        allow read, delete: if ownsReplay();
+        allow create, update: if ownsReplay() &&
+          request.resource.data.keys().hasOnly(["bucket"]) &&
+          request.resource.data.bucket is bytes &&
+          request.resource.data.bucket.size() <= 950000;
+      }
+
+      match /curatedProfiles/{profile} {
+        function validProfile() {
+          return profile.matches('^[0-9a-f]{64}$');
+        }
+
+        allow get, delete: if ownsReplay() && validProfile();
+        allow create, update: if ownsReplay() && validProfile() &&
+          request.resource.data.keys().hasOnly(["bucket"]) &&
+          request.resource.data.bucket is bytes &&
+          request.resource.data.bucket.size() <= 950000;
+      }
+    }
+  }
+}

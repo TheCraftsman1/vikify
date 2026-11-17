@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "794653884734-ekm2b64pgtegvnhja1u1rs6qcnmh2o2c.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.music.vikify",
+            "certificate_hash": "d625a4cb080b14db56741bab01743b5b2aac84d8"
+          }
+        },
+        {
+          "client_id": "794653884734-mcnnmns8f6ec5973ub19vvopec7t1h11.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.music.vikify",
+            "certificate_hash": "0def84c9866e17bf4af91e668212b13c5f27b0b5"
+          }
+        },
+        {
           "client_id": "794653884734-a6rc2ij1n85pqkg8ga7830cdtton5835.apps.googleusercontent.com",
           "client_type": 3
         }

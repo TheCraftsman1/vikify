@@ -1,0 +1,839 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "partyRooms": {
+      "$code": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider == 'google.com' && $code.matches(/^[A-Z0-9]{6}$/) && !root.child('partyBans').child($code).child(auth.uid).exists() && (!data.exists() || data.child('expiresAtMs').val() > now || data.child('members').child(auth.uid).exists())",
+        ".write": "(auth != null && auth.token.firebase.sign_in_provider == 'google.com') && ($code.matches(/^[A-Z0-9]{6}$/)) && ((!newData.exists() && data.exists() && root.child('partyRooms').child($code).child('hostUid').val() == auth.uid) || ((newData.exists()) && (!root.child('partyBans').child($code).child(auth.uid).exists()) && ((!data.exists() && newData.child('hostUid').val() == auth.uid && newData.child('members').child(auth.uid).exists()) || (data.exists() && data.child('expiresAtMs').val() > now && (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() || newData.child('members').child(auth.uid).exists())))))",
+        ".validate": "(newData.hasChildren(['v','code','hostUid','createdAtMs','updatedAtMs','expiresAtMs','maxMembers','hostOnlyControl','revision','members','slots','playback','queue'])) && (newData.child('updatedAtMs').isNumber() && newData.child('updatedAtMs').val() >= now - 10000 && newData.child('updatedAtMs').val() <= now + 5000) && (newData.child('updatedAtMs').val() >= newData.child('createdAtMs').val()) && (newData.child('members').child(newData.child('hostUid').val()).exists()) && (!data.child('slots/s0').exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || data.child('slots/s0').val() == auth.uid || newData.child('members').child(data.child('slots/s0').val()).exists()) && (!data.child('slots/s1').exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || data.child('slots/s1').val() == auth.uid || newData.child('members').child(data.child('slots/s1').val()).exists()) && (!data.child('slots/s2').exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || data.child('slots/s2').val() == auth.uid || newData.child('members').child(data.child('slots/s2').val()).exists()) && (!data.child('slots/s3').exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || data.child('slots/s3').val() == auth.uid || newData.child('members').child(data.child('slots/s3').val()).exists()) && (!data.child('slots/s4').exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || data.child('slots/s4').val() == auth.uid || newData.child('members').child(data.child('slots/s4').val()).exists()) && (!data.child('slots/s5').exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || data.child('slots/s5').val() == auth.uid || newData.child('members').child(data.child('slots/s5').val()).exists()) && (!data.child('slots/s6').exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || data.child('slots/s6').val() == auth.uid || newData.child('members').child(data.child('slots/s6').val()).exists()) && (!data.child('slots/s7').exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || data.child('slots/s7').val() == auth.uid || newData.child('members').child(data.child('slots/s7').val()).exists()) && (!data.child('slots/s8').exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || data.child('slots/s8').val() == auth.uid || newData.child('members').child(data.child('slots/s8').val()).exists()) && (!data.child('slots/s9').exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || data.child('slots/s9').val() == auth.uid || newData.child('members').child(data.child('slots/s9').val()).exists()) && (!data.exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('playback/seq').val() == data.child('playback/seq').val()) && (newData.child('playback/queueSeq').val() == data.child('playback/queueSeq').val()) && (newData.child('playback/queueLength').val() == data.child('playback/queueLength').val()) && (newData.child('playback/queueIndex').val() == data.child('playback/queueIndex').val()) && (newData.child('playback/isPlaying').val() == data.child('playback/isPlaying').val()) && (newData.child('playback/positionMs').val() == data.child('playback/positionMs').val()) && (newData.child('playback/anchorMs').val() == data.child('playback/anchorMs').val()) && (newData.child('playback/effectivePositionMs').val() == data.child('playback/effectivePositionMs').val()) && (newData.child('playback/updatedBy').val() == data.child('playback/updatedBy').val()) && (newData.child('playback/startedBy').val() == data.child('playback/startedBy').val()) && (newData.child('playback/startedByName').val() == data.child('playback/startedByName').val()) && (newData.child('playback/autoplayEnabled').val() == data.child('playback/autoplayEnabled').val()) && (newData.child('playback/updatedAtMs').val() == data.child('playback/updatedAtMs').val()) && (newData.child('playback/track').exists() == data.child('playback/track').exists()) && (newData.child('playback/track/videoId').val() == data.child('playback/track/videoId').val()) && (newData.child('playback/track/title').val() == data.child('playback/track/title').val()) && (newData.child('playback/track/artist').val() == data.child('playback/track/artist').val()) && (newData.child('playback/track/thumbnailUrl').val() == data.child('playback/track/thumbnailUrl').val()) && (newData.child('playback/track/durationMs').val() == data.child('playback/track/durationMs').val()) && (newData.child('playback/track/fromAutoplay').val() == data.child('playback/track/fromAutoplay').val()))) && (!data.exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('queue/seq').val() == data.child('queue/seq').val()) && (newData.child('queue/index').val() == data.child('queue/index').val()) && (newData.child('queue/items/0').exists() == data.child('queue/items/0').exists()) && (newData.child('queue/items/1').exists() == data.child('queue/items/1').exists()) && (newData.child('queue/items/2').exists() == data.child('queue/items/2').exists()) && (newData.child('queue/items/3').exists() == data.child('queue/items/3').exists()) && (newData.child('queue/items/4').exists() == data.child('queue/items/4').exists()) && (newData.child('queue/items/5').exists() == data.child('queue/items/5').exists()) && (newData.child('queue/items/6').exists() == data.child('queue/items/6').exists()) && (newData.child('queue/items/7').exists() == data.child('queue/items/7').exists()) && (newData.child('queue/items/8').exists() == data.child('queue/items/8').exists()) && (newData.child('queue/items/9').exists() == data.child('queue/items/9').exists()) && (newData.child('queue/items/10').exists() == data.child('queue/items/10').exists()) && (newData.child('queue/items/11').exists() == data.child('queue/items/11').exists()) && (newData.child('queue/items/12').exists() == data.child('queue/items/12').exists()) && (newData.child('queue/items/13').exists() == data.child('queue/items/13').exists()) && (newData.child('queue/items/14').exists() == data.child('queue/items/14').exists()) && (newData.child('queue/items/15').exists() == data.child('queue/items/15').exists()) && (newData.child('queue/items/16').exists() == data.child('queue/items/16').exists()) && (newData.child('queue/items/17').exists() == data.child('queue/items/17').exists()) && (newData.child('queue/items/18').exists() == data.child('queue/items/18').exists()) && (newData.child('queue/items/19').exists() == data.child('queue/items/19').exists()) && (newData.child('queue/items/20').exists() == data.child('queue/items/20').exists()) && (newData.child('queue/items/21').exists() == data.child('queue/items/21').exists()) && (newData.child('queue/items/22').exists() == data.child('queue/items/22').exists()) && (newData.child('queue/items/23').exists() == data.child('queue/items/23').exists()) && (newData.child('queue/items/24').exists() == data.child('queue/items/24').exists()) && (newData.child('queue/items/25').exists() == data.child('queue/items/25').exists()))) && (newData.child('playback/queueSeq').val() == newData.child('queue/seq').val()) && (newData.child('playback/queueIndex').val() == newData.child('queue/index').val()) && (newData.child('queue/index').val() != 0 || newData.child('playback/track/videoId').val() == newData.child('queue/items/0/videoId').val()) && (newData.child('queue/index').val() != 1 || newData.child('playback/track/videoId').val() == newData.child('queue/items/1/videoId').val()) && (newData.child('queue/index').val() != 2 || newData.child('playback/track/videoId').val() == newData.child('queue/items/2/videoId').val()) && (newData.child('queue/index').val() != 3 || newData.child('playback/track/videoId').val() == newData.child('queue/items/3/videoId').val()) && (newData.child('queue/index').val() != 4 || newData.child('playback/track/videoId').val() == newData.child('queue/items/4/videoId').val()) && (newData.child('queue/index').val() != 5 || newData.child('playback/track/videoId').val() == newData.child('queue/items/5/videoId').val()) && (newData.child('queue/index').val() != 6 || newData.child('playback/track/videoId').val() == newData.child('queue/items/6/videoId').val()) && (newData.child('queue/index').val() != 7 || newData.child('playback/track/videoId').val() == newData.child('queue/items/7/videoId').val()) && (newData.child('queue/index').val() != 8 || newData.child('playback/track/videoId').val() == newData.child('queue/items/8/videoId').val()) && (newData.child('queue/index').val() != 9 || newData.child('playback/track/videoId').val() == newData.child('queue/items/9/videoId').val()) && (newData.child('queue/index').val() != 10 || newData.child('playback/track/videoId').val() == newData.child('queue/items/10/videoId').val()) && (newData.child('queue/index').val() != 11 || newData.child('playback/track/videoId').val() == newData.child('queue/items/11/videoId').val()) && (newData.child('queue/index').val() != 12 || newData.child('playback/track/videoId').val() == newData.child('queue/items/12/videoId').val()) && (newData.child('queue/index').val() != 13 || newData.child('playback/track/videoId').val() == newData.child('queue/items/13/videoId').val()) && (newData.child('queue/index').val() != 14 || newData.child('playback/track/videoId').val() == newData.child('queue/items/14/videoId').val()) && (newData.child('queue/index').val() != 15 || newData.child('playback/track/videoId').val() == newData.child('queue/items/15/videoId').val()) && (newData.child('queue/index').val() != 16 || newData.child('playback/track/videoId').val() == newData.child('queue/items/16/videoId').val()) && (newData.child('queue/index').val() != 17 || newData.child('playback/track/videoId').val() == newData.child('queue/items/17/videoId').val()) && (newData.child('queue/index').val() != 18 || newData.child('playback/track/videoId').val() == newData.child('queue/items/18/videoId').val()) && (newData.child('queue/index').val() != 19 || newData.child('playback/track/videoId').val() == newData.child('queue/items/19/videoId').val()) && (newData.child('queue/index').val() != 20 || newData.child('playback/track/videoId').val() == newData.child('queue/items/20/videoId').val()) && (newData.child('queue/index').val() != 21 || newData.child('playback/track/videoId').val() == newData.child('queue/items/21/videoId').val()) && (newData.child('queue/index').val() != 22 || newData.child('playback/track/videoId').val() == newData.child('queue/items/22/videoId').val()) && (newData.child('queue/index').val() != 23 || newData.child('playback/track/videoId').val() == newData.child('queue/items/23/videoId').val()) && (newData.child('queue/index').val() != 24 || newData.child('playback/track/videoId').val() == newData.child('queue/items/24/videoId').val()) && (newData.child('queue/index').val() != 25 || newData.child('playback/track/videoId').val() == newData.child('queue/items/25/videoId').val()) && ((newData.child('playback/queueLength').val() == 0 && !newData.child('queue/items').exists() && newData.child('queue/index').val() == -1) || ((newData.child('playback/queueLength').val() == 1) && (newData.child('queue/items/0').exists()) && (!newData.child('queue/items/1').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 0)) || ((newData.child('playback/queueLength').val() == 2) && (newData.child('queue/items/1').exists()) && (!newData.child('queue/items/2').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 1)) || ((newData.child('playback/queueLength').val() == 3) && (newData.child('queue/items/2').exists()) && (!newData.child('queue/items/3').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 2)) || ((newData.child('playback/queueLength').val() == 4) && (newData.child('queue/items/3').exists()) && (!newData.child('queue/items/4').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 3)) || ((newData.child('playback/queueLength').val() == 5) && (newData.child('queue/items/4').exists()) && (!newData.child('queue/items/5').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 4)) || ((newData.child('playback/queueLength').val() == 6) && (newData.child('queue/items/5').exists()) && (!newData.child('queue/items/6').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 5)) || ((newData.child('playback/queueLength').val() == 7) && (newData.child('queue/items/6').exists()) && (!newData.child('queue/items/7').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 6)) || ((newData.child('playback/queueLength').val() == 8) && (newData.child('queue/items/7').exists()) && (!newData.child('queue/items/8').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 7)) || ((newData.child('playback/queueLength').val() == 9) && (newData.child('queue/items/8').exists()) && (!newData.child('queue/items/9').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 8)) || ((newData.child('playback/queueLength').val() == 10) && (newData.child('queue/items/9').exists()) && (!newData.child('queue/items/10').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 9)) || ((newData.child('playback/queueLength').val() == 11) && (newData.child('queue/items/10').exists()) && (!newData.child('queue/items/11').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 10)) || ((newData.child('playback/queueLength').val() == 12) && (newData.child('queue/items/11').exists()) && (!newData.child('queue/items/12').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 11)) || ((newData.child('playback/queueLength').val() == 13) && (newData.child('queue/items/12').exists()) && (!newData.child('queue/items/13').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 12)) || ((newData.child('playback/queueLength').val() == 14) && (newData.child('queue/items/13').exists()) && (!newData.child('queue/items/14').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 13)) || ((newData.child('playback/queueLength').val() == 15) && (newData.child('queue/items/14').exists()) && (!newData.child('queue/items/15').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 14)) || ((newData.child('playback/queueLength').val() == 16) && (newData.child('queue/items/15').exists()) && (!newData.child('queue/items/16').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 15)) || ((newData.child('playback/queueLength').val() == 17) && (newData.child('queue/items/16').exists()) && (!newData.child('queue/items/17').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 16)) || ((newData.child('playback/queueLength').val() == 18) && (newData.child('queue/items/17').exists()) && (!newData.child('queue/items/18').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 17)) || ((newData.child('playback/queueLength').val() == 19) && (newData.child('queue/items/18').exists()) && (!newData.child('queue/items/19').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 18)) || ((newData.child('playback/queueLength').val() == 20) && (newData.child('queue/items/19').exists()) && (!newData.child('queue/items/20').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 19)) || ((newData.child('playback/queueLength').val() == 21) && (newData.child('queue/items/20').exists()) && (!newData.child('queue/items/21').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 20)) || ((newData.child('playback/queueLength').val() == 22) && (newData.child('queue/items/21').exists()) && (!newData.child('queue/items/22').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 21)) || ((newData.child('playback/queueLength').val() == 23) && (newData.child('queue/items/22').exists()) && (!newData.child('queue/items/23').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 22)) || ((newData.child('playback/queueLength').val() == 24) && (newData.child('queue/items/23').exists()) && (!newData.child('queue/items/24').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 23)) || ((newData.child('playback/queueLength').val() == 25) && (newData.child('queue/items/24').exists()) && (!newData.child('queue/items/25').exists()) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 24)) || ((newData.child('playback/queueLength').val() == 26) && (newData.child('queue/items/25').exists()) && (true) && (newData.child('queue/index').val() >= -1 && newData.child('queue/index').val() <= 25))) && (!data.exists() || newData.child('queue/seq').val() != data.child('queue/seq').val() || ((newData.child('queue/items/0').exists() == data.child('queue/items/0').exists()) && (newData.child('queue/items/1').exists() == data.child('queue/items/1').exists()) && (newData.child('queue/items/2').exists() == data.child('queue/items/2').exists()) && (newData.child('queue/items/3').exists() == data.child('queue/items/3').exists()) && (newData.child('queue/items/4').exists() == data.child('queue/items/4').exists()) && (newData.child('queue/items/5').exists() == data.child('queue/items/5').exists()) && (newData.child('queue/items/6').exists() == data.child('queue/items/6').exists()) && (newData.child('queue/items/7').exists() == data.child('queue/items/7').exists()) && (newData.child('queue/items/8').exists() == data.child('queue/items/8').exists()) && (newData.child('queue/items/9').exists() == data.child('queue/items/9').exists()) && (newData.child('queue/items/10').exists() == data.child('queue/items/10').exists()) && (newData.child('queue/items/11').exists() == data.child('queue/items/11').exists()) && (newData.child('queue/items/12').exists() == data.child('queue/items/12').exists()) && (newData.child('queue/items/13').exists() == data.child('queue/items/13').exists()) && (newData.child('queue/items/14').exists() == data.child('queue/items/14').exists()) && (newData.child('queue/items/15').exists() == data.child('queue/items/15').exists()) && (newData.child('queue/items/16').exists() == data.child('queue/items/16').exists()) && (newData.child('queue/items/17').exists() == data.child('queue/items/17').exists()) && (newData.child('queue/items/18').exists() == data.child('queue/items/18').exists()) && (newData.child('queue/items/19').exists() == data.child('queue/items/19').exists()) && (newData.child('queue/items/20').exists() == data.child('queue/items/20').exists()) && (newData.child('queue/items/21').exists() == data.child('queue/items/21').exists()) && (newData.child('queue/items/22').exists() == data.child('queue/items/22').exists()) && (newData.child('queue/items/23').exists() == data.child('queue/items/23').exists()) && (newData.child('queue/items/24').exists() == data.child('queue/items/24').exists()) && (newData.child('queue/items/25').exists() == data.child('queue/items/25').exists())))",
+        "v": {
+          ".validate": "newData.val() == 1"
+        },
+        "code": {
+          ".validate": "newData.isString() && newData.val() == $code"
+        },
+        "hostUid": {
+          ".validate": "(newData.isString() && newData.val().length >= 1 && newData.val().length <= 128) && ((!root.child('partyRooms').child($code).exists() && newData.val() == auth.uid) || (newData.val() == root.child('partyRooms').child($code).child('hostUid').val()) || (root.child('partyRooms').child($code).child('hostUid').val() == auth.uid) || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && newData.val() == auth.uid && (root.child('partyRooms').child($code).child('createdAtMs').val() <= now - 45000 && (!root.child('partyLeases').child($code).child(root.child('partyRooms').child($code).child('hostUid').val()).exists() || (root.child('partyLeases').child($code).child(root.child('partyRooms').child($code).child('hostUid').val()).isNumber() && root.child('partyLeases').child($code).child(root.child('partyRooms').child($code).child('hostUid').val()).val() <= now - 45000)))))"
+        },
+        "createdAtMs": {
+          ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 9007199254740991 && ((!data.exists() && newData.val() >= now - 10000 && newData.val() <= now + 5000) || newData.val() == data.val())"
+        },
+        "updatedAtMs": {
+          ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 9007199254740991"
+        },
+        "expiresAtMs": {
+          ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 9007199254740991 && newData.val() == newData.parent().child('createdAtMs').val() + 43200000 && (!data.exists() || newData.val() == data.val())"
+        },
+        "maxMembers": {
+          ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 2 && newData.val() <= 10 && (!root.child('partyRooms').child($code).exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || newData.val() == data.val())"
+        },
+        "hostOnlyControl": {
+          ".validate": "newData.isBoolean() && (!root.child('partyRooms').child($code).exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || newData.val() == data.val())"
+        },
+        "revision": {
+          ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 0 && newData.val() <= 9007199254740991 && ((!data.exists() && newData.val() == 0) || newData.val() == data.val() + 1)"
+        },
+        "members": {
+          "$uid": {
+            ".validate": "($uid.matches(/^[A-Za-z0-9_-]{1,128}$/)) && (newData.hasChildren(['displayName','joinedAtMs','slot'])) && (newData.parent().parent().child('slots').child(newData.child('slot').val()).val() == $uid) && ((!data.exists() && $uid == auth.uid) || ((data.exists()) && (newData.child('joinedAtMs').val() == data.child('joinedAtMs').val()) && ((root.child('partyRooms').child($code).child('hostUid').val() == auth.uid || $uid == auth.uid || newData.child('slot').val() == data.child('slot').val())) && (($uid == auth.uid || (newData.child('displayName').val() == data.child('displayName').val() && newData.child('avatarUrl').val() == data.child('avatarUrl').val())))))",
+            "displayName": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80 && newData.val().matches(/.*[^ \\t\\r\\n].*/)"
+            },
+            "avatarUrl": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 2000 && newData.val().matches(/^https?:\\/\\/.+/)"
+            },
+            "joinedAtMs": {
+              ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 9007199254740991 && newData.val() >= newData.parent().parent().parent().child('createdAtMs').val() && newData.val() < newData.parent().parent().parent().child('expiresAtMs').val() && (data.exists() || (newData.val() >= now - 10000 && newData.val() <= now + 5000))"
+            },
+            "slot": {
+              ".validate": "newData.isString() && newData.val().matches(/^s[0-9]$/)"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "slots": {
+          "s0": {
+            ".validate": "(newData.isString() && newData.val().length >= 1 && newData.val().length <= 128) && (newData.parent().parent().child('maxMembers').val() > 0) && (newData.parent().parent().child('members').child(newData.val()).child('slot').val() == 's0') && ((newData.val() == data.val()) || (root.child('partyRooms').child($code).child('hostUid').val() == auth.uid) || (!data.exists() && newData.val() == auth.uid) || (data.val() == auth.uid && newData.val() == auth.uid))"
+          },
+          "s1": {
+            ".validate": "(newData.isString() && newData.val().length >= 1 && newData.val().length <= 128) && (newData.parent().parent().child('maxMembers').val() > 1) && (newData.parent().parent().child('members').child(newData.val()).child('slot').val() == 's1') && ((newData.val() == data.val()) || (root.child('partyRooms').child($code).child('hostUid').val() == auth.uid) || (!data.exists() && newData.val() == auth.uid) || (data.val() == auth.uid && newData.val() == auth.uid))"
+          },
+          "s2": {
+            ".validate": "(newData.isString() && newData.val().length >= 1 && newData.val().length <= 128) && (newData.parent().parent().child('maxMembers').val() > 2) && (newData.parent().parent().child('members').child(newData.val()).child('slot').val() == 's2') && ((newData.val() == data.val()) || (root.child('partyRooms').child($code).child('hostUid').val() == auth.uid) || (!data.exists() && newData.val() == auth.uid) || (data.val() == auth.uid && newData.val() == auth.uid))"
+          },
+          "s3": {
+            ".validate": "(newData.isString() && newData.val().length >= 1 && newData.val().length <= 128) && (newData.parent().parent().child('maxMembers').val() > 3) && (newData.parent().parent().child('members').child(newData.val()).child('slot').val() == 's3') && ((newData.val() == data.val()) || (root.child('partyRooms').child($code).child('hostUid').val() == auth.uid) || (!data.exists() && newData.val() == auth.uid) || (data.val() == auth.uid && newData.val() == auth.uid))"
+          },
+          "s4": {
+            ".validate": "(newData.isString() && newData.val().length >= 1 && newData.val().length <= 128) && (newData.parent().parent().child('maxMembers').val() > 4) && (newData.parent().parent().child('members').child(newData.val()).child('slot').val() == 's4') && ((newData.val() == data.val()) || (root.child('partyRooms').child($code).child('hostUid').val() == auth.uid) || (!data.exists() && newData.val() == auth.uid) || (data.val() == auth.uid && newData.val() == auth.uid))"
+          },
+          "s5": {
+            ".validate": "(newData.isString() && newData.val().length >= 1 && newData.val().length <= 128) && (newData.parent().parent().child('maxMembers').val() > 5) && (newData.parent().parent().child('members').child(newData.val()).child('slot').val() == 's5') && ((newData.val() == data.val()) || (root.child('partyRooms').child($code).child('hostUid').val() == auth.uid) || (!data.exists() && newData.val() == auth.uid) || (data.val() == auth.uid && newData.val() == auth.uid))"
+          },
+          "s6": {
+            ".validate": "(newData.isString() && newData.val().length >= 1 && newData.val().length <= 128) && (newData.parent().parent().child('maxMembers').val() > 6) && (newData.parent().parent().child('members').child(newData.val()).child('slot').val() == 's6') && ((newData.val() == data.val()) || (root.child('partyRooms').child($code).child('hostUid').val() == auth.uid) || (!data.exists() && newData.val() == auth.uid) || (data.val() == auth.uid && newData.val() == auth.uid))"
+          },
+          "s7": {
+            ".validate": "(newData.isString() && newData.val().length >= 1 && newData.val().length <= 128) && (newData.parent().parent().child('maxMembers').val() > 7) && (newData.parent().parent().child('members').child(newData.val()).child('slot').val() == 's7') && ((newData.val() == data.val()) || (root.child('partyRooms').child($code).child('hostUid').val() == auth.uid) || (!data.exists() && newData.val() == auth.uid) || (data.val() == auth.uid && newData.val() == auth.uid))"
+          },
+          "s8": {
+            ".validate": "(newData.isString() && newData.val().length >= 1 && newData.val().length <= 128) && (newData.parent().parent().child('maxMembers').val() > 8) && (newData.parent().parent().child('members').child(newData.val()).child('slot').val() == 's8') && ((newData.val() == data.val()) || (root.child('partyRooms').child($code).child('hostUid').val() == auth.uid) || (!data.exists() && newData.val() == auth.uid) || (data.val() == auth.uid && newData.val() == auth.uid))"
+          },
+          "s9": {
+            ".validate": "(newData.isString() && newData.val().length >= 1 && newData.val().length <= 128) && (newData.parent().parent().child('maxMembers').val() > 9) && (newData.parent().parent().child('members').child(newData.val()).child('slot').val() == 's9') && ((newData.val() == data.val()) || (root.child('partyRooms').child($code).child('hostUid').val() == auth.uid) || (!data.exists() && newData.val() == auth.uid) || (data.val() == auth.uid && newData.val() == auth.uid))"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "playback": {
+          ".validate": "(newData.hasChildren(['seq','queueSeq','queueLength','queueIndex','isPlaying','positionMs','anchorMs','effectivePositionMs','autoplayEnabled','updatedAtMs'])) && (!data.exists() || newData.child('seq').val() == data.child('seq').val() || newData.child('seq').val() == data.child('seq').val() + 1) && (!data.exists() || newData.child('seq').val() != data.child('seq').val() || ((newData.child('queueSeq').val() == data.child('queueSeq').val()) && (newData.child('queueLength').val() == data.child('queueLength').val()) && (newData.child('queueIndex').val() == data.child('queueIndex').val()) && (newData.child('isPlaying').val() == data.child('isPlaying').val()) && (newData.child('positionMs').val() == data.child('positionMs').val()) && (newData.child('anchorMs').val() == data.child('anchorMs').val()) && (newData.child('effectivePositionMs').val() == data.child('effectivePositionMs').val()) && (newData.child('updatedBy').val() == data.child('updatedBy').val()) && (newData.child('startedBy').val() == data.child('startedBy').val()) && (newData.child('startedByName').val() == data.child('startedByName').val()) && (newData.child('autoplayEnabled').val() == data.child('autoplayEnabled').val()) && (newData.child('updatedAtMs').val() == data.child('updatedAtMs').val()) && (newData.child('track').exists() == data.child('track').exists()) && (newData.child('track/videoId').val() == data.child('track/videoId').val()) && (newData.child('track/title').val() == data.child('track/title').val()) && (newData.child('track/artist').val() == data.child('track/artist').val()) && (newData.child('track/thumbnailUrl').val() == data.child('track/thumbnailUrl').val()) && (newData.child('track/durationMs').val() == data.child('track/durationMs').val()) && (newData.child('track/fromAutoplay').val() == data.child('track/fromAutoplay').val()))) && (newData.child('isPlaying').val() == false || newData.child('track').exists())",
+          "seq": {
+            ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 0 && newData.val() <= 9007199254740991 && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "queueSeq": {
+            ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 0 && newData.val() <= 9007199254740991 && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "queueLength": {
+            ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 0 && newData.val() <= 26 && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "queueIndex": {
+            ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= -1 && newData.val() <= 25 && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "isPlaying": {
+            ".validate": "newData.isBoolean() && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "positionMs": {
+            ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 0 && newData.val() <= 86400000 && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "anchorMs": {
+            ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 9007199254740991 && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "effectivePositionMs": {
+            ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 0 && newData.val() <= 86400000 && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "autoplayEnabled": {
+            ".validate": "newData.isBoolean() && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "updatedAtMs": {
+            ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 9007199254740991 && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "updatedBy": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128 && (!root.child('partyRooms').child($code).exists() || newData.val() == data.val() || ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) && newData.val() == auth.uid))"
+          },
+          "startedBy": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128 && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "startedByName": {
+            ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 200 && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "track": {
+            ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (true) && (true)",
+            "videoId": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+            },
+            "title": {
+              ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+            },
+            "artist": {
+              ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+            },
+            "thumbnailUrl": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+            },
+            "durationMs": {
+              ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+            },
+            "fromAutoplay": {
+              ".validate": "newData.isBoolean()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "queue": {
+          ".validate": "(newData.hasChildren(['seq','index'])) && (!data.exists() || newData.child('seq').val() == data.child('seq').val() || newData.child('seq').val() == data.child('seq').val() + 1)",
+          "seq": {
+            ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 0 && newData.val() <= 9007199254740991 && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "index": {
+            ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= -1 && newData.val() <= 25 && ((root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || newData.val() == data.val() || !root.child('partyRooms').child($code).exists())"
+          },
+          "items": {
+            "0": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (true)",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "1": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('0').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "2": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('1').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "3": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('2').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "4": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('3').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "5": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('4').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "6": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('5').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "7": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('6').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "8": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('7').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "9": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('8').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "10": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('9').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "11": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('10').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "12": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('11').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "13": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('12').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "14": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('13').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "15": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('14').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "16": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('15').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "17": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('16').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "18": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('17').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "19": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('18').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "20": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('19').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "21": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('20').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "22": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('21').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "23": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('22').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "24": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('23').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "25": {
+              ".validate": "(newData.hasChildren(['videoId','title','artist','fromAutoplay'])) && (!root.child('partyRooms').child($code).exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && (root.child('partyRooms').child($code).child('hostOnlyControl').val() == false || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)) || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (!root.child('partyRooms').child($code).exists() || newData.parent().parent().child('seq').val() != root.child('partyRooms').child($code).child('queue/seq').val() || ((newData.child('videoId').val() == data.child('videoId').val()) && (newData.child('title').val() == data.child('title').val()) && (newData.child('artist').val() == data.child('artist').val()) && (newData.child('thumbnailUrl').val() == data.child('thumbnailUrl').val()) && (newData.child('durationMs').val() == data.child('durationMs').val()) && (newData.child('fromAutoplay').val() == data.child('fromAutoplay').val()))) && (newData.parent().child('24').exists())",
+              "videoId": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 128"
+              },
+              "title": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "artist": {
+                ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 300"
+              },
+              "thumbnailUrl": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000 && newData.val().matches(/^https?:\\/\\/.+/)"
+              },
+              "durationMs": {
+                ".validate": "newData.isNumber() && newData.val() % 1 == 0 && newData.val() >= 1 && newData.val() <= 86400000"
+              },
+              "fromAutoplay": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "partyBans": {
+      "$code": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider == 'google.com' && (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() || root.child('partyRooms').child($code).child('hostUid').val() == auth.uid)",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider == 'google.com' && root.child('partyRooms').child($code).exists() && root.child('partyRooms').child($code).child('hostUid').val() == auth.uid",
+        "$uid": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider == 'google.com' && ($uid == auth.uid || root.child('partyRooms').child($code).child('members').child(auth.uid).exists())",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider == 'google.com' && root.child('partyRooms').child($code).exists() && root.child('partyRooms').child($code).child('hostUid').val() == auth.uid",
+          ".validate": "newData.val() == true && $uid != auth.uid"
+        }
+      }
+    },
+    "partyPresence": {
+      "$code": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider == 'google.com' && root.child('partyRooms').child($code).child('members').child(auth.uid).exists()",
+        "$uid": {
+          "$device": {
+            ".write": "auth != null && auth.token.firebase.sign_in_provider == 'google.com' && auth.uid == $uid && (!newData.exists() || (root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && root.child('partyRooms').child($code).child('expiresAtMs').val() > now))",
+            ".validate": "newData.val() == true && $device.matches(/^[A-Za-z0-9_-]{1,100}$/)"
+          }
+        }
+      }
+    },
+    "partyLeases": {
+      "$code": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider == 'google.com' && root.child('partyRooms').child($code).child('members').child(auth.uid).exists()",
+        "$uid": {
+          ".write": "auth != null && auth.token.firebase.sign_in_provider == 'google.com' && auth.uid == $uid && root.child('partyRooms').child($code).child('members').child(auth.uid).exists() && root.child('partyRooms').child($code).child('expiresAtMs').val() > now",
+          ".validate": "newData.isNumber() && newData.val() >= now - 1000 && newData.val() <= now + 1000"
+        }
+      }
+    }
+  }
+}

@@ -70,6 +70,9 @@ func main() {
 
 	// Web invite endpoint
 	mux.HandleFunc("GET /invite/{code}", handleInviteLanding)
+	mux.HandleFunc("GET /track/{id}", handleSharedTrack)
+	mux.HandleFunc("GET /song/{id}", handleSharedTrack)
+	mux.HandleFunc("GET /.well-known/assetlinks.json", handleAppAssociation)
 
 	// WebSocket endpoint
 	mux.HandleFunc("GET /ws/parties/{code}", handleWebSocket)

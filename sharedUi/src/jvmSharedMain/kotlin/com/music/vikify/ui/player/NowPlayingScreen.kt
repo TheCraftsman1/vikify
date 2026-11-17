@@ -741,6 +741,8 @@ fun NowPlayingScreen(
      * width comfortably clears a phone's landscape width.
      */
     windowHeight: Dp,
+    /** Host-owned control in the layout, replacing the optional volume slider. */
+    djCompanion: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -853,8 +855,12 @@ fun NowPlayingScreen(
     val meshRefreshMs = MESH_REFRESH_MS
 
     val scrub = rememberPlayerScrub(song.videoId, position, durationMs)
+    // Share the lyric clock's timestamp-aware interpolation, with no lyrics
+    // offset. The returned state is only read by the bar and its timestamps.
+    val scrubPlayhead = remember(position) { LyricPlayhead(position, mutableStateOf(0)) }
+    val scrubClock = rememberPlaybackClock(song.videoId, scrubPlayhead, isPlaying && position.advancing)
     // Read by the scrubber itself — see [PlayerScrubber.shown].
-    val shown: () -> Float = { scrub.shown(position.positionMs, durationMs) }
+    val shown: () -> Float = { scrub.shown(scrubClock.longValue.coerceAtMost(durationMs.coerceAtLeast(0L)), durationMs) }
     // Back restarts the track rather than stepping back once it is a few
     // seconds in. Derived, so this scope hears about the playhead once, when
     // it crosses that point, rather than on every tick.
@@ -1932,7 +1938,9 @@ fun NowPlayingScreen(
                                     compact = compact,
                                 )
                             },
-                            volume = if (hideVolumeBar) {
+                            volume = if (djCompanion != null) {
+                                djCompanion
+                            } else if (hideVolumeBar) {
                                 null
                             } else {
                                 {
@@ -3603,13 +3611,11 @@ fun NowPlayingScreen(
                         onNext = onNext,
                     )
 
-                    // Keep the volume slot's full footprint when its contents are
-                    // hidden. Removing the slot itself shortened the controls by 50dp
-                    // and moved every control below it. A display preference should not
-                    // change the half-player's geometry.
-                    Spacer(Modifier.height(12.dp + controlSpread / 2))
+                    Spacer(Modifier.height((if (djCompanion != null) 4.dp else 12.dp) + controlSpread / 2))
 
-                    if (!hideVolumeBar) {
+                    if (djCompanion != null) {
+                        djCompanion()
+                    } else if (!hideVolumeBar) {
                         VolumeRow(
                             value = { volume.level.value },
                             onValueChange = onVolumeChange,

@@ -142,6 +142,7 @@
     <string name="clear_search">Clear search</string>
     <string name="downloaded">Downloaded</string>
     <string name="explore">Explore</string>
+    <string name="explore_subtitle">Find a mood or discover a new genre.</string>
     <string name="library">Library</string>
     <string name="library_sign_in_description">Sign in to your Google account to see your liked songs, playlists, and YouTube Music history.</string>
     <string name="new_playlist">New playlist</string>
@@ -208,4 +209,5 @@
     <string name="import_spotify_subtitle">From a playlist link</string>
     <string name="sign_in_with_google">Sign in with Google</string>
     <string name="home_manage_collections">Manage collections</string>
+    <string name="home_empty_music">Play a few songs or save a playlist to shape your Home. Explore collections above to find something to start with.</string>
 </resources>

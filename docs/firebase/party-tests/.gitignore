@@ -1,0 +1,4 @@
+node_modules/
+*-debug.log
+database-debug.log
+rules.generated.json

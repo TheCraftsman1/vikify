@@ -748,7 +748,7 @@
         <item quantity="other">%1$s minutes</item>
     </plurals>
     <string name="replay_mostly_around">%1$s</string>
-    <string name="replay_private_counting">Built privately from your listening history on this device.</string>
+    <string name="replay_private_counting">Built from your Vikify listening history.</string>
     <string name="replay_share_card_description">A polished card with your main listening highlights.</string>
     <string name="replay_share_summary_description">A full picture with songs, artists, albums, genres, and habits.</string>
     <string name="replay_songs_end"> filled your month.</string>
@@ -894,6 +894,7 @@
     <string name="account_profiles_help">A Google account can have Personal and Brand profiles. Each has its own library, likes and history.</string>
     <string name="choose_profile">Choose a profile</string>
     <string name="use_this_profile">Use this profile</string>
+    <string name="confirm_profile_to_library">Confirm your YouTube profile to open your library.</string>
     <string name="switch_profile_hint">Switch using the avatar, then use this profile.</string>
     <string name="profile_unavailable">No signed-in profile is available on this page yet.</string>
 
@@ -976,6 +977,7 @@
     <string name="listen_together_reconnecting">Reconnecting…</string>
     <string name="listen_together_syncing_clock">Measuring the clock…</string>
     <string name="listen_together_in_sync">In sync · %1$d ms round trip</string>
+    <string name="listen_together_room_connected">Connected · shared playback</string>
     <string name="listen_together_custom_server_dialog_title">Join party on custom server?</string>
     <string name="listen_together_custom_server_dialog_message">This party is hosted on an external server:\n\n%1$s\n\nDo you want to switch your party server and join party %2$s?</string>
     <string name="listen_together_custom_server_switch_and_join">Switch &amp; Join</string>
@@ -1235,7 +1237,7 @@
     <string name="mix_local_history">Shaped by listening on this device.</string>
     <string name="mix_reason_repeat">Based on songs you repeatedly played on this device over the past four weeks.</string>
     <string name="mix_reason_rotation">Favorites from this device that you have not played for at least two weeks.</string>
-    <string name="mix_reason_daily">Favorites from this device, with related discoveries when available.</string>
+    <string name="mix_reason_daily">Selected from your listening history. Refresh this mix to look for related discoveries.</string>
     <string name="mix_reason_comfort">Familiar favorites from this device, with occasional deeper cuts from artists you enjoy.</string>
     <string name="mix_reason_orbit">Music around artists you return to, including deeper cuts and connected artists when available.</string>
     <string name="mix_reason_fresh">Discoveries outside the listening history used for your recommendations.</string>
@@ -1301,4 +1303,23 @@
     <string name="cover_preview_only">Artwork preview</string>
     <string name="cover_reference">Alongside On Repeat</string>
     <string name="cover_cache_clear_failed">Some composed covers could not be cleared. Try again.</string>
+    <string name="vikify_google_account">Google account in Vikify</string>
+    <string name="music_service_account_hint">Account hint for %1$s</string>
+    <string name="choose_device_google_account">Choose account</string>
+    <string name="music_website_connection_hint">Finish signing in to %1$s below. Your connection stays on this phone until it expires or you disconnect.</string>
+    <string name="google_device_account_hint">Choose a Google account already on your phone. Music services need their own connection.</string>
+    <string name="google_change_device_account">Change Google account</string>
+    <string name="home_saved_playlists">Your playlists</string>
+    <string name="home_saved_playlists_subtitle">Saved in Vikify</string>
+    <string name="home_collection_available">Available to explore</string>
+    <string name="home_collection_open_named">Open %1$s</string>
+    <string name="replay_sync">Sync Replay &amp; mixes</string>
+    <string name="replay_sync_description">Back up Replay, curated mixes, saved mix copies, and preferences. Sign in with the same Google account and YouTube Music profile, then enable this to restore. YouTube playlists stay on YouTube.</string>
+    <string name="replay_sync_sign_in">Sign in to your Vikify account to back up Replay and mixes.</string>
+    <string name="replay_sync_failed">Replay could not sync. Vikify will try again.</string>
+    <string name="curated_sync_failed">Mix backup could not sync. Check your connection and Firestore setup. Your local data is safe; Vikify will retry.</string>
+    <string name="curated_sync_profile_required">Reconnect your YouTube Music profile to restore its mixes. Replay sync continues separately.</string>
+    <string name="curated_sync_account_mismatch">This music profile’s local backup belongs to another Vikify account. Sign in with that Google account to sync it.</string>
+    <string name="curated_sync_running">Saving and restoring your curated mixes…</string>
+    <string name="curated_sync_saved">Curated mixes, saved copies, and preferences are backed up. Replay syncs separately. YouTube playlists stay on YouTube.</string>
 </resources>

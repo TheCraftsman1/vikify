@@ -27,9 +27,9 @@ import androidx.compose.ui.unit.dp
 import com.music.vikify.data.model.Song
 import com.music.vikify.ui.components.BottomFadeScrim
 import com.music.vikify.ui.components.BottomTab
-import com.music.vikify.ui.components.FloatingBottomBar
 import com.music.vikify.ui.components.FrostedTopBar
 import com.music.vikify.ui.components.MiniPlayer
+import com.music.vikify.ui.components.PlaybackDock
 import com.music.vikify.ui.components.TopFadeBlur
 import com.music.vikify.ui.components.TopBarBlur
 import com.music.vikify.ui.icons.VikifyIcons
@@ -117,7 +117,7 @@ private val PreviewTabs = listOf(
 
 /**
  * The whole chrome stack in the order [com.music.vikify.MainActivity] draws
- * it: feed, bounded top blur, bar, bottom scrim, pill.
+ * it: feed, bounded top blur, top bar, bottom scrim, and playback dock.
  */
 @Composable
 private fun ChromeStack(scrolled: Boolean, withMiniPlayer: Boolean) {
@@ -143,36 +143,29 @@ private fun ChromeStack(scrolled: Boolean, withMiniPlayer: Boolean) {
             withMiniPlayer = withMiniPlayer,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
-        // The same column MainActivity stacks these in, down to the 8dp gap —
-        // the point of this preview is the spacing between the two bars, so it
-        // has to be the spacing the app actually uses.
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (withMiniPlayer) {
-                MiniPlayer(
-                    song = PreviewSong,
-                    isPlaying = true,
-                    isLoading = false,
-                    hazeState = hazeState,
-                    onPlayPause = {},
-                    onNext = {},
-                    onPrevious = {},
-                    onExpand = {},
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            FloatingBottomBar(
-                tabs = PreviewTabs,
-                selectedIndex = 0,
-                onTabSelected = {},
-                hazeState = hazeState,
-            )
-        }
+        PlaybackDock(
+            tabs = PreviewTabs,
+            selectedIndex = 0,
+            onTabSelected = {},
+            hazeState = hazeState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            miniPlayer = if (withMiniPlayer) {
+                {
+                    MiniPlayer(
+                        song = PreviewSong,
+                        isPlaying = true,
+                        isLoading = false,
+                        hazeState = hazeState,
+                        onPlayPause = {},
+                        onNext = {},
+                        onPrevious = {},
+                        onExpand = {},
+                        modifier = Modifier.fillMaxWidth(),
+                        inPlaybackDock = true,
+                    )
+                }
+            } else null,
+        )
     }
 }
 
@@ -189,7 +182,8 @@ private fun ChromeLightPreview() {
 }
 
 /** The taller scrim, which the mini player's arrival grows it into. */
-@Preview(name = "Chrome · mini player", device = "id:pixel_8", showBackground = true)
+@Preview(name = "Chrome · playback dock", device = "id:pixel_8", showBackground = true)
+@Preview(name = "Chrome · wide playback dock", widthDp = 840, heightDp = 440, showBackground = true)
 @Composable
 private fun ChromeMiniPlayerPreview() {
     VikifyTheme(darkTheme = true) { ChromeStack(scrolled = true, withMiniPlayer = true) }
@@ -198,11 +192,7 @@ private fun ChromeMiniPlayerPreview() {
 /**
  * The mini player on its own, at the three states the transport slot takes.
  *
- * This is the preview for the pill's geometry: the corner is half the height,
- * so it moves whenever the row's padding or the artwork's size does, and the
- * thing to look at is whether the artwork and the skip glyph still clear the
- * curve at either end. The glass does not render here — what is being judged
- * is the shape and the spacing inside it.
+ * Use it to check the rectangular bar's edge alignment and control spacing.
  */
 @Preview(name = "Mini player · dark", widthDp = 400, heightDp = 260)
 @Preview(

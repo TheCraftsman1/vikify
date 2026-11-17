@@ -78,6 +78,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -248,6 +249,7 @@ import com.music.vikify.ui.components.LastfmLoginAlert
 import com.music.vikify.data.sources.SourceRegistry
 import com.music.vikify.ui.components.ListenBrainzTokenAlert
 import com.music.vikify.ui.components.MiniPlayer
+import com.music.vikify.ui.components.PlaybackDock
 import com.music.vikify.ui.components.QueueActionNotice
 import com.music.vikify.ui.components.QueueActionNoticeHost
 import com.music.vikify.ui.components.TopBarAccountButton
@@ -513,6 +515,12 @@ private fun BitChordApp(
      * signing in, or picking a channel in YouTube Music's own Accounts list.
      */
     var webSession by remember { mutableStateOf<WebSessionMode?>(null) }
+    var webSessionLoginHint by remember { mutableStateOf<String?>(null) }
+    var googleConnectionTarget by rememberSaveable { mutableStateOf(com.music.vikify.auth.GoogleConnectionTarget.VIKIFY) }
+    var spotifyLoginHint by remember { mutableStateOf<String?>(null) }
+    var googleConnectionBusy by remember { mutableStateOf(false) }
+    var googleConnectionError by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
     // Replay: the page (a route on the back stack — see [AppNavigator]), the
     // stories over it, and the share sheet over those. Closing one has to
     // reveal what it was opened from.
@@ -524,6 +532,15 @@ private fun BitChordApp(
     /** Which story card the share sheet is for, or null for the whole Replay. */
     var replaySharePage by rememberSaveable { mutableStateOf<ReplayStoryPage?>(null) }
     var showSpotifyCanvasAuth by remember { mutableStateOf(false) }
+    var showDjConversation by rememberSaveable { mutableStateOf(false) }
+    val djOpenPlayer by com.music.vikify.dj.DjPlayback.openPlayer.collectAsStateWithLifecycle()
+    LaunchedEffect(djOpenPlayer) {
+        if (djOpenPlayer) {
+            showDjConversation = false
+            showNowPlaying = true
+            com.music.vikify.dj.DjPlayback.openPlayer.value = false
+        }
+    }
 
     // Hosted here rather than inside SourcesScreen so its frosted card has
     // something to blur: that screen is drawn inside the `hazeSource` subtree,
@@ -558,6 +575,7 @@ private fun BitChordApp(
     var showSpotifyLogin by remember { mutableStateOf(false) }
     var discordDialog by remember { mutableStateOf<DiscordDialog?>(null) }
     var songActions by remember { mutableStateOf<Song?>(null) }
+    var vikifyShareSong by remember { mutableStateOf<Song?>(null) }
     var showLyricsOffset by remember { mutableStateOf(false) }
     /**
      * Whether the track menu that is up was opened from the player.
@@ -753,6 +771,91 @@ private fun BitChordApp(
     val account by viewModel.account.collectAsStateWithLifecycle()
     val selectedChannelName by viewModel.selectedChannelName.collectAsStateWithLifecycle()
     val googleAccounts by viewModel.googleAccounts.collectAsStateWithLifecycle()
+
+    val firebaseUserEmail by com.music.vikify.data.firebase.FirebaseSyncManager.userEmail.collectAsStateWithLifecycle()
+    val firebaseIsAnonymous by com.music.vikify.data.firebase.FirebaseSyncManager.isAnonymous.collectAsStateWithLifecycle()
+    // YouTube's account.email may be an @channel handle, so it cannot identify a device Gmail.
+    val currentGoogleEmail = firebaseUserEmail?.takeIf { !firebaseIsAnonymous && it.isNotBlank() }
+
+    fun openMusicConnection(target: com.music.vikify.auth.GoogleConnectionTarget, email: String?) {
+        when (target) {
+            com.music.vikify.auth.GoogleConnectionTarget.VIKIFY -> Unit
+            com.music.vikify.auth.GoogleConnectionTarget.YOUTUBE_MUSIC -> {
+                viewModel.cancelWebSessionValidation()
+                webSessionLoginHint = email
+                webSession = WebSessionMode.SIGN_IN
+            }
+            com.music.vikify.auth.GoogleConnectionTarget.SPOTIFY -> {
+                spotifyLoginHint = email
+                showSpotifyLogin = true
+            }
+        }
+    }
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val parsed = com.music.vikify.auth.GoogleAuthHelper.parseSignInResult(result.data)
+        parsed.onSuccess { googleAccount ->
+            val target = googleConnectionTarget
+            if (target != com.music.vikify.auth.GoogleConnectionTarget.VIKIFY) {
+                // For a music service this picker supplies only an optional hint.
+                // It must never replace the listener's Vikify cloud identity.
+                openMusicConnection(target, googleAccount.email)
+                googleConnectionBusy = false
+                return@onSuccess
+            }
+            coroutineScope.launch {
+                try {
+                    val connected = com.music.vikify.data.firebase.FirebaseSyncManager.signInWithGoogleCredential(
+                        idToken = googleAccount.idToken,
+                        email = googleAccount.email,
+                        displayName = googleAccount.displayName,
+                    )
+                    if (connected.isSuccess) {
+                        googleAccount.displayName?.takeIf { it.isNotBlank() }?.let(ListenTogether::setNickname)
+                    } else {
+                        googleConnectionError = "Google was selected, but cloud sign-in couldn't finish. Please try again."
+                    }
+                } finally {
+                    googleConnectionBusy = false
+                }
+            }
+        }.onFailure { e ->
+            googleConnectionBusy = false
+            googleConnectionError = com.music.vikify.auth.GoogleAuthHelper.userMessage(e)
+        }
+    }
+
+    fun connectGoogle(
+        target: com.music.vikify.auth.GoogleConnectionTarget,
+        chooseAnotherAccount: Boolean = false,
+    ) {
+        if (googleConnectionBusy) return
+        googleConnectionTarget = target
+        googleConnectionError = null
+        // Music accounts are independent of the Vikify cloud account. Start at
+        // the website unless the listener explicitly asks for an email hint.
+        if (!chooseAnotherAccount && target != com.music.vikify.auth.GoogleConnectionTarget.VIKIFY) {
+            openMusicConnection(target, null)
+            return
+        }
+        if (!chooseAnotherAccount && currentGoogleEmail != null) {
+            return
+        }
+        val activity = context as? android.app.Activity
+        if (activity == null) {
+            googleConnectionError = "Reopen Vikify to connect your Google account."
+            return
+        }
+        googleConnectionBusy = true
+        try {
+            googleSignInLauncher.launch(com.music.vikify.auth.GoogleAuthHelper.getSignInIntent(activity))
+        } catch (_: Exception) {
+            googleConnectionBusy = false
+            googleConnectionError = "Google sign-in couldn't open. Please try again."
+        }
+    }
     val activeAccountId by viewModel.activeAccountId.collectAsStateWithLifecycle()
     val activeProfileId by viewModel.activeProfileId.collectAsStateWithLifecycle()
     LaunchedEffect(activeAccountId, activeProfileId) {
@@ -2265,6 +2368,12 @@ private fun BitChordApp(
                     }?.displayName?.takeIf(String::isNotBlank)
             }
         NowPlayingScreen(
+            djCompanion = {
+                com.music.vikify.dj.DjCompanionCard(
+                    songId = player.song?.videoId, playing = player.isPlaying, compact = true,
+                    onClick = { showDjConversation = true },
+                )
+            },
             song = displayedSong,
             playedBy = playedBy,
             accountName = account?.name,
@@ -2694,7 +2803,7 @@ private fun BitChordApp(
                                         type = BrowseType.PLAYLIST,
                                     )
                                 },
-                                onOpenLogin = { showSpotifyLogin = true },
+                                onOpenLogin = { connectGoogle(com.music.vikify.auth.GoogleConnectionTarget.SPOTIFY) },
                                 onOpenTokenSetup = { showSpotifyCanvasAuth = true },
                                 contentPadding = listPadding,
                             )
@@ -2714,13 +2823,23 @@ private fun BitChordApp(
                                 channelName = selectedChannelName,
                                 onSignIn = {
                                     navigator.clear()
-                                    webSession = WebSessionMode.SIGN_IN
+                                    connectGoogle(com.music.vikify.auth.GoogleConnectionTarget.YOUTUBE_MUSIC)
                                 },
                                 onSwitchChannel = {
                                     viewModel.loadChannels()
                                     showAccountSelector = true
                                 },
                                 onSignOut = { viewModel.signOut() },
+                                onGoogleSignIn = {
+                                    connectGoogle(com.music.vikify.auth.GoogleConnectionTarget.VIKIFY, chooseAnotherAccount = true)
+                                },
+                                onGoogleSignOut = {
+                                    (context as? androidx.activity.ComponentActivity)?.let { act ->
+                                        com.music.vikify.auth.GoogleAuthHelper.signOut(act) {
+                                            com.music.vikify.data.firebase.FirebaseSyncManager.signOut()
+                                        }
+                                    } ?: com.music.vikify.data.firebase.FirebaseSyncManager.signOut()
+                                },
                                 onOpenListenBrainzLogin = { showListenBrainzLogin = true },
                                 onOpenLastfmLogin = { showLastfmLogin = true },
                                 onOpenDiscord = { navigator.push(AppRoute.Discord) },
@@ -2740,11 +2859,14 @@ private fun BitChordApp(
                                 },
                                 onSignIn = {
                                     navigator.clear()
-                                    webSession = WebSessionMode.SIGN_IN
+                                    connectGoogle(if (ListenTogether.usesFirebaseRooms()) com.music.vikify.auth.GoogleConnectionTarget.VIKIFY
+                                        else com.music.vikify.auth.GoogleConnectionTarget.YOUTUBE_MUSIC)
                                 },
                                 contentPadding = listPadding,
                                 onEditServer = { editingPartyServer = true },
                             )
+                        } else if (pageRoute == AppRoute.Dj) {
+                            com.music.vikify.dj.DjScreen(controller = controller, contentPadding = listPadding)
                         } else if (pageRoute == AppRoute.Settings) {
                             SettingsScreen(
                                 windowWidth = windowWidth,
@@ -2752,7 +2874,7 @@ private fun BitChordApp(
                                 account = account,
                                 onSignIn = {
                                     navigator.clear()
-                                    webSession = WebSessionMode.SIGN_IN
+                                    connectGoogle(com.music.vikify.auth.GoogleConnectionTarget.YOUTUBE_MUSIC)
                                 },
                                 onSignOut = { viewModel.signOut() },
                                 onAccountScrobbling = { navigator.push(AppRoute.AccountScrobbling) },
@@ -2763,6 +2885,7 @@ private fun BitChordApp(
                                 onLyricsSources = { showLyricsSources = true },
                                 onTranslationLanguage = { showTranslationLanguage = true },
                                 onListenTogether = { navigator.push(AppRoute.ListenTogether) },
+                                onDj = { showDjConversation = true },
                                 onWearOs = { navigator.push(AppRoute.WearOs) },
                                 onSpotifyCanvasAuth = { showSpotifyCanvasAuth = true },
                                 onAppLanguage = { showAppLanguage = true },
@@ -3017,13 +3140,19 @@ private fun BitChordApp(
                             )
                         } else when ((destination as? AppDestination.Tab)?.index ?: selectedTab) {
                             TAB_HOME -> HomeScreen(
+                                djCompanion = {
+                                    com.music.vikify.dj.DjCompanionCard(
+                                        songId = player.song?.videoId, playing = player.isPlaying,
+                                        onClick = { showDjConversation = true },
+                                    )
+                                },
                                 state = homeState,
                                 listState = homeListState,
                                 currentSong = player.song,
                                 isPlaying = player.isPlaying,
                                 title = stringResource(R.string.listen_now),
                                 signedIn = signedIn,
-                                onSignIn = { webSession = WebSessionMode.SIGN_IN },
+                                onSignIn = { connectGoogle(com.music.vikify.auth.GoogleConnectionTarget.YOUTUBE_MUSIC) },
                                 onItemClick = { item, shelfTitle ->
                                     item.browseId?.takeIf { it.startsWith("mood:") }?.removePrefix("mood:")?.let {
                                         viewModel.recordHomeCollection(it, opened = true)
@@ -3296,7 +3425,7 @@ private fun BitChordApp(
                                         },
                                     )
                                 },
-                                onSignIn = { webSession = WebSessionMode.SIGN_IN },
+                                onSignIn = { connectGoogle(com.music.vikify.auth.GoogleConnectionTarget.YOUTUBE_MUSIC) },
                                 onRetry = viewModel::loadLibrary,
                                 refreshing = MainViewModel.Feed.LIBRARY in refreshing,
                                 onRefresh = { viewModel.refresh(MainViewModel.Feed.LIBRARY) },
@@ -3382,6 +3511,7 @@ private fun BitChordApp(
                         AppRoute.ListenTogether -> stringResource(R.string.listen_together)
                         AppRoute.WearOs -> stringResource(R.string.wear_os_page_title)
                         AppRoute.Settings -> stringResource(R.string.settings)
+                        AppRoute.Dj -> "Your DJ"
                         AppRoute.Replay -> stringResource(R.string.replay)
                         null -> when {
                             detail != null && detailActiveShelf != null -> detailActiveShelf?.title.orEmpty()
@@ -3740,47 +3870,44 @@ private fun BitChordApp(
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        // Capped and centred rather than run to the page's edges
-                        // — see [FLOATING_BAR_MAX_WIDTH]. It sits on the Column
-                        // rather than on each bar so the two are held to the same
-                        // width and keep the shared left and right edge they have
-                        // on a phone. Before fillMaxWidth, so the fill has
-                        // already been bounded by the time it is applied.
-                        .widthIn(max = FLOATING_BAR_MAX_WIDTH)
                         .fillMaxWidth()
                         .onSizeChanged { floatingBarsHeight.intValue = it.height },
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    QueueActionNoticeHost(queueNotice)
-                    player.song?.let { song ->
-                        MiniPlayer(
-                            song = song,
-                            isPlaying = player.isPlaying,
-                            isLoading = playPauseBusy,
-                            hazeState = hazeState,
-                            onPlayPause = {
-                                togglePlayPause()
-                            },
-                            onNext = { controller?.seekToNextMediaItem() },
-                            onPrevious = { controller?.seekToPrevious() },
-                            onExpand = if (reducePlayerMotion) {
-                                { showNowPlaying = true }
-                            } else {
-                                playerSheetMotion::open
-                            },
-                            controlsLocked = controlsLocked,
-                            onBlockedControl = showHostOnlyNotice,
-                            dock = activeDock,
-                            pull = playerSheetMotion.takeIf { !reducePlayerMotion },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    FloatingBottomBar(
+                    QueueActionNoticeHost(
+                        notice = queueNotice,
+                        modifier = Modifier.widthIn(max = FLOATING_BAR_MAX_WIDTH),
+                    )
+                    val currentTrack = player.song
+                    PlaybackDock(
                         tabs = tabs,
                         selectedIndex = selectedTab,
                         hazeState = hazeState,
                         onTabSelected = onTabSelected,
+                        miniPlayer = if (currentTrack != null) {
+                            {
+                                MiniPlayer(
+                                    song = currentTrack,
+                                    isPlaying = player.isPlaying,
+                                    isLoading = playPauseBusy,
+                                    hazeState = hazeState,
+                                    onPlayPause = { togglePlayPause() },
+                                    onNext = { controller?.seekToNextMediaItem() },
+                                    onPrevious = { controller?.seekToPrevious() },
+                                    onExpand = if (reducePlayerMotion) {
+                                        { showNowPlaying = true }
+                                    } else {
+                                        playerSheetMotion::open
+                                    },
+                                    controlsLocked = controlsLocked,
+                                    onBlockedControl = showHostOnlyNotice,
+                                    dock = activeDock,
+                                    pull = playerSheetMotion.takeIf { !reducePlayerMotion },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    inPlaybackDock = true,
+                                )
+                            }
+                        } else null,
                     )
                 }
             }
@@ -3914,6 +4041,35 @@ private fun BitChordApp(
             }
         }
 
+        if (showDjConversation) {
+            com.music.vikify.dj.DjConversationSheet(
+                controller = controller,
+                name = ListenTogether.nickname().ifBlank { account?.name.orEmpty() },
+                onDismiss = { showDjConversation = false },
+                bottomBar = { studioHazeState ->
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        FloatingBottomBar(
+                            tabs = tabs,
+                            selectedIndex = selectedTab,
+                            hazeState = studioHazeState,
+                            modifier = Modifier.widthIn(max = FLOATING_BAR_MAX_WIDTH).fillMaxWidth(),
+                            onTabSelected = { index ->
+                                showDjConversation = false
+                                if (showNowPlaying) dismissPlayer()
+                                navigator.clear()
+                                viewModel.closeMoodGenre()
+                                selectedTab = index
+                                if (index == TAB_SEARCH) {
+                                    viewModel.onQueryChange("")
+                                    searchFocusRequested = true
+                                }
+                            },
+                        )
+                    }
+                },
+            )
+        }
+
         // ---- Replay stories ----
         // Mounted out here rather than inside the pane above, because a story
         // covers the window: on a tablet the page is only the left half of the
@@ -3991,11 +4147,7 @@ private fun BitChordApp(
                 )
             } ?: heldSong
             val share: () -> Unit = {
-                val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, "https://music.youtube.com/watch?v=${song.videoId}")
-                }
-                context.startActivity(Intent.createChooser(sendIntent, song.title))
+                vikifyShareSong = song
                 songActions = null
             }
             // Navigating has to take the player down with the sheet, or the
@@ -4368,6 +4520,14 @@ private fun BitChordApp(
             if (songActions == null) songMenuOrigin = null
         }
 
+        vikifyShareSong?.let { song ->
+            com.music.vikify.ui.share.VikifyShareSheet(
+                song = song,
+                lyricsSnippet = if (player.song?.videoId == song.videoId) lyrics?.joinToString("\n") { it.text } else null,
+                onDismiss = { vikifyShareSong = null }
+            )
+        }
+
         // ---- Home collections ----
         if (showCoverPreview) ModalBottomSheet(onDismissRequest = { showCoverPreview = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -4384,6 +4544,13 @@ private fun BitChordApp(
                     collectionId = managedHomeCollectionId,
                     preferences = homeCollectionPreferences,
                     saving = savingHomeCollection,
+                    onOpen = { id ->
+                        com.music.vikify.data.mood.MoodGenreRepository.findMood(id)?.let { collection ->
+                            manageHomeCollections = false
+                            viewModel.openDetail("mood:$id", collection.title, collection.subtitle,
+                                collection.assetUrl, BrowseType.PLAYLIST)
+                        }
+                    },
                     onPin = { id, pinned ->
                         savingHomeCollection = true
                         viewModel.setHomeCollectionPinned(id, pinned) { saved ->
@@ -4462,8 +4629,8 @@ private fun BitChordApp(
                         }
                         dismiss()
                     },
-                    onCreate = { title, privacy ->
-                        viewModel.createPlaylist(title, privacy, target)
+                    onCreate = { title, privacy, coverUri ->
+                        viewModel.createPlaylist(title, privacy, target, coverUri)
                         dismiss()
                     },
                 )
@@ -4741,23 +4908,65 @@ private fun BitChordApp(
                     ListenTogether.nickname().ifBlank { account?.name.orEmpty() }
                 },
                 onNameChosen = ListenTogether::setNickname,
-                onSignIn = { webSession = WebSessionMode.SIGN_IN },
-                onSpotifySignIn = { showSpotifyLogin = true },
-                onFinish = AppSettings::setOnboardingComplete,
+                onSignIn = {
+                    connectGoogle(com.music.vikify.auth.GoogleConnectionTarget.YOUTUBE_MUSIC)
+                },
+                onSpotifySignIn = { connectGoogle(com.music.vikify.auth.GoogleConnectionTarget.SPOTIFY) },
+                onFinish = {
+                    navigator.clear()
+                    selectedTab = if (signedIn) TAB_LIBRARY else TAB_HOME
+                    AppSettings.setOnboardingComplete()
+                },
+            )
+        }
+
+        googleConnectionError?.let { message ->
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { googleConnectionError = null },
+                title = { Text("Couldn't connect Google") },
+                text = { Text(message) },
+                confirmButton = {
+                    TextButton(onClick = { googleConnectionError = null; connectGoogle(googleConnectionTarget, chooseAnotherAccount = true) }) { Text("Try again") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        googleConnectionError = null
+                        openMusicConnection(googleConnectionTarget, null)
+                    }) { Text(if (googleConnectionTarget != com.music.vikify.auth.GoogleConnectionTarget.VIKIFY) "Use website sign-in" else "Not now") }
+                },
             )
         }
 
         // ---- Google sign-in (full screen WebView) ----
         webSession?.let { mode ->
-            BackHandler { webSession = null }
             // Raised by "Use this channel", read by the browser as "take the
             // session from the page as it now stands". A counter rather than a
             // flag so a second tap, after a failed first one, is still a new
             // request rather than a value that was already true.
-            var captureRequest by remember(mode) { mutableIntStateOf(0) }
-            var captureFailed by remember(mode) { mutableStateOf(false) }
-            var pageReady by remember(mode) { mutableStateOf(false) }
-            var confirmingProfile by remember(mode) { mutableStateOf(false) }
+            var captureRequest by remember(mode, webSessionLoginHint) { mutableIntStateOf(0) }
+            var captureFailed by remember(mode, webSessionLoginHint) { mutableStateOf(false) }
+            var pageReady by remember(mode, webSessionLoginHint) { mutableStateOf(false) }
+            var confirmingProfile by remember(mode, webSessionLoginHint) { mutableStateOf(false) }
+            var verifyingProfile by remember(mode, webSessionLoginHint) { mutableStateOf(false) }
+            // Async WebView callbacks can arrive after this login was dismissed
+            // or replaced. They must not submit or close a later login screen.
+            val confirmationHint = webSessionLoginHint
+            val confirmationLifetime = remember(mode, webSessionLoginHint) { booleanArrayOf(true) }
+            DisposableEffect(confirmationLifetime) {
+                onDispose {
+                    confirmationLifetime[0] = false
+                    viewModel.cancelWebSessionValidation()
+                }
+            }
+            fun confirmationIsCurrent() = confirmationLifetime[0] &&
+                webSession == mode && webSessionLoginHint == confirmationHint
+            fun dismissWebLogin() {
+                confirmationLifetime[0] = false
+                viewModel.cancelWebSessionValidation()
+                webSession = null
+                webSessionLoginHint = null
+            }
+            BackHandler { dismissWebLogin() }
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 Column(Modifier.fillMaxSize()) {
                     Row(
@@ -4767,7 +4976,7 @@ private fun BitChordApp(
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(onClick = { webSession = null }) {
+                        IconButton(onClick = { dismissWebLogin() }) {
                             Icon(
                                 Icons.Rounded.Close,
                                 contentDescription = stringResource(R.string.close),
@@ -4788,7 +4997,7 @@ private fun BitChordApp(
                                     text = if (captureFailed) {
                                          stringResource(R.string.profile_unavailable)
                                      } else {
-                                         stringResource(R.string.switch_profile_hint)
+                                         stringResource(R.string.choose_profile)
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -4796,12 +5005,85 @@ private fun BitChordApp(
                                 )
                             }
                         }
-                        if (pageReady) {
-                            TextButton(onClick = {
-                                captureFailed = false
-                                confirmingProfile = true
-                                captureRequest++
-                            }, enabled = !confirmingProfile) {
+                    }
+                    if (mode == WebSessionMode.SIGN_IN) {
+                        com.music.vikify.auth.MusicConnectionAccount(
+                            email = webSessionLoginHint,
+                            service = "YouTube Music",
+                            busy = googleConnectionBusy || confirmingProfile,
+                            onChooseAccount = { connectGoogle(com.music.vikify.auth.GoogleConnectionTarget.YOUTUBE_MUSIC, chooseAnotherAccount = true) },
+                        )
+                    }
+                    androidx.compose.runtime.key(mode, webSessionLoginHint) {
+                    YtMusicLoginScreen(
+                        modifier = Modifier.weight(1f),
+                        mode = mode,
+                        loginHint = webSessionLoginHint,
+                        browserAccountId = if (mode == WebSessionMode.SWITCH_CHANNEL) activeAccountId else
+                            googleAccounts.firstOrNull {
+                                !webSessionLoginHint.isNullOrBlank() && it.email.equals(webSessionLoginHint, ignoreCase = true)
+                            }?.accountId,
+                        initialCookie = when {
+                            mode == WebSessionMode.SWITCH_CHANNEL -> googleAccounts.firstOrNull { it.accountId == activeAccountId }?.cookie
+                            !webSessionLoginHint.isNullOrBlank() -> googleAccounts.firstOrNull {
+                                it.email.equals(webSessionLoginHint, ignoreCase = true)
+                            }?.cookie
+                            else -> null
+                        },
+                        captureRequest = captureRequest,
+                        onPageReady = { if (confirmationIsCurrent()) pageReady = it },
+                        onCaptureUnavailable = {
+                            if (confirmationIsCurrent() && !verifyingProfile) {
+                                confirmingProfile = false
+                                captureFailed = true
+                            }
+                        },
+                        onCaptured = { session ->
+                            if (confirmationIsCurrent() && confirmingProfile && !verifyingProfile) {
+                                verifyingProfile = true
+                                viewModel.onWebSession(session, mode) { accepted ->
+                                    if (confirmationIsCurrent()) {
+                                        confirmingProfile = false
+                                        verifyingProfile = false
+                                        if (accepted) {
+                                            webSession = null
+                                            webSessionLoginHint = null
+                                            if (mode == WebSessionMode.SIGN_IN) {
+                                                AppSettings.setOnboardingComplete()
+                                                navigator.clear()
+                                                selectedTab = TAB_LIBRARY
+                                            }
+                                        } else {
+                                            captureFailed = true
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    )
+                    }
+                    if (pageReady) {
+                        Column(
+                            Modifier.fillMaxWidth().navigationBarsPadding()
+                                .padding(horizontal = 20.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.switch_profile_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Button(
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !confirmingProfile && !googleConnectionBusy,
+                                onClick = {
+                                    if (!confirmingProfile && !googleConnectionBusy) {
+                                        captureFailed = false
+                                        confirmingProfile = true
+                                        captureRequest++
+                                    }
+                                },
+                            ) {
                                 Text(
                                     if (confirmingProfile) stringResource(R.string.checking)
                                     else stringResource(R.string.use_this_profile),
@@ -4809,32 +5091,6 @@ private fun BitChordApp(
                             }
                         }
                     }
-                    YtMusicLoginScreen(
-                        mode = mode,
-                        initialCookie = if (mode == WebSessionMode.SWITCH_CHANNEL) {
-                            googleAccounts.firstOrNull { it.accountId == activeAccountId }?.cookie
-                        } else null,
-                        captureRequest = captureRequest,
-                        onPageReady = { pageReady = it },
-                        onCaptureUnavailable = {
-                            confirmingProfile = false
-                            captureFailed = true
-                        },
-                        onCaptured = { session ->
-                            viewModel.onWebSession(session, mode) { accepted ->
-                                confirmingProfile = false
-                                if (accepted) {
-                                    webSession = null
-                                    if (mode == WebSessionMode.SIGN_IN) {
-                                        navigator.clear()
-                                        selectedTab = TAB_LIBRARY
-                                    }
-                                } else {
-                                    captureFailed = true
-                                }
-                            }
-                        },
-                    )
                 }
             }
         }
@@ -4939,11 +5195,16 @@ private fun BitChordApp(
                 accounts = googleAccounts,
                 activeAccountId = activeAccountId,
                 activeProfileId = activeProfileId,
+                googleEmail = currentGoogleEmail,
+                onChooseGoogleAccount = {
+                    showAccountSelector = false
+                    connectGoogle(com.music.vikify.auth.GoogleConnectionTarget.VIKIFY, chooseAnotherAccount = true)
+                },
                 hazeState = hazeState,
                 onSelect = { selected, profile -> viewModel.selectProfile(selected.accountId, profile.profileId) },
                 onAddAccount = {
                     showAccountSelector = false
-                    webSession = WebSessionMode.SIGN_IN
+                    connectGoogle(com.music.vikify.auth.GoogleConnectionTarget.YOUTUBE_MUSIC, chooseAnotherAccount = true)
                 },
                 onRemoveAccount = { selected ->
                     viewModel.removeAccount(selected.accountId)
@@ -5214,13 +5475,27 @@ private fun BitChordApp(
                             color = MaterialTheme.colorScheme.onBackground,
                         )
                     }
+                    com.music.vikify.auth.MusicConnectionAccount(
+                        email = spotifyLoginHint,
+                        service = "Spotify",
+                        busy = googleConnectionBusy,
+                        onChooseAccount = { connectGoogle(com.music.vikify.auth.GoogleConnectionTarget.SPOTIFY, chooseAnotherAccount = true) },
+                    )
+                    androidx.compose.runtime.key(spotifyLoginHint) {
                     SpotifyLoginScreen(
+                        emailHint = spotifyLoginHint,
                         modifier = Modifier.navigationBarsPadding(),
                         onConnected = { token ->
                             AppSettings.setSpotifySpdcToken(token)
+                            com.music.vikify.data.firebase.FirebaseSyncManager.syncSpotifyStatus(true)
                             showSpotifyLogin = false
+                            spotifyLoginHint = null
+                            AppSettings.setOnboardingComplete()
+                            selectedTab = TAB_LIBRARY
+                            navigator.reset(AppRoute.Spotify)
                         },
                     )
+                    }
                 }
             }
         }

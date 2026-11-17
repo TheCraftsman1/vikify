@@ -24,6 +24,7 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 data class GeneratedMix(
     val kind: LocalMixKind,
@@ -56,6 +57,91 @@ class GeneratedMixRepository(
     private val revisions = ConcurrentHashMap<String, Long>()
     private val catalogGate = Semaphore(2)
     private val retiredScopes = ConcurrentHashMap.newKeySet<String>()
+    private val evidenceVersions = ConcurrentHashMap<String, AtomicLong>()
+    private val generatedEvidenceVersions = ConcurrentHashMap<String, Long>()
+
+    /** Keep the saved fallback readable, but refresh it on the next preparation after restored history arrives. */
+    suspend fun markEvidenceChanged(scope: String) {
+        if (scope !in retiredScopes) evidenceVersions.getOrPut(scope) { AtomicLong() }.incrementAndGet()
+    }
+
+    suspend fun exportCloud(scope: String): Map<String, String> = withContext(Dispatchers.IO) {
+        cloudLocks(scope) { cloudEntries(scope) }
+    }
+
+    /** Scope-free catalog snapshots. All kind locks make compare-and-replace atomic against refreshes. */
+    suspend fun applyCloud(scope: String, expected: Map<String, String>, desired: Map<String, String>): Boolean {
+        CloudMixPayload.bounded(desired, LocalMixKind.entries.size, 1_000_000)
+        val imported = desired.map { (id, payload) ->
+            val kind = requireNotNull(LocalMixKind.fromId(id)) { "Unsupported cloud mix" }
+            val record = json.decodeFromString(CloudGeneratedMix.serializer(), payload)
+            require(record.kind == kind && record.version > 0 && record.generatedAt > 0 &&
+                record.algorithmVersion in 1..LocalMixGenerator.ALGORITHM_VERSION &&
+                record.tracks.isNotEmpty() && record.tracks.size <= LocalMixGenerator.MAX_TRACKS &&
+                record.tracks.all(CloudMixPayload::valid) && record.tracks.distinctBy { it.id }.size == record.tracks.size &&
+                record.basedOnArtists.size <= 3 && record.basedOnArtists.all { it.length <= 1_000 })
+            kind to record
+        }.toMap()
+        return withContext(Dispatchers.IO) {
+            cloudLocks(scope) {
+                if (scope in retiredScopes || !isCurrentScope(scope) || cloudEntries(scope) != expected) return@cloudLocks false
+                val localFeedback = feedback(scope).revision
+                val evidenceVersion = evidenceVersions[scope]?.get() ?: 0L
+                val previous = LocalMixKind.entries.associateWith { read(key(scope, it), it) }
+                previous.forEach { (kind, current) ->
+                    require(current == null || portable(current) || imported[kind] == null) {
+                        "Cloud mix conflicts with a local-file mix"
+                    }
+                }
+                LocalMixKind.entries.forEach { kind ->
+                    val key = key(scope, kind)
+                    val remote = imported[kind]
+                    val current = previous[kind]
+                    // A device-only mix cannot be replaced by a cloud snapshot with the same kind.
+                    if (current != null && !portable(current)) {
+                        return@forEach
+                    }
+                    if (remote == null) {
+                        listOf("json", "tmp").forEach { suffix ->
+                            val file = File(directory, "$key.$suffix")
+                            check(!file.exists() || file.delete()) { "Could not remove saved mix" }
+                        }
+                        snapshots.remove(key)
+                        generatedEvidenceVersions.remove(key)
+                    } else {
+                        val localTracks = current?.songs.orEmpty().map(StoredMixTrack::from).associateBy { it.id }
+                        val next = GeneratedMix(kind, remote.version, remote.generatedAt,
+                            remote.tracks.map { CloudMixPayload.retainDeviceLocation(it, localTracks[it.id]).song() },
+                            localFeedback, remote.algorithmVersion, remote.confidence, remote.basedOnArtists)
+                        if (next != current) {
+                            write(key, next)
+                            generatedEvidenceVersions[key] = evidenceVersion
+                        }
+                        snapshots[key] = next
+                    }
+                    revisions[key] = (revisions[key] ?: 0L) + 1
+                }
+                true
+            }
+        }
+    }
+
+    private fun portable(mix: GeneratedMix) = mix.songs.all { CloudMixPayload.trackId(it.videoId) }
+    private fun cloudEntries(scope: String): Map<String, String> = sortedMapOf<String, String>().apply {
+        if (scope in retiredScopes || !isCurrentScope(scope)) return@apply
+        LocalMixKind.entries.forEach { kind ->
+            val mix = read(key(scope, kind), kind) ?: return@forEach
+            if (portable(mix)) put(kind.id, json.encodeToString(CloudGeneratedMix.serializer(), CloudGeneratedMix(
+                mix.kind, mix.version, mix.generatedAt, mix.algorithmVersion, mix.confidence, mix.basedOnArtists,
+                mix.songs.map { CloudMixPayload.portable(StoredMixTrack.from(it)) })))
+        }
+    }
+
+    private suspend fun <T> cloudLocks(scope: String, index: Int = 0, action: suspend () -> T): T =
+        if (index == LocalMixKind.entries.size) action() else
+            locks.getOrPut(key(scope, LocalMixKind.entries[index])) { Mutex() }.withLock {
+                cloudLocks(scope, index + 1, action)
+            }
 
     suspend fun clearScope(scope: String) = withContext(Dispatchers.IO) {
         retiredScopes.add(scope)
@@ -64,6 +150,7 @@ class GeneratedMixRepository(
             locks.getOrPut(key) { Mutex() }.withLock {
                 snapshots.remove(key)
                 revisions.remove(key)
+                generatedEvidenceVersions.remove(key)
                 listOf("json", "tmp").forEach { suffix ->
                     val file = File(directory, "$key.$suffix")
                     check(!file.exists() || file.delete()) { "Could not remove saved mix" }
@@ -98,6 +185,7 @@ class GeneratedMixRepository(
                     return@withLock MixLoadResult(null, MixFailure.REFRESH_FAILED)
                 }
                 val saved = read(key, kind)
+                val evidenceVersion = evidenceVersions[scope]?.get() ?: 0L
                 val now = clock()
                 val discoveryHistory = if (kind.discoveryOnly) try { evidence() }
                     catch (cancelled: CancellationException) { throw cancelled }
@@ -106,6 +194,7 @@ class GeneratedMixRepository(
                 val discoveryProfile = discoveryHistory?.let { TasteProfileBuilder.build(it, now, zone(), preference.preferences) }
                 val previous = saved?.let { filtered(it, preference.preferences, discoveryProfile) }
                 if (previous != null && previous.feedbackRevision == preference.revision &&
+                    (generatedEvidenceVersions[key] ?: 0L) == evidenceVersion &&
                     (!kind.discoveryOnly || previous.songs.size * 2 >= saved.songs.size) &&
                     previous.algorithmVersion == LocalMixGenerator.ALGORITHM_VERSION && ((!force && now >= previous.generatedAt &&
                     now - previous.generatedAt < kind.freshnessMs) ||
@@ -118,7 +207,11 @@ class GeneratedMixRepository(
                     if (!isCurrentScope(scope)) return@withLock MixLoadResult(null, MixFailure.SCOPE_CHANGED)
                     val profile = discoveryProfile ?: TasteProfileBuilder.build(history, now, zone(), preference.preferences)
                     val seeds = LocalMixGenerator.seedTracks(kind, history, now, zone(), preference.preferences, profile)
-                    val retrieved = retrieveCandidates(kind, seeds, scope)
+                    // Familiar mixes must remain immediately usable offline.
+                    // Discovery-only collections are the catalog-backed surface;
+                    // routine repeat/favorite playback does not wait on radio.
+                    val retrieved = if (kind.discoveryOnly || force) retrieveCandidates(kind, seeds, scope)
+                        else CandidateBatch(emptyList(), true)
                     if (seeds.isNotEmpty() && !retrieved.answered && (previous != null || kind.discoveryOnly))
                         return@withLock MixLoadResult(previous, MixFailure.REFRESH_FAILED)
                     val discoveries = retrieved.candidates.map { it.song }
@@ -148,6 +241,7 @@ class GeneratedMixRepository(
                     if (scope in retiredScopes) return@withLock MixLoadResult(null, MixFailure.SCOPE_CHANGED)
                     write(key, candidate)
                     snapshots[key] = candidate
+                    generatedEvidenceVersions[key] = evidenceVersion
                     revisions[key] = revisionAtRequest + 1
                     MixLoadResult(candidate)
                 } catch (cancelled: CancellationException) {
@@ -198,7 +292,7 @@ class GeneratedMixRepository(
         val target = File(directory, "$key.json")
         val temporary = File(directory, "$key.tmp")
         try {
-            val record = StoredMix(key = key, kind = mix.kind.id, version = mix.version,
+            val record = StoredMix(key = key, kind = mix.kind.id, version = mix.version, algorithmVersion = mix.algorithmVersion,
                 generatedAt = mix.generatedAt, tracks = mix.songs.map(StoredMixTrack::from), feedbackRevision = mix.feedbackRevision,
                 confidence = mix.confidence, basedOnArtists = mix.basedOnArtists)
             temporary.outputStream().use { stream ->
@@ -256,6 +350,17 @@ class GeneratedMixRepository(
         CandidateBatch(responses.flatMap { it.candidates }, responses.any { it.answered })
     }
 }
+
+@Serializable
+private data class CloudGeneratedMix(
+    val kind: LocalMixKind,
+    val version: Long,
+    val generatedAt: Long,
+    val algorithmVersion: Int,
+    val confidence: PreferenceConfidence,
+    val basedOnArtists: List<String>,
+    val tracks: List<StoredMixTrack>,
+)
 
 @Serializable
 private data class StoredMix(

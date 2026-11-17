@@ -3,6 +3,11 @@ package com.music.vikify.data.personalization
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 /** Prepares the next visit without publishing changes into the current scrolling feed. */
 class AdaptiveHomeRepository(val store: HomeCollectionStore, private val mixes: GeneratedMixRepository,
@@ -23,11 +28,16 @@ class AdaptiveHomeRepository(val store: HomeCollectionStore, private val mixes: 
     }
 
     suspend fun prepare(scope: String): HomeCollectionSnapshot {
-        val summaries = LocalMixKind.entries.map { kind ->
-            currentCoroutineContext().ensureActive()
-            check(currentScope(scope)) { "Listener changed" }
-            val loaded = mixes.load(scope, kind)
-            summary(kind, loaded.mix, loaded.failure)
+        val summaries = coroutineScope {
+            val gate = Semaphore(2)
+            LocalMixKind.entries.map { kind -> async {
+                gate.withPermit {
+                    currentCoroutineContext().ensureActive()
+                    check(currentScope(scope)) { "Listener changed" }
+                    val loaded = mixes.load(scope, kind)
+                    summary(kind, loaded.mix, loaded.failure)
+                }
+            } }.awaitAll()
         }
         currentCoroutineContext().ensureActive()
         check(currentScope(scope)) { "Listener changed" }
@@ -35,8 +45,9 @@ class AdaptiveHomeRepository(val store: HomeCollectionStore, private val mixes: 
     }
 
     private fun summary(kind: LocalMixKind, mix: GeneratedMix?, failure: MixFailure?, saved: HomeMixSummary? = null): HomeMixSummary {
-        if (mix != null && mix.songs.isNotEmpty()) return HomeMixSummary(kind.id, HomeMixAvailability.READY,
-            mix.songs.size, mix.generatedAt, mix.confidence)
+        val playable = mix?.songs?.filter(LocalMixGenerator::eligible)?.distinctBy { it.videoId }.orEmpty()
+        if (mix != null && playable.isNotEmpty()) return HomeMixSummary(kind.id, HomeMixAvailability.READY,
+            playable.size, mix.generatedAt, mix.confidence, homeTrackSetFingerprint(playable))
         return HomeMixSummary(kind.id, when (failure) {
             MixFailure.NO_DISCOVERIES -> HomeMixAvailability.NO_DISCOVERIES
             MixFailure.REFRESH_FAILED, MixFailure.SCOPE_CHANGED -> HomeMixAvailability.UNAVAILABLE

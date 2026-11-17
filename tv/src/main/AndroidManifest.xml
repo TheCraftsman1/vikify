@@ -86,6 +86,10 @@
         android:theme="@style/Theme.Vikify"
         tools:targetApi="34">
 
+        <activity
+            android:name=".auth.GoogleSignInActivity"
+            android:exported="false" />
+
         <!--
           One UI 7+ only routes an app's ongoing notification to Live
           Notifications / the Now Bar if the app opts in here. Ignored by every

@@ -139,6 +139,7 @@ enum class SongSort {
 object AppSettings {
 
     private lateinit var prefs: SharedPreferences
+    private lateinit var aiCredentials: SharedPreferences
 
     /** Only for the Discord, WebDAV and SMB secrets — everything else on here is plain prefs. */
     private lateinit var authStore: AuthStore
@@ -296,9 +297,6 @@ object AppSettings {
 
     /** Preferred UI refresh rate while [highPerformanceMode] is enabled. */
     val performanceRefreshRate = MutableStateFlow(DEFAULT_PERFORMANCE_REFRESH_RATE)
-
-    /** Stop playback when the app is swiped away from the recent apps screen. */
-    val stopOnTaskRemoved = MutableStateFlow(false)
 
     /** Hides the volume slider on the main player, leaving the rest of the layout to reflow. */
     val hideVolumeBar = MutableStateFlow(false)
@@ -636,6 +634,40 @@ object AppSettings {
     val downloadsAllowedNow: Boolean
         get() = !wifiOnlyDownloads.value || meteredConnection.value != true
 
+    val gnaniTtsEnabled = MutableStateFlow(true)
+    val gnaniTtsVoice = MutableStateFlow("Girish")
+    val gnaniApiKey = MutableStateFlow("")
+    const val NVIDIA_DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    val nvidiaApiKey = MutableStateFlow("")
+    val nvidiaModel = MutableStateFlow(BuildConfig.NVIDIA_MODEL.trim().ifBlank { NVIDIA_DEFAULT_MODEL })
+
+    fun setNvidiaApiKey(key: String) {
+        val normalized = key.trim()
+        nvidiaApiKey.value = normalized
+        if (this::aiCredentials.isInitialized) aiCredentials.edit().putString(KEY_NVIDIA_API_KEY, normalized).apply()
+    }
+
+    fun setNvidiaModel(model: String) {
+        val normalized = model.trim().ifBlank { BuildConfig.NVIDIA_MODEL.trim().ifBlank { NVIDIA_DEFAULT_MODEL } }
+        nvidiaModel.value = normalized
+        if (this::prefs.isInitialized) prefs.edit().putString(KEY_NVIDIA_MODEL, normalized).apply()
+    }
+
+    fun setGnaniTtsEnabled(enabled: Boolean) {
+        gnaniTtsEnabled.value = enabled
+        if (this::prefs.isInitialized) prefs.edit().putBoolean(KEY_GNANI_ENABLED, enabled).apply()
+    }
+
+    fun setGnaniTtsVoice(voice: String) {
+        gnaniTtsVoice.value = voice
+        if (this::prefs.isInitialized) prefs.edit().putString(KEY_GNANI_VOICE, voice).apply()
+    }
+
+    fun setGnaniApiKey(key: String) {
+        gnaniApiKey.value = key
+        if (this::prefs.isInitialized) prefs.edit().putString(KEY_GNANI_API_KEY, key).apply()
+    }
+
     /**
      * [authStore] is the application's own, passed in rather than opened again:
      * each open of the encrypted store is a keystore round trip, and a second
@@ -643,6 +675,7 @@ object AppSettings {
      */
     fun init(context: Context, authStore: AuthStore) {
         prefs = context.getSharedPreferences("vikify_settings", Context.MODE_PRIVATE)
+        aiCredentials = com.music.vikify.auth.EncryptedPrefs.open(context, "vikify_ai", "vikify_ai_plain")
         this.authStore = authStore
         com.music.vikify.data.spotify.LocalPlaylistStore.init(context)
         readAll()
@@ -702,12 +735,17 @@ object AppSettings {
         performanceRefreshRate.value = normalizePerformanceRefreshRate(
             prefs.getInt(KEY_PERFORMANCE_REFRESH_RATE, DEFAULT_PERFORMANCE_REFRESH_RATE),
         )
-        stopOnTaskRemoved.value = prefs.getBoolean(KEY_STOP_ON_TASK_REMOVED, false)
         hideVolumeBar.value = prefs.getBoolean(KEY_HIDE_VOLUME_BAR, false)
         hideStatusBarInPlayer.value = prefs.getBoolean(KEY_HIDE_STATUS_BAR_IN_PLAYER, false)
         hideSongStatus.value = prefs.getBoolean(KEY_HIDE_SONG_STATUS, false)
         showQueueHistory.value = prefs.getBoolean(KEY_SHOW_QUEUE_HISTORY, false)
         swipeToPlayNext.value = prefs.getBoolean(KEY_SWIPE_TO_PLAY_NEXT, false)
+        gnaniTtsEnabled.value = prefs.getBoolean(KEY_GNANI_ENABLED, true)
+        gnaniTtsVoice.value = prefs.getString(KEY_GNANI_VOICE, "Girish") ?: "Girish"
+        gnaniApiKey.value = prefs.getString(KEY_GNANI_API_KEY, "") ?: ""
+        nvidiaApiKey.value = aiCredentials.getString(KEY_NVIDIA_API_KEY, "").orEmpty()
+        nvidiaModel.value = prefs.getString(KEY_NVIDIA_MODEL, null).orEmpty().trim()
+            .ifBlank { BuildConfig.NVIDIA_MODEL.trim().ifBlank { NVIDIA_DEFAULT_MODEL } }
         dontRepeatSuggestions.value = prefs.getBoolean(KEY_DONT_REPEAT_SUGGESTIONS, false)
         preferMusicOnly.value = prefs.getBoolean(KEY_PREFER_MUSIC_ONLY, false)
         reduceDynamicBlur.value = prefs.getBoolean(KEY_REDUCE_BLUR, false)
@@ -980,11 +1018,6 @@ object AppSettings {
     fun setOnboardingComplete() {
         onboardingComplete.value = true
         prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETE, true).apply()
-    }
-
-    fun setStopOnTaskRemoved(value: Boolean) {
-        stopOnTaskRemoved.value = value
-        prefs.edit().putBoolean(KEY_STOP_ON_TASK_REMOVED, value).apply()
     }
 
     fun setHideVolumeBar(value: Boolean) {
@@ -1734,7 +1767,6 @@ object AppSettings {
     private const val KEY_ONBOARDING_COMPLETE = "onboarding_complete"
     private const val KEY_HIGH_PERFORMANCE_MODE = "high_performance_mode"
     private const val KEY_PERFORMANCE_REFRESH_RATE = "performance_refresh_rate"
-    private const val KEY_STOP_ON_TASK_REMOVED = "stop_on_task_removed"
     private const val KEY_HIDE_VOLUME_BAR = "hide_volume_bar"
     private const val KEY_HIDE_STATUS_BAR_IN_PLAYER = "hide_status_bar_in_player"
     private const val KEY_HIDE_SONG_STATUS = "hide_song_status"
@@ -1810,4 +1842,9 @@ object AppSettings {
     private const val KEY_DISCORD_BUTTON_2_VISIBLE = "discord_button_2_visible"
     private const val KEY_DISCORD_INFO_DISMISSED = "discord_info_dismissed"
     private const val KEY_LAST_VERSION_CODE = "last_version_code"
+    private const val KEY_GNANI_ENABLED = "gnani_tts_enabled"
+    private const val KEY_GNANI_VOICE = "gnani_tts_voice"
+    private const val KEY_GNANI_API_KEY = "gnani_api_key"
+    private const val KEY_NVIDIA_API_KEY = "nvidia_api_key"
+    private const val KEY_NVIDIA_MODEL = "nvidia_model"
 }

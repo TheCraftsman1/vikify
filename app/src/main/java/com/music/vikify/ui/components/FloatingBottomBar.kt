@@ -20,12 +20,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -148,6 +154,51 @@ internal const val STRETCH = 0.16f
  */
 internal const val SQUASH = 0.5f
 
+/** The player and tabs share one surface whenever a track is available. */
+@OptIn(ExperimentalHazeMaterialsApi::class)
+@Composable
+internal fun PlaybackDock(
+    tabs: List<BottomTab>,
+    selectedIndex: Int,
+    onTabSelected: (Int) -> Unit,
+    hazeState: HazeState,
+    modifier: Modifier = Modifier,
+    miniPlayer: (@Composable () -> Unit)? = null,
+) {
+    Box(modifier.fillMaxWidth()) {
+        if (miniPlayer != null) {
+            val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+            val container = MaterialTheme.colorScheme.surface
+            val surface = if (reduceDynamicBlur) {
+                Modifier.background(container)
+            } else {
+                Modifier.optimizedHazeEffect(hazeState, HazeMaterials.regular(container))
+            }
+            // Keep the backdrop anchored when an upward pull lifts the player row.
+            Box(Modifier.matchParentSize().clipToBounds().then(surface)) {
+                HorizontalDivider(thickness = GLASS_EDGE_WIDTH, color = GLASS_EDGE_COLOR)
+            }
+        }
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (miniPlayer != null) {
+                miniPlayer()
+                HorizontalDivider(thickness = GLASS_EDGE_WIDTH, color = GLASS_EDGE_COLOR)
+            }
+            val navModifier = if (miniPlayer != null) {
+                Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+            } else Modifier
+            FloatingBottomBar(
+                tabs = tabs,
+                selectedIndex = selectedIndex,
+                onTabSelected = onTabSelected,
+                hazeState = hazeState,
+                modifier = navModifier.widthIn(max = FLOATING_BAR_MAX_WIDTH),
+                inPlaybackDock = miniPlayer != null,
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun FloatingBottomBar(
@@ -156,10 +207,22 @@ fun FloatingBottomBar(
     onTabSelected: (Int) -> Unit,
     hazeState: HazeState,
     modifier: Modifier = Modifier,
+    inPlaybackDock: Boolean = false,
 ) {
     val pillShape = RoundedCornerShape(percent = 50)
-    val container = MaterialTheme.colorScheme.surface
-    val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    val surface = if (inPlaybackDock) Modifier else {
+        val container = MaterialTheme.colorScheme.surface
+        val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+        Modifier.clip(pillShape)
+            .then(
+                if (reduceDynamicBlur) {
+                    Modifier.background(container)
+                } else {
+                    Modifier.optimizedHazeEffect(hazeState, HazeMaterials.regular(container))
+                },
+            )
+            .border(GLASS_EDGE_WIDTH, GLASS_EDGE_COLOR, pillShape)
+    }
     val reduceAnimation by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     // The glass settle is exactly the motion "reduce animation" promises to
     // drop — snapping both the indicator's travel and the glyph's pop to
@@ -170,6 +233,7 @@ fun FloatingBottomBar(
     val haptics = rememberHaptics()
     val density = LocalDensity.current
     val currentSelectedIndex by rememberUpdatedState(selectedIndex)
+    val currentOnTabSelected by rememberUpdatedState(onTabSelected)
 
     var rowSize by remember { mutableStateOf(IntSize.Zero) }
     val gapPx = with(density) { 6.dp.toPx() }
@@ -216,18 +280,7 @@ fun FloatingBottomBar(
             .padding(horizontal = BAR_GUTTER)
             .padding(bottom = 2.dp)
             .fillMaxWidth()
-            .clip(pillShape)
-            .then(
-                if (reduceDynamicBlur) {
-                    Modifier.background(container)
-                } else {
-                    Modifier.optimizedHazeEffect(
-                        state = hazeState,
-                        style = HazeMaterials.regular(container),
-                    )
-                },
-            )
-            .border(GLASS_EDGE_WIDTH, GLASS_EDGE_COLOR, pillShape)
+            .then(surface)
             .padding(horizontal = PILL_INSET, vertical = PILL_INSET),
     ) {
         if (tabWidthPx > 0f) {
@@ -254,31 +307,30 @@ fun FloatingBottomBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .onSizeChanged { rowSize = it }
-                .pointerInput(Unit) {
+                .pointerInput(tabStepPx, n) {
+                    if (tabStepPx <= 0f || n == 0) return@pointerInput
                     var totalDrag = 0f
-                    var dragStartIndex = selectedIndex
+                    var dragStartIndex = currentSelectedIndex
                     detectHorizontalDragGestures(
                         onDragStart = {
                             totalDrag = 0f
-                            dragStartIndex = selectedIndex
+                            dragStartIndex = currentSelectedIndex
                         },
                         onDragCancel = { dragOffset = 0f },
                         onDragEnd = {
-                            if (tabStepPx > 0f) {
-                                val absoluteIndexFloat = (dragStartIndex + totalDrag / tabStepPx)
-                                    .coerceIn(0f, tabs.lastIndex.toFloat())
-                                val newIndex = absoluteIndexFloat.roundToInt()
-                                if (newIndex != selectedIndex) {
-                                    onTabSelected(newIndex)
-                                }
+                            val absoluteIndexFloat = (dragStartIndex + totalDrag / tabStepPx)
+                                .coerceIn(0f, (n - 1).toFloat())
+                            val newIndex = absoluteIndexFloat.roundToInt()
+                            if (newIndex != currentSelectedIndex) {
+                                currentOnTabSelected(newIndex)
                             }
                             dragOffset = 0f
                         },
                         onHorizontalDrag = { _, delta ->
                             totalDrag += delta
                             val absoluteIndexFloat = (dragStartIndex + totalDrag / tabStepPx)
-                                .coerceIn(0f, tabs.lastIndex.toFloat())
-                            dragOffset = absoluteIndexFloat * tabStepPx - selectedIndex * tabStepPx
+                                .coerceIn(0f, (n - 1).toFloat())
+                            dragOffset = (absoluteIndexFloat - currentSelectedIndex) * tabStepPx
 
                             val approxTab = absoluteIndexFloat.roundToInt()
                             if (approxTab != lastHapticTab) {

@@ -15,12 +15,18 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
@@ -37,6 +43,8 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,6 +61,8 @@ import com.music.vikify.ui.components.PAGE_GUTTER
 import com.music.vikify.ui.components.PullToRefresh
 import com.music.vikify.ui.components.ShimmerBox
 import com.music.vikify.ui.components.feedSkeleton
+import com.music.vikify.ui.components.thumbnailBorder
+import com.music.vikify.ui.icons.VikifyIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,47 +86,69 @@ fun ExploreScreen(
         modifier = modifier,
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val columns = moodColumns(maxWidth)
+            val columns = moodColumns(maxWidth, LocalDensity.current.fontScale)
             LazyColumn(
                 state = listState,
                 contentPadding = contentPadding,
                 modifier = Modifier.fillMaxSize(),
             ) {
                 if (showTitle) {
-                    item {
-                        Text(
-                            text = stringResource(Res.string.explore),
-                            style = MaterialTheme.typography.displayLarge,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            // 14dp under the title, the same gap Library leaves
-                            // above its first card (8dp title + 6dp Replay row).
-                            modifier = Modifier.padding(
-                                start = PAGE_GUTTER,
-                                end = PAGE_GUTTER,
-                                top = 8.dp,
-                                bottom = 14.dp,
-                            ),
-                        )
-                    }
+                    item(key = "explore-title") { ExploreTitle() }
                 }
                 when (state) {
-                    UiState.Loading -> item { ExploreSkeletonRows(columns) }
+                    UiState.Loading -> {
+                        item {
+                            ShimmerBox(Modifier.padding(horizontal = PAGE_GUTTER, vertical = 10.dp).width(128.dp).height(20.dp))
+                        }
+                        items(5) { ExploreSkeletonRow(columns) }
+                    }
                     is UiState.Error -> item {
                         MessageState(state.message, actionLabel = stringResource(Res.string.retry), onAction = onRetry)
                     }
                     is UiState.Success -> {
-                        // Moods and genres read as one grid; the server's
-                        // grouping only decides the order.
-                        val rows = state.data.flatMap(MoodGenreSection::items)
-                            .distinctBy { it.browseId to it.params }
-                            .chunked(columns)
-                        items(rows, key = { row -> row.first().let { "${it.browseId}|${it.params}" } }) { row ->
-                            MoodGenreRow(row = row, columns = columns, onCategoryClick = onCategoryClick)
+                        val seen = mutableSetOf<Pair<String, String?>>()
+                        val sections = state.data.mapNotNull { section ->
+                            val categories = section.items.filter { seen.add(it.browseId to it.params) }
+                            categories.takeIf { it.isNotEmpty() }?.let { section.copy(items = it) }
+                        }
+                        sections.forEachIndexed { sectionIndex, section ->
+                            item(key = "heading:${section.items.first().exploreKey}") {
+                                if (sectionIndex > 0) Spacer(Modifier.height(12.dp))
+                                SectionHeader(section.title)
+                            }
+                            val rows = section.items.chunked(columns)
+                            items(rows, key = { it.first().exploreKey }) { row ->
+                                MoodGenreRow(
+                                    row = row,
+                                    columns = columns,
+                                    onCategoryClick = onCategoryClick,
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+private val MoodGenre.exploreKey: String
+    get() = "category:${browseId.length}:$browseId${params?.let { ":$it" }.orEmpty()}"
+
+@Composable
+private fun ExploreTitle() {
+    Column(Modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp)) {
+        Text(
+            text = stringResource(Res.string.explore),
+            style = MaterialTheme.typography.displayLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            text = stringResource(Res.string.explore_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 
@@ -150,13 +182,57 @@ private fun MoodGenreCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    MoodGenreSleeve(
-        item = item,
+    val accent = remember(item.stripeColor, item.title) { moodColor(item) }
+    Box(
         modifier = modifier
-            .aspectRatio(MOOD_CARD_ASPECT)
-            .clip(MOOD_CARD_SHAPE)
-            .clickable(onClick = onClick),
-    )
+            .clip(EXPLORE_CARD_SHAPE)
+            .thumbnailBorder(EXPLORE_CARD_SHAPE)
+            .background(lerp(accent, Color.Black, .58f))
+            .clickable(role = Role.Button, onClick = onClick),
+    ) {
+        Spacer(Modifier.fillMaxWidth().aspectRatio(EXPLORE_CARD_ASPECT))
+        Icon(
+            imageVector = VikifyIcons.MusicNote,
+            contentDescription = null,
+            tint = accent.copy(alpha = .52f),
+            modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).size(54.dp),
+        )
+        AsyncImage(
+            model = item.thumbnailUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize(),
+        )
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        .28f to Color.Black.copy(alpha = .70f),
+                        1f to Color.Black.copy(alpha = .88f),
+                    ),
+                )
+                .padding(start = 12.dp, top = 22.dp, end = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = .8f),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
 }
 
 /**
@@ -217,8 +293,11 @@ fun MoodGenreSleeve(
 
 private class MoodTone(val stripe: Color, val placeholder: Color, val duotone: ColorFilter)
 
+private fun moodColor(item: MoodGenre): Color =
+    item.stripeColor?.let { Color(it.toInt()) } ?: fallbackMoodColor(item.title)
+
 private fun moodTone(item: MoodGenre): MoodTone {
-    val base = item.stripeColor?.let { Color(it.toInt()) } ?: fallbackMoodColor(item.title)
+    val base = moodColor(item)
     // YouTube's palette is already pastel; a touch of black keeps it from
     // glowing against the black page.
     val stripe = lerp(base, Color.Black, .08f)
@@ -265,7 +344,8 @@ private fun fallbackMoodColor(title: String): Color = when ((title.hashCode() an
 /** Gap between mood cards, in both directions. */
 private val MOOD_SPACING = 12.dp
 
-private val MOOD_CARD_SHAPE = RoundedCornerShape(18.dp)
+private val EXPLORE_CARD_SHAPE = RoundedCornerShape(18.dp)
+private const val EXPLORE_CARD_ASPECT = 1.28f
 
 /** Width over height; a two-column phone row lands at about 100dp tall. */
 const val MOOD_CARD_ASPECT = 1.72f
@@ -273,34 +353,27 @@ const val MOOD_CARD_ASPECT = 1.72f
 /** How much of the card the solid stripe covers before the artwork starts. */
 private const val MOOD_STRIPE_FRACTION = .28f
 
-/**
- * The narrowest a mood card is let get before the row drops a column.
- *
- * Pitched so every phone still gets its two (the widest, 448dp, has room for
- * 1.8 of these), while a tablet or a window lays out as many as fit rather
- * than two cards each half a screen wide.
- */
-private val MOOD_MIN_CARD_WIDTH = 220.dp
+/** Keep two columns on phones and add columns as the layout gets wider. */
+private val MOOD_MIN_CARD_WIDTH = 168.dp
 
 private const val MOOD_MAX_COLUMNS = 6
 
-private fun moodColumns(available: Dp): Int {
+private fun moodColumns(available: Dp, fontScale: Float): Int {
     val row = available - PAGE_GUTTER * 2
-    return ((row + MOOD_SPACING) / (MOOD_MIN_CARD_WIDTH + MOOD_SPACING)).toInt().coerceIn(2, MOOD_MAX_COLUMNS)
+    val largeText = fontScale >= 1.5f
+    val minCardWidth = if (largeText) MOOD_MIN_CARD_WIDTH * fontScale else MOOD_MIN_CARD_WIDTH
+    val minColumns = if (available >= 344.dp && !largeText) 2 else 1
+    return ((row + MOOD_SPACING) / (minCardWidth + MOOD_SPACING)).toInt().coerceIn(minColumns, MOOD_MAX_COLUMNS)
 }
 
 @Composable
-private fun ExploreSkeletonRows(columns: Int) {
-    Column(Modifier.padding(horizontal = PAGE_GUTTER)) {
-        repeat(6) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(MOOD_SPACING),
-                modifier = Modifier.padding(bottom = MOOD_SPACING),
-            ) {
-                repeat(columns) {
-                    ShimmerBox(Modifier.weight(1f).aspectRatio(MOOD_CARD_ASPECT), MOOD_CARD_SHAPE)
-                }
-            }
+private fun ExploreSkeletonRow(columns: Int) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(MOOD_SPACING),
+        modifier = Modifier.padding(start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = MOOD_SPACING),
+    ) {
+        repeat(columns) {
+            ShimmerBox(Modifier.weight(1f).aspectRatio(EXPLORE_CARD_ASPECT), EXPLORE_CARD_SHAPE)
         }
     }
 }

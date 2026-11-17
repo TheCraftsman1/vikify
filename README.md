@@ -11,14 +11,14 @@
 
 <br/>
 
-[![Latest release](https://img.shields.io/github/v/release/kushagrasinghx/Vikify?style=for-the-badge&labelColor=0d1117)](https://github.com/kushagrasinghx/Vikify/releases)
-[![License](https://img.shields.io/github/license/kushagrasinghx/Vikify?style=for-the-badge&labelColor=0d1117)](https://github.com/kushagrasinghx/Vikify/blob/main/LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/kushagrasinghx/Vikify/total?style=for-the-badge&labelColor=0d1117)](https://github.com/kushagrasinghx/Vikify/releases)
+[![Latest release](https://img.shields.io/github/v/release/TheCraftsman1/vikify?style=for-the-badge&labelColor=0d1117)](https://github.com/TheCraftsman1/vikify/releases)
+[![License](https://img.shields.io/github/license/TheCraftsman1/vikify?style=for-the-badge&labelColor=0d1117)](https://github.com/TheCraftsman1/vikify/blob/main/LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/TheCraftsman1/vikify/total?style=for-the-badge&labelColor=0d1117)](https://github.com/TheCraftsman1/vikify/releases)
 [![Listening now](https://api.vikify.app/api/stats/live/badge.svg)](https://api.vikify.app/api/stats/live)
 
 <br/>
 
-[**Download**](#download) · [**Features**](#features) · [**Contributing**](#contributing) · [**Support**](#support) · [**Disclaimer**](#disclaimer)
+[**Download**](#download) · [**Features**](#features) · [**Screenshots**](#screenshots) · [**Contributing**](#contributing) · [**Support**](#support) · [**Disclaimer**](#disclaimer)
 
 <br/>
 
@@ -87,12 +87,70 @@
 
 <div align="center">
 
+<h1><a id="screenshots"></a>Screenshots & Showcase</h1>
+
+<p align="center">
+  <img src="screenshots/hero.png" alt="vikify hero showcase" width="100%"/>
+</p>
+
+### 📱 Core Navigation & Library
+
+<p align="center">
+  <img src="screenshots/home.png" alt="Home Screen" width="220"/>
+  &nbsp;&nbsp;
+  <img src="screenshots/search.png" alt="Search Screen" width="220"/>
+  &nbsp;&nbsp;
+  <img src="screenshots/library.png" alt="Library Screen" width="220"/>
+  &nbsp;&nbsp;
+  <img src="screenshots/Settings1.png" alt="Settings Screen" width="220"/>
+</p>
+
+### 🤖 AI DJ Studio & Party Listening
+
+<p align="center">
+  <img src="screenshots/dj_home.png" alt="AI DJ Home Card" width="220"/>
+  &nbsp;&nbsp;
+  <img src="screenshots/dj_studio.png" alt="DJ Studio" width="220"/>
+  &nbsp;&nbsp;
+  <img src="screenshots/dj_chat.png" alt="DJ Companion Chat" width="220"/>
+  &nbsp;&nbsp;
+  <img src="screenshots/player_card.png" alt="Frosted Glass Player Card" width="220"/>
+</p>
+
+### 🚀 Highlights & Integrations
+
+<p align="center">
+  <img src="Marketing_Assets/Jam_Mode.png" alt="Firebase Party Jam Mode" width="48%"/>
+  &nbsp;
+  <img src="Marketing_Assets/Spotify_Import_Bridge.png" alt="Spotify Bridge" width="48%"/>
+</p>
+<p align="center">
+  <img src="Marketing_Assets/Hybrid_Library.png" alt="Hybrid Library" width="48%"/>
+  &nbsp;
+  <img src="Marketing_Assets/Offline_Freedom.png" alt="Offline Mode" width="48%"/>
+</p>
+
+</div>
+
+---
+
+<div align="center">
+
 <h1><a id="download"></a>Download</h1>
 
-<a href="https://github.com/kushagrasinghx/Vikify/releases" target="_blank" rel="noopener noreferrer"><img src="https://cdn.jsdelivr.net/gh/JMcrafter26/badges@main/src/assets/supported/android/cozy.svg" alt="Download for Android" height="55"/></a>
+<a href="https://github.com/TheCraftsman1/vikify/releases" target="_blank" rel="noopener noreferrer"><img src="https://cdn.jsdelivr.net/gh/JMcrafter26/badges@main/src/assets/supported/android/cozy.svg" alt="Download for Android" height="55"/></a>
 
-Grab the latest signed APK from the [Releases](https://github.com/kushagrasinghx/Vikify/releases) page. Sideloading requires enabling "Install unknown apps" for whichever app you download it with.
+<br/><br/>
 
+### 📦 Latest Official Release: **Vikify v2.0.2**
+
+| Package | Architecture | Size | Download |
+| :--- | :--- | :--- | :--- |
+| **Vikify-2.0.2.apk** | Universal / ARM64 / x86_64 | ~52.4 MB | [⬇️ Download APK](https://github.com/TheCraftsman1/vikify/releases/download/v2.0.2/Vikify-2.0.2.apk) |
+| **Vikify-2.0.2-source.zip** | GPLv3 Corresponding Source | ~29.5 MB | [⬇️ Download Source](https://github.com/TheCraftsman1/vikify/releases/download/v2.0.2-android-source/Vikify-2.0.2-source.zip) |
+
+> **SHA-256 (APK):** `4D5D6C39158C05A068D2A8309392197A40569B29760ED977280BA9EB7573ADF6`  
+> *Sideloading requires enabling "Install unknown apps" in Android settings for your browser or file manager.*
 
 </div>
 
@@ -108,8 +166,8 @@ We welcome contributions to vikify! Please review our [Contributing Guide](CONTR
 
 ### Thanks to all contributors ❤
 
-<a href="https://github.com/kushagrasinghx/Vikify/graphs/contributors">
-  <img src="https://raw.githubusercontent.com/kushagrasinghx/Vikify/contributors/contributors.svg" />
+<a href="https://github.com/TheCraftsman1/vikify/graphs/contributors">
+  <img src="https://raw.githubusercontent.com/TheCraftsman1/vikify/contributors/contributors.svg" />
 </a>
 
 </div>
@@ -124,9 +182,6 @@ vikify is free and always will be — if it's earned a spot in your rotation, yo
 
 <a href="https://ko-fi.com/kushagrasinghx" target="_blank" rel="noopener noreferrer"><img src="https://cdn.jsdelivr.net/gh/JMcrafter26/badges@main/src/assets/donate/kofi-singular-alt/cozy.svg" alt="Support me on Ko-fi" height="55"/></a>
 <a href="https://paypal.me/kuxhagrasingh" target="_blank" rel="noopener noreferrer"><img src="https://cdn.jsdelivr.net/gh/JMcrafter26/badges@main/src/assets/donate/paypal-plural/cozy.svg" alt="Support us on PayPal" height="55"/></a>
-
-<br/>
-<img src="upi_support.jpg" alt="UPI Support" width="250" />
 
 </div>
 

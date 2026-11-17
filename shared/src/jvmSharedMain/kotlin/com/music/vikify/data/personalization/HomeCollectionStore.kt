@@ -23,6 +23,8 @@ import kotlin.math.ln
     val trackCount: Int = 0,
     val generatedAt: Long = 0,
     val confidence: PreferenceConfidence = PreferenceConfidence.NONE,
+    /** Missing on older saved summaries; automatic Home promotion waits for revalidation. */
+    val trackSetFingerprint: String? = null,
 ) {
     val ready: Boolean get() = availability == HomeMixAvailability.READY && trackCount > 0 && generatedAt > 0
 }
@@ -82,6 +84,40 @@ class HomeCollectionStore(private val directory: File, private val collectionIds
     private val retired = ConcurrentHashMap.newKeySet<String>()
 
     suspend fun snapshot(scope: String): HomeCollectionSnapshot = update(scope) { it }
+
+    /** Portable user choices only; rankings and exposure statistics are device-local. */
+    suspend fun exportCloud(scope: String): Map<String, String> = cloudEntries(snapshot(scope))
+
+    /** A download may only replace the exact choices captured before the network round trip. */
+    suspend fun applyCloud(scope: String, expected: Map<String, String>, desired: Map<String, String>): Boolean {
+        CloudMixPayload.bounded(desired, 1, 100_000)
+        require(desired.keys.all { it == "preferences" })
+        val preferences = desired["preferences"]?.let {
+            json.decodeFromString(HomeCollectionPreferences.serializer(), it)
+        } ?: HomeCollectionPreferences()
+        require(preferences.pinned.size <= collectionIds.size && preferences.hidden.size <= collectionIds.size &&
+            preferences.followed.size <= collectionIds.size && preferences.pinned.distinct() == preferences.pinned &&
+            (preferences.pinned + preferences.hidden + preferences.followed).all { it in collectionIds } &&
+            preferences.followed.all { LocalMixKind.fromId(it) != null } && preferences.pinned.none { it in preferences.hidden })
+        return withContext(Dispatchers.IO) {
+            val key = key(scope)
+            locks.getOrPut(key) { Mutex() }.withLock {
+                if (key in retired) return@withLock false
+                val old = read(key)
+                if (cloudEntries(old) != expected) return@withLock false
+                val next = old.copy(preferences = preferences)
+                if (next != old) write(key, next)
+                true
+            }
+        }
+    }
+
+    private fun cloudEntries(snapshot: HomeCollectionSnapshot): Map<String, String> {
+        val prefs = snapshot.preferences.copy(hidden = snapshot.preferences.hidden.toSortedSet(),
+            followed = snapshot.preferences.followed.toSortedSet())
+        return if (prefs == HomeCollectionPreferences()) emptyMap() else
+            mapOf("preferences" to json.encodeToString(HomeCollectionPreferences.serializer(), prefs))
+    }
 
     suspend fun follow(scope: String, id: String, followed: Boolean): HomeCollectionSnapshot {
         require(LocalMixKind.fromId(id) != null && id in collectionIds)

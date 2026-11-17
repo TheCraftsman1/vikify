@@ -8,7 +8,10 @@ import com.music.vikify.data.model.ShelfItem
 import com.music.vikify.data.model.Song
 import com.music.vikify.data.model.durationMillis
 import com.music.vikify.data.personalization.LocalMixKind
+import com.music.vikify.data.personalization.LocalMixGenerator
 import com.music.vikify.data.personalization.LocalMixPlatform
+import com.music.vikify.data.innertube.Innertube
+import kotlinx.coroutines.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 
 data class MoodBox(
@@ -41,20 +44,21 @@ enum class MoodSection(val title: String) {
 
 object MoodGenreRepository {
     private val songCache = ConcurrentHashMap<String, List<Song>>()
-    private val PERSONALIZED_MOODS = setOf("your_daily_mix", "on_repeat", "back_in_rotation")
 
     private val BAD_TITLE_KEYWORDS = listOf(
-        "1 hour", "2 hour", "3 hour", "4 hour", "8 hour", "10 hour", "hour", "hours",
-        "sound bath", "singing bowl", "singing bowls", "full album", "loop", "432hz", "528hz",
+        "sound bath", "singing bowl", "singing bowls", "full album", "432hz", "528hz",
         "continuous mix", "mega mix", "mashup", "compilation", "nightcore",
         "live stream", "full concert", "bass boosted", "8d audio", "slowed + reverb"
     )
+    private val longMixTitle = Regex("\\b\\d+\\s*(?:hours?|hrs?)\\b", RegexOption.IGNORE_CASE)
 
     fun Song.isValidStudioTrack(): Boolean {
-        if (isVideo) return false
+        if (!LocalMixGenerator.eligible(this)) return false
         val lower = title.lowercase()
-        if (BAD_TITLE_KEYWORDS.any { lower.contains(it) }) return false
         val millis = durationMillis()
+        // A measured short song can legitimately be called "24 Hours".
+        // Use the long-form title guard only when duration is unavailable.
+        if ((millis <= 0 && longMixTitle.containsMatchIn(title)) || BAD_TITLE_KEYWORDS.any { lower.contains(it) }) return false
         if (millis > 0) {
             val sec = millis / 1000
             if (sec < 70 || sec > 540) return false
@@ -329,148 +333,45 @@ object MoodGenreRepository {
         }
     }
 
-    fun initialQuickPicksShelf(): HomeShelf {
-        val starterSongs = listOf(
-            Song(videoId = "V9PVRfjEBTI", title = "BIRDS OF A FEATHER", artist = "Billie Eilish", thumbnailUrl = "https://i.ytimg.com/vi/V9PVRfjEBTI/sddefault.jpg"),
-            Song(videoId = "ev4b8E54XyU", title = "Espresso", artist = "Sabrina Carpenter", thumbnailUrl = "https://i.ytimg.com/vi/ev4b8E54XyU/sddefault.jpg"),
-            Song(videoId = "kPa7bsKwL-8", title = "Die With A Smile", artist = "Lady Gaga & Bruno Mars", thumbnailUrl = "https://i.ytimg.com/vi/kPa7bsKwL-8/sddefault.jpg"),
-            Song(videoId = "4NRXx6U8ABQ", title = "Blinding Lights", artist = "The Weeknd", thumbnailUrl = "https://i.ytimg.com/vi/4NRXx6U8ABQ/sddefault.jpg"),
-            Song(videoId = "1KI_wP_6-yY", title = "Good Luck, Babe!", artist = "Chappell Roan", thumbnailUrl = "https://i.ytimg.com/vi/1KI_wP_6-yY/sddefault.jpg"),
-            Song(videoId = "t7bQwEgyptU", title = "A Bar Song (Tipsy)", artist = "Shaboozey", thumbnailUrl = "https://i.ytimg.com/vi/t7bQwEgyptU/sddefault.jpg"),
-            Song(videoId = "H5v3kku4y6Q", title = "As It Was", artist = "Harry Styles", thumbnailUrl = "https://i.ytimg.com/vi/H5v3kku4y6Q/sddefault.jpg"),
-            Song(videoId = "ic8j13piAhQ", title = "Cruel Summer", artist = "Taylor Swift", thumbnailUrl = "https://i.ytimg.com/vi/ic8j13piAhQ/sddefault.jpg"),
-            Song(videoId = "34Na4j8AVgA", title = "Starboy", artist = "The Weeknd ft. Daft Punk", thumbnailUrl = "https://i.ytimg.com/vi/34Na4j8AVgA/sddefault.jpg"),
-            Song(videoId = "G7KNmW9a75Y", title = "Flowers", artist = "Miley Cyrus", thumbnailUrl = "https://i.ytimg.com/vi/G7KNmW9a75Y/sddefault.jpg"),
-            Song(videoId = "TUVcZfQe-Kw", title = "Levitating", artist = "Dua Lipa", thumbnailUrl = "https://i.ytimg.com/vi/TUVcZfQe-Kw/sddefault.jpg"),
-            Song(videoId = "XXYlFuWEuKI", title = "Save Your Tears", artist = "The Weeknd", thumbnailUrl = "https://i.ytimg.com/vi/XXYlFuWEuKI/sddefault.jpg"),
-        )
-        return HomeShelf(
-            title = "Quick picks",
-            subtitle = "Songs you might like",
-            items = starterSongs.map { it.toTrackShelfItem() },
-        )
-    }
+    /** Empty view state only; starter metadata must never masquerade as loaded recommendations. */
+    fun initialQuickPicksShelf(): HomeShelf = HomeShelf("Quick picks", emptyList(), "Songs you might like")
 
-    fun initialTrendingSongsShelf(): HomeShelf {
-        val starterTrending = listOf(
-            Song(videoId = "DI-v_19u6xQ", title = "Taste", artist = "Sabrina Carpenter", thumbnailUrl = "https://i.ytimg.com/vi/DI-v_19u6xQ/sddefault.jpg"),
-            Song(videoId = "Oa_RSwwpPaA", title = "Beautiful Things", artist = "Benson Boone", thumbnailUrl = "https://i.ytimg.com/vi/Oa_RSwwpPaA/sddefault.jpg"),
-            Song(videoId = "9PvgqBCbmbA", title = "Lose Control", artist = "Teddy Swims", thumbnailUrl = "https://i.ytimg.com/vi/9PvgqBCbmbA/sddefault.jpg"),
-            Song(videoId = "cfnY_rL9eCY", title = "Please Please Please", artist = "Sabrina Carpenter", thumbnailUrl = "https://i.ytimg.com/vi/cfnY_rL9eCY/sddefault.jpg"),
-            Song(videoId = "toBb_b38o-w", title = "greedy", artist = "Tate McRae", thumbnailUrl = "https://i.ytimg.com/vi/toBb_b38o-w/sddefault.jpg"),
-            Song(videoId = "suAR1PYFNYA", title = "Houdini", artist = "Dua Lipa", thumbnailUrl = "https://i.ytimg.com/vi/suAR1PYFNYA/sddefault.jpg"),
-            Song(videoId = "f1r0RMQuTqE", title = "One Of The Girls", artist = "The Weeknd, JENNIE, Lily-Rose Depp", thumbnailUrl = "https://i.ytimg.com/vi/f1r0RMQuTqE/sddefault.jpg"),
-            Song(videoId = "XoiOOiuH8iI", title = "Water", artist = "Tyla", thumbnailUrl = "https://i.ytimg.com/vi/XoiOOiuH8iI/sddefault.jpg"),
-            Song(videoId = "m4_9TFeMfJE", title = "Paint The Town Red", artist = "Doja Cat", thumbnailUrl = "https://i.ytimg.com/vi/m4_9TFeMfJE/sddefault.jpg"),
-            Song(videoId = "hYkX8N2V3E8", title = "vampire", artist = "Olivia Rodrigo", thumbnailUrl = "https://i.ytimg.com/vi/hYkX8N2V3E8/sddefault.jpg"),
-            Song(videoId = "aezstCBbvh8", title = "Too Sweet", artist = "Hozier", thumbnailUrl = "https://i.ytimg.com/vi/aezstCBbvh8/sddefault.jpg"),
-            Song(videoId = "H58vbez_m4E", title = "Not Like Us", artist = "Kendrick Lamar", thumbnailUrl = "https://i.ytimg.com/vi/H58vbez_m4E/sddefault.jpg"),
-        )
-        return HomeShelf(
-            title = "Trending songs",
-            subtitle = "Today's top tunes",
-            items = starterTrending.map { it.toTrackShelfItem() },
-        )
-    }
+    fun initialTrendingSongsShelf(): HomeShelf = HomeShelf("Trending songs", emptyList(), "Current music")
 
     private fun Song.withHighResArtwork(): Song {
         val art = thumbnailUrl ?: return this
         val enhanced = when {
-            art.contains("googleusercontent.com") || art.contains("ggpht.com") -> {
+            art.contains("googleusercontent.com") || art.contains("ggpht.com") ->
                 art.replace(Regex("""w\d+-h\d+"""), "w544-h544")
                     .replace(Regex("""=s\d+"""), "=s544")
-            }
-            art.contains("i.ytimg.com") -> {
-                art.replace("hqdefault.jpg", "sddefault.jpg")
-                    .replace("mqdefault.jpg", "sddefault.jpg")
-                    .replace("default.jpg", "sddefault.jpg")
-            }
+            art.contains("i.ytimg.com") ->
+                art.replace(Regex("""(?<=/)(?:hq|mq)?default\.jpg(?=$|\?)"""), "sddefault.jpg")
             else -> art
         }
         return copy(thumbnailUrl = enhanced)
     }
 
     suspend fun loadQuickPicksShelf(): Result<HomeShelf> {
-        val recents = YtMusicRepository.recents().getOrNull().orEmpty().filter { it.isValidStudioTrack() }
-        val collected = mutableListOf<Song>()
-        val seen = mutableSetOf<String>()
-
-        if (recents.isNotEmpty()) {
-            recents.take(6).forEach {
-                if (seen.add(it.videoId)) collected.add(it.withHighResArtwork())
-            }
-            val seed = recents.first()
-            val radioSongs = YtMusicRepository.radio(seed.videoId).getOrNull().orEmpty()
-                .filter { it.isValidStudioTrack() }
-            radioSongs.forEach {
-                if (seen.add(it.videoId)) collected.add(it.withHighResArtwork())
-            }
-        }
-
-        if (collected.size < 12) {
-            val hitsResult = YtMusicRepository.searchPage("Top Hits 2024", SearchFilter.SONGS)
-            hitsResult.getOrNull()?.rows?.mapNotNull { r ->
-                when (r) {
-                    is SearchResult.Track -> r.song
-                    is SearchResult.TopTrack -> r.song
-                    else -> null
-                }
-            }?.filter { it.isValidStudioTrack() }?.forEach {
-                if (seen.add(it.videoId)) collected.add(it.withHighResArtwork())
-            }
-        }
-
-        if (collected.isEmpty()) {
-            return Result.success(initialQuickPicksShelf())
-        }
-
-        val items = collected.map { it.toTrackShelfItem() }
-        return Result.success(HomeShelf(title = "Quick picks", items = items, subtitle = "Songs you might like"))
+        val collected = linkedMapOf<String, Song>()
+        YtMusicRepository.recents().getOrNull().orEmpty().filter { it.isValidStudioTrack() }.take(8)
+            .forEach { collected[it.videoId] = it.withHighResArtwork() }
+        YtMusicRepository.quickPicks(collected.keys).getOrNull().orEmpty().filter { it.isValidStudioTrack() }
+            .forEach { collected.putIfAbsent(it.videoId, it.withHighResArtwork()) }
+        if (collected.isEmpty()) return Result.failure(IllegalStateException("No music recommendations are available yet."))
+        return Result.success(HomeShelf("Quick picks", collected.values.take(24).map { it.toTrackShelfItem() },
+            "From your recent listening and recommendations"))
     }
 
     suspend fun loadTrendingSongsShelf(): Result<HomeShelf> {
-        val trendingResult = YtMusicRepository.searchPage("Trending songs", SearchFilter.SONGS)
-        val collected = mutableListOf<Song>()
-        val seen = mutableSetOf<String>()
-
-        trendingResult.getOrNull()?.rows?.mapNotNull { r ->
-            when (r) {
-                is SearchResult.Track -> r.song
-                is SearchResult.TopTrack -> r.song
+        val result = YtMusicRepository.searchPage("${Innertube.currentRegion} trending songs", SearchFilter.SONGS)
+        return result.mapCatching { page ->
+            val songs = page.rows.mapNotNull { row -> when (row) {
+                is SearchResult.Track -> row.song
+                is SearchResult.TopTrack -> row.song
                 else -> null
-            }
-        }?.filter { it.isValidStudioTrack() }?.forEach {
-            if (seen.add(it.videoId)) collected.add(it.withHighResArtwork())
-        }
-
-        if (collected.isEmpty()) {
-            return Result.success(initialTrendingSongsShelf())
-        }
-
-        val items = collected.map { it.toTrackShelfItem() }
-        return Result.success(HomeShelf(title = "Trending songs", items = items, subtitle = "Today's top tunes"))
-    }
-
-    private suspend fun loadPersonalizedSongs(moodId: String): List<Song>? {
-        val recents = YtMusicRepository.recents().getOrNull().orEmpty()
-            .filter { it.isValidStudioTrack() }
-        if (recents.isEmpty()) return null
-
-        return when (moodId) {
-            "your_daily_mix" -> {
-                val seed = recents.firstOrNull() ?: return null
-                val radioSongs = YtMusicRepository.radio(seed.videoId).getOrNull().orEmpty()
-                    .filter { it.isValidStudioTrack() }
-                (recents.take(8) + radioSongs).distinctBy { it.videoId }
-            }
-            "on_repeat" -> {
-                recents.take(25)
-            }
-            "back_in_rotation" -> {
-                val dropped = recents.drop(4)
-                if (dropped.isNotEmpty()) dropped.take(25) else recents.take(25)
-            }
-            else -> null
+            } }.filter { it.isValidStudioTrack() }.distinctBy { it.videoId }.take(24)
+            check(songs.isNotEmpty()) { "No current trending songs are available." }
+            HomeShelf("Trending songs", songs.map { it.withHighResArtwork().toTrackShelfItem() }, "Current music")
         }
     }
 
@@ -482,7 +383,8 @@ object MoodGenreRepository {
         // Local personalized snapshots must bypass the legacy global song cache and search fallback.
         val localKind = LocalMixKind.fromId(moodId)
         val localRepository = LocalMixPlatform.repository
-        if (localKind != null && localRepository != null) {
+        if (localKind != null) {
+            if (localRepository == null) return Result.failure(IllegalStateException("Personal mixes are not available on this device yet."))
             val loaded = localRepository.load(LocalMixPlatform.listenerScope(), localKind)
             return loaded.mix?.let { Result.success(it.songs) }
                 ?: Result.failure(IllegalStateException(when (loaded.failure) {
@@ -493,23 +395,14 @@ object MoodGenreRepository {
                 }))
         }
 
-        songCache[moodId]?.let { return Result.success(it) }
+        val scope = LocalMixPlatform.listenerScope()
+        val cacheKey = "${scope.length}:$scope:${Innertube.currentRegion}:$moodId"
+        songCache[cacheKey]?.let { return Result.success(it) }
 
-        // 1. Personalized mixes based on user listening
-        if (moodId in PERSONALIZED_MOODS) {
-            val personalSongs = runCatching { loadPersonalizedSongs(moodId) }.getOrNull()
-            if (!personalSongs.isNullOrEmpty()) {
-                val enhanced = personalSongs.filter { it.isValidStudioTrack() }.map { it.withHighResArtwork() }
-                if (enhanced.isNotEmpty()) {
-                    songCache[moodId] = enhanced
-                    return Result.success(enhanced)
-                }
-            }
-        }
-
-        // 2. Fetch official studio songs matching the curated mood query
+        // Curated collections search real studio tracks; they are never a
+        // substitute for unavailable personal listening evidence.
         val songsResult = YtMusicRepository.searchPage(query, SearchFilter.SONGS)
-        return songsResult.map { page ->
+        return songsResult.mapCatching { page ->
             val collected = mutableListOf<Song>()
             val seenIds = mutableSetOf<String>()
 
@@ -532,18 +425,19 @@ object MoodGenreRepository {
             // If we have fewer than 15 songs and continuation is available, fetch next page
             val continuationToken = page.continuation
             if (collected.size < 15 && continuationToken != null) {
-                runCatching {
+                try {
                     val next = YtMusicRepository.searchContinuation(continuationToken, SearchFilter.SONGS).getOrNull()
                     if (next != null) {
                         addPageSongs(next.rows)
                     }
-                }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { /* Keep the playable first page. */ }
             }
 
-            if (collected.isNotEmpty()) {
-                songCache[moodId] = collected
-            }
+            check(scope == LocalMixPlatform.listenerScope()) { "Listener changed. Reopen this collection." }
+            check(collected.isNotEmpty()) { "No playable tracks were found for this collection. Try another collection or refresh later." }
+            songCache[cacheKey] = collected
             collected
-        }
+        }.onFailure { if (it is CancellationException) throw it }
     }
 }

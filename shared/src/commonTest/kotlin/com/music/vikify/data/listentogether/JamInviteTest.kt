@@ -29,6 +29,15 @@ class JamInviteTest {
     @Test
     fun `another host is not an invite even with the same path`() {
         assertNull(JamInvite.parse("https://example.com/invite/ABC123"))
+        assertNull(JamInvite.parse("https://vikify.web.app.evil.example/invite/ABC123"))
+        assertNull(JamInvite.parse("https://another-project.web.app/invite/ABC123"))
+    }
+
+    @Test
+    fun `public host case and previously shared host remain readable`() {
+        assertEquals("ABC123", JamInvite.parse("HTTPS://VIKIFY.WEB.APP/invite/abc123"))
+        assertEquals("ABC123", JamInvite.parse("https://vikify-95144.web.app/invite/abc123"))
+        assertEquals("ABC123", JamInvite.parse("https://vikify.app/invite/abc123"))
     }
 
     @Test
@@ -51,6 +60,7 @@ class JamInviteTest {
 
     @Test
     fun `a built url round-trips`() {
+        assertEquals("https://vikify.web.app/invite/ZZ99QQ", JamInvite.url("zz99qq"))
         assertEquals("ZZ99QQ", JamInvite.parse(JamInvite.url("zz99qq")))
     }
 }

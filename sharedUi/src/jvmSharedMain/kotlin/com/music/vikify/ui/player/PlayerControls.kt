@@ -191,10 +191,7 @@ internal fun PlaybackOriginCaption(
  */
 @Composable
 internal fun PlayerScrubber(
-    /**
-     * Where the handle is, read in here so the playhead's tick recomposes the
-     * bar and its two times rather than the player the bar sits in.
-     */
+    /** Read in the draw phase; only whole-second timestamp changes recompose. */
     shown: () -> Float,
     durationMs: Long,
     /** A version switch's wait, drawn along the bar — see [ThinSlider.loading]. */
@@ -204,7 +201,6 @@ internal fun PlayerScrubber(
     onScrubFinished: () -> Unit,
     centerLabel: @Composable BoxScope.() -> Unit = {},
 ) {
-    val shown = shown()
     Column(Modifier.fillMaxWidth()) {
         ThinSlider(
             value = shown,
@@ -219,23 +215,33 @@ internal fun PlayerScrubber(
                 // so pull the labels back up under it.
                 .offset(y = (-9).dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = formatTime((shown * durationMs).toLong()),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = LocalPlayerTint.current.copy(alpha = 0.55f),
-                )
-                Text(
-                    text = "-" + formatTime(durationMs - (shown * durationMs).toLong()),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = LocalPlayerTint.current.copy(alpha = 0.55f),
-                )
-            }
+            ScrubberTimes(shown = shown, durationMs = durationMs)
             Box(Modifier.matchParentSize()) { centerLabel() }
         }
+    }
+}
+
+@Composable
+private fun ScrubberTimes(shown: () -> Float, durationMs: Long) {
+    // Quantise before observing: interpolating the fill at display cadence
+    // should still update these two labels only when their text changes.
+    val times by remember(shown, durationMs) {
+        derivedStateOf {
+            val elapsed = (shown().coerceIn(0f, 1f) * durationMs.coerceAtLeast(0L)).toLong()
+            elapsed / 1_000L to (durationMs - elapsed).coerceAtLeast(0L) / 1_000L
+        }
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(
+            text = formatTime(times.first * 1_000L),
+            style = MaterialTheme.typography.labelMedium,
+            color = LocalPlayerTint.current.copy(alpha = 0.55f),
+        )
+        Text(
+            text = "-" + formatTime(times.second * 1_000L),
+            style = MaterialTheme.typography.labelMedium,
+            color = LocalPlayerTint.current.copy(alpha = 0.55f),
+        )
     }
 }
 
@@ -458,7 +464,7 @@ internal fun VolumeRow(
         )
         Spacer(Modifier.width(10.dp))
         ThinSlider(
-            value = value(),
+            value = value,
             onValueChange = onValueChange,
             onValueChangeFinished = onValueChangeFinished,
             idleHeight = 6.dp,

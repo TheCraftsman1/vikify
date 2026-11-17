@@ -10,15 +10,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.music.vikify.data.stats.ArtistFacts
 import com.music.vikify.data.stats.ListeningStats
+import com.music.vikify.data.stats.ReplayCloudSync
 import com.music.vikify.data.stats.ReplayPeriod
 import com.music.vikify.data.stats.ReplaySummary
 import com.music.vikify.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -64,15 +66,6 @@ fun rememberReplayState(active: Boolean): Pair<ReplayState, (ReplayPeriod) -> Un
     var loading by remember { mutableStateOf(true) }
     var memberSince by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(active) {
-        if (!active) return@LaunchedEffect
-        // A directory listing, so off the composition's thread.
-        memberSince = withContext(Dispatchers.IO) {
-            ListeningStats.months().firstOrNull()?.let {
-                "%02d/%02d".format(Locale.ROOT, it.monthValue, it.year % 100)
-            }
-        }
-    }
     LaunchedEffect(period, active) {
         if (!active) return@LaunchedEffect
         // Only the first read shows a spinner. Switching period must not blank
@@ -91,7 +84,12 @@ fun rememberReplayState(active: Boolean): Pair<ReplayState, (ReplayPeriod) -> Un
         // with the Replay closed. `collectLatest` gives the debounce for free —
         // a burst of lookups cancels each pending delay and only the last one
         // gets as far as a rebuild.
-        ArtistFacts.revision.drop(1).collectLatest {
+        combine(ArtistFacts.revision, ReplayCloudSync.remote) { facts, remote -> facts to remote }.collectLatest { (_, remote) ->
+            memberSince = withContext(Dispatchers.IO) {
+                (ListeningStats.months() + remote.map { YearMonth.parse(it.month) }).minOrNull()?.let {
+                    "%02d/%02d".format(Locale.ROOT, it.monthValue, it.year % 100)
+                }
+            }
             delay(SETTLE_MILLIS)
             summary = ListeningStats.summary(period)
         }
@@ -391,7 +389,6 @@ data class ReplayHeroCard(
     val label: String,
     val value: String,
     val detail: String?,
-    val artworkUrl: String?,
     val page: ReplayStoryPage,
 )
 
@@ -411,7 +408,6 @@ fun ReplaySummary.cards(context: Context): List<ReplayHeroCard> = buildList {
             value = formatMinutes(totalMs),
             detail = "${context.replayCount(totalPlays, R.plurals.replay_play_count)} · " +
                 localizedLabel(context),
-            artworkUrl = songs.firstOrNull()?.song?.thumbnailUrl,
             page = ReplayStoryPage.MINUTES,
         ),
     )
@@ -421,7 +417,6 @@ fun ReplaySummary.cards(context: Context): List<ReplayHeroCard> = buildList {
                 label = context.getString(R.string.top_song),
                 value = it.song.title,
                 detail = "${it.song.artist} · ${context.replayCount(it.plays, R.plurals.replay_play_count)}",
-                artworkUrl = it.song.thumbnailUrl,
                 page = ReplayStoryPage.SONGS,
             ),
         )
@@ -433,7 +428,6 @@ fun ReplaySummary.cards(context: Context): List<ReplayHeroCard> = buildList {
                 value = it.title,
                 detail = "${formatListening(context, it.ms)} · " +
                     context.replayCount(it.plays, R.plurals.replay_play_count),
-                artworkUrl = it.artworkUrl,
                 page = ReplayStoryPage.ARTISTS,
             ),
         )
@@ -444,7 +438,6 @@ fun ReplaySummary.cards(context: Context): List<ReplayHeroCard> = buildList {
                 label = context.getString(R.string.top_album),
                 value = it.title,
                 detail = listOfNotNull(it.subtitle, formatListening(context, it.ms)).joinToString(" · "),
-                artworkUrl = it.artworkUrl,
                 page = ReplayStoryPage.ALBUMS,
             ),
         )

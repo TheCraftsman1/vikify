@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,144 +35,102 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.music.vikify.sharedui.resources.*
-import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
-import com.music.vikify.ui.player.MeshGradientBackground
-import com.music.vikify.ui.player.rememberArtworkColors
+import coil3.compose.AsyncImage
 import java.util.Locale
 
-/**
- * One headline number, as a card you could keep in a wallet.
- *
- * ## Why a card
- *
- * A Replay's four headline facts — minutes, artist, song, album — are four
- * unlike things, and a grid of tiles gives no clue that they are peers or that
- * any of them leads anywhere. A card is a thing people already know how to read:
- * it holds one fact, it has a *front* you look at rather than a list you scan,
- * and a row of them says "there are four of these" without a heading saying so.
- * Tapping one opens Replay at the chart it summarises, which is the other half
- * of why it is a card — a card is an object, and objects can be picked up.
- *
- * ## Why it is built like a real one
- *
- * Every part of the anatomy is doing the job its real counterpart does, which is
- * what stops this reading as a rounded rectangle with a chip sticker on it:
- *
- *  - the **proportions** are the real ones, 85.6 × 54mm, so 1.586:1 — this alone
- *    accounts for most of the recognition;
- *  - the **cardholder line and member-since date** are the part that makes it
- *    *yours*. A card with nobody's name on it is a graphic; with a name on it,
- *    it is an artefact of an account, which is exactly what a year of listening
- *    is. There is no chip: a contact plate is the one piece of card anatomy
- *    that exists to be *inserted into something*, and on a card that is only
- *    ever looked at it reads as a sticker;
- *  - the **embossing** — a monospaced face, wide tracking, a dark offset shadow
- *    under a pale gradient fill — is how a real card's raised type catches the
- *    light, and it is why those lines read as pressed into the card rather than
- *    printed on it;
- *  - the **logo sits top-right**, opposite what the card is for, so the two
- *    corners of the head each carry one fact and neither is a caption for the
- *    other.
- *
- * ## Why the background is the player's own mesh
- *
- * Sampled from the artwork this card is about, so no two people's cards look
- * alike and each one is lit by the record it is describing. It is drawn once
- * and held still — [MeshGradientBackground]'s `animated = false` — rather
- * than crossfading or drifting, since a row of these redrawing a blurred
- * layer every time a card is opened or swiped past is the expensive case the
- * class note there warns about, multiplied by however many cards are on
- * screen.
- */
+/** A headline Replay stat on the same black metal stock as the rest of the wallet. */
 @Composable
 fun ReplayCreditCard(
     label: String,
     value: String,
     detail: String?,
-    artworkUrl: String?,
     /** Whose card it is. Empty falls back to the localized listener label. */
     holder: String,
     /** `MM/YY`, or null when there is nothing to date it from. */
     memberSince: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    showChip: Boolean = false,
 ) {
-    val palette = rememberArtworkColors(artworkUrl)
+    val cardTitle = if (showChip) stringResource(Res.string.your_listening_experience) else label
     Box(
         modifier = modifier
             .aspectRatio(CARD_RATIO)
             .shadow(16.dp, CardShape, clip = false)
             .clip(CardShape)
+            .replayMetalFinish()
             .clickable(onClick = onClick),
     ) {
-        MeshGradientBackground(
-            palette = palette,
-            trackKey = artworkUrl ?: label,
-            blurRadius = 34.dp,
-            animated = false,
-        )
-        // Deepened towards the foot, where the embossed lines are: the mesh is
-        // built to be bright and those lines are pale, and without this the
-        // cardholder name lands on whichever blob happened to drift under it.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0.0f to Color.Black.copy(alpha = 0.18f),
-                        0.55f to Color.Black.copy(alpha = 0.30f),
-                        1.0f to Color.Black.copy(alpha = 0.55f),
-                    ),
-                ),
-        )
-
-        Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 16.dp)) {
-            // The two things a card says about itself, at the two corners a card
-            // says them from: what it is on the left, whose it is on the right.
-            // The wordmark that used to sit here is gone — the logo says it, and
-            // saying it twice on an object this small is the difference between
-            // a card and an advert.
-            Row(verticalAlignment = Alignment.Top) {
-                Text(
-                    text = stringResource(Res.string.your_listening_experience).uppercase(Locale.getDefault()),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.W700,
-                    letterSpacing = 1.4.sp,
-                    lineHeight = 13.sp,
-                    color = Color.White.copy(alpha = 0.72f),
-                    modifier = Modifier.weight(1f),
-                )
+        Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 13.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Vikify",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontSize = 17.sp,
+                            lineHeight = 20.sp,
+                            fontWeight = FontWeight.W800,
+                            letterSpacing = 1.sp,
+                            brush = PolishedInk,
+                        ),
+                    )
+                    Text(
+                        text = cardTitle.uppercase(Locale.getDefault()),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
+                        fontWeight = FontWeight.W700,
+                        letterSpacing = 1.sp,
+                        color = Color.White.copy(alpha = 0.67f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Spacer(Modifier.width(10.dp))
-                Icon(
-                    painter = painterResource(Res.drawable.ic_logo),
+                AsyncImage(
+                    model = Res.getUri("files/replay/vikify_white.png"),
                     contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(width = 34.dp, height = 22.dp),
+                    modifier = Modifier.size(46.dp),
                 )
             }
 
             Spacer(Modifier.weight(1f))
 
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontSize = 27.sp,
-                    lineHeight = 30.sp,
-                    fontWeight = FontWeight.W800,
-                    brush = PolishedInk,
-                    shadow = EmbossShadow,
-                ),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = label.uppercase(Locale.ROOT),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.W700,
-                letterSpacing = 1.8.sp,
-                color = Color.White.copy(alpha = 0.65f),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (showChip) {
+                    ReplayMetalChip()
+                    Spacer(Modifier.width(12.dp))
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = if (showChip) Alignment.End else Alignment.Start,
+                ) {
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontSize = 27.sp,
+                            lineHeight = 30.sp,
+                            fontWeight = FontWeight.W800,
+                            brush = PolishedInk,
+                            shadow = EmbossShadow,
+                        ),
+                        textAlign = if (showChip) TextAlign.End else TextAlign.Start,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (showChip) {
+                        Text(
+                            text = label.uppercase(Locale.getDefault()),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.W700,
+                            letterSpacing = 1.3.sp,
+                            color = Color.White.copy(alpha = 0.65f),
+                            textAlign = TextAlign.End,
+                        )
+                    }
+                }
+            }
 
             // Weighted either side rather than pinned to the foot, so the figure
             // sits where a card's number sits — across the middle — instead of
@@ -206,12 +163,6 @@ fun ReplayCreditCard(
                             lineHeight = 8.sp,
                             letterSpacing = 0.8.sp,
                             color = Color.White.copy(alpha = 0.55f),
-                            // Both lines to the right edge, not just the block.
-                            // Column alignment places the text *box*; inside it
-                            // the two lines still set from the left, which left
-                            // "MEMBER / SINCE" hanging a few pixels off the date
-                            // under it — the one misalignment on the card that
-                            // catches the eye every time.
                             textAlign = TextAlign.End,
                         )
                         Embossed(text = memberSince, size = 12.sp)
@@ -305,8 +256,6 @@ private val EmbossShadow = Shadow(
 )
 
 private val CardShape = RoundedCornerShape(20.dp)
-
-/** Whose card it is when there is no signed-in account to name. */
 
 /** 85.6mm × 54mm, which is what makes the shape read as a card. */
 private const val CARD_RATIO = 1.586f

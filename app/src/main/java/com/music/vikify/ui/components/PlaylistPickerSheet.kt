@@ -2,6 +2,8 @@ package com.music.vikify.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -88,7 +90,7 @@ fun PlaylistPickerSheet(
     playlists: List<UserPlaylist>,
     loading: Boolean,
     onAdd: (List<UserPlaylist>) -> Unit,
-    onCreate: (String, PlaylistPrivacy) -> Unit,
+    onCreate: (String, PlaylistPrivacy, String?) -> Unit,
     modifier: Modifier = Modifier,
     song: Song? = null,
     startCreating: Boolean = false,
@@ -237,28 +239,24 @@ private fun PlaylistRow(playlist: UserPlaylist, selected: Boolean, onClick: () -
 }
 
 /**
- * Name and visibility, and nothing else. YouTube also takes a description,
- * which nobody fills in from a phone at the moment of saving a song.
+ * A playlist's name, artwork and visibility in one creation flow.
  */
 @Composable
 private fun NewPlaylistForm(
     onBack: (() -> Unit)?,
-    onCreate: (String, PlaylistPrivacy) -> Unit,
+    onCreate: (String, PlaylistPrivacy, String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var name by remember { mutableStateOf("") }
     var privacy by remember { mutableStateOf(PlaylistPrivacy.PRIVATE) }
+    var coverUri by remember { mutableStateOf<String?>(null) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
-
-    // The form exists to be typed into; opening it with the keyboard already
-    // up saves the tap that would otherwise always follow.
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     val submit: () -> Unit = {
         if (name.isNotBlank()) {
             focusManager.clearFocus()
-            onCreate(name, privacy)
+            onCreate(name.trim(), privacy, coverUri)
         }
     }
 
@@ -267,7 +265,8 @@ private fun NewPlaylistForm(
     Column(
         modifier
             .fillMaxWidth()
-            .imePadding(),
+            .imePadding()
+            .verticalScroll(rememberScrollState()),
     ) {
         Row(
             modifier = Modifier
@@ -348,6 +347,8 @@ private fun NewPlaylistForm(
             }
         }
 
+        PlaylistCoverEditor(title = name, onCoverChange = { coverUri = it })
+        Spacer(Modifier.height(12.dp))
         SheetHeading(stringResource(R.string.who_can_see_it).uppercase(Locale.getDefault()))
         Row(
             modifier = Modifier
